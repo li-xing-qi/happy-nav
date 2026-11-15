@@ -84,6 +84,33 @@ const CONTENT = require('./content.js');
   } catch (e) { /* 读不到就用默认值，不阻断启动 */ }
 })();
 
+/* ============================================================
+   工作区自举：首次启动时把人设模板与记忆文件准备好
+   为什么需要：workspace/ 属于运行时数据（不进版本库），
+   如果只靠部署脚本复制，直接 `node server.js` 的人会得到一个没有人设的 AI。
+   这里做幂等补齐：缺什么补什么，已有的绝不覆盖。
+   ============================================================ */
+(function bootstrapWorkspace() {
+  try {
+    const ws = process.env.WORKSPACE_DIR || path.join(__dirname, 'workspace');
+    fs.mkdirSync(ws, { recursive: true });
+    const seed = path.join(__dirname, 'workspace.example', 'AGENTS.md');
+    const target = path.join(ws, 'AGENTS.md');
+    if (!fs.existsSync(target) && fs.existsSync(seed)) {
+      fs.copyFileSync(seed, target);
+      console.log('     [初始化] 已从模板生成 workspace/AGENTS.md（可自行修改人设）');
+    }
+    const mem = path.join(ws, 'MEMORY.md');
+    if (!fs.existsSync(mem)) {
+      fs.writeFileSync(mem, '', 'utf8');
+      console.log('     [初始化] 已创建空白 workspace/MEMORY.md（长期记忆写入这里）');
+    }
+    for (const d of ['memes', 'pics']) {
+      fs.mkdirSync(path.join(ws, d), { recursive: true });
+    }
+  } catch (e) { /* 目录不可写也不该阻断启动 */ }
+})();
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC = path.join(__dirname, 'public');

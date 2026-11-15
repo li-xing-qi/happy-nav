@@ -71,7 +71,7 @@ node server.js
 
 ## 部署完先做什么
 
-1. 打开 `http://localhost:3000`，六个玩法都能点开
+1. 打开 `http://localhost:3000`，六个页面都能点开。首次启动会自动生成 `workspace/AGENTS.md`（人设）与 `workspace/MEMORY.md`（长期记忆）
 2. **想启用 AI 对话**：复制 `.env.example` 为 `.env`，填入你的模型服务地址与密钥（任何 OpenAI 兼容接口都行），重启服务
 3. **想改 AI 的性格和称呼**：编辑 `workspace/AGENTS.md`，保存即生效
 4. **想让它记住你**：直接编辑 `workspace/MEMORY.md`（一行一条）。长期记忆由后台任务自动沉淀，模型本身没有写入工具
