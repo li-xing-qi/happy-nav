@@ -58,6 +58,32 @@ const { URL } = require('url');
 const { Room, MAX_PLAYERS } = require('./engine.js');
 const CONTENT = require('./content.js');
 
+/* ============================================================
+   .env 自动加载（零依赖，必须先于任何 process.env 读取执行）
+   为什么自己写：本项目零第三方依赖，不引入 dotenv；
+   但既然提供了 .env.example，就必须真的读它，否则配置项全是摆设。
+   规则：已存在的真实环境变量优先（方便 docker/CI 覆盖），.env 只补空缺。
+   ============================================================ */
+(function loadDotEnv() {
+  try {
+    const file = path.join(__dirname, '.env');
+    if (!fs.existsSync(file)) return;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const s = line.trim();
+      if (!s || s[0] === '#') continue;
+      const eq = s.indexOf('=');
+      if (eq < 1) continue;
+      const key = s.slice(0, eq).trim();
+      let val = s.slice(eq + 1).trim();
+      if (val.length >= 2) {
+        const a = val[0], b = val[val.length - 1];
+        if ((a === '"' && b === '"') || (a === "'" && b === "'")) val = val.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = val;
+    }
+  } catch (e) { /* 读不到就用默认值，不阻断启动 */ }
+})();
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC = path.join(__dirname, 'public');
@@ -126,13 +152,44 @@ setInterval(() => {
 }, 2000).unref();
 
 /* ================= deepseek 接入（AI 标签用，可选） ================= */
-const DEEPSEEK_BASE = (process.env.DEEPSEEK_BASE_URL || 'http://localhost:11434/v1').replace(/\/+$/, '');
-const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-r1:7b';
-const DEEPSEEK_FORMAT = (process.env.DEEPSEEK_FORMAT || 'auto').toLowerCase();
-const DEEPSEEK_TEMP = Number(process.env.DEEPSEEK_TEMP || 0.7);
+/* 变量名统一：对外文档与 .env.example 用 LLM_*，同时兼容历史 DEEPSEEK_* 写法。
+   两种都支持是为了老部署升级时不用改配置，新用户按文档填 LLM_* 即可生效。 */
+const DEEPSEEK_BASE = (process.env.LLM_BASE_URL || process.env.DEEPSEEK_BASE_URL || 'http://localhost:11434/v1').replace(/\/+$/, '');
+const DEEPSEEK_KEY = process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+const DEEPSEEK_MODEL = process.env.LLM_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-r1:7b';
+const DEEPSEEK_FORMAT = (process.env.LLM_FORMAT || process.env.DEEPSEEK_FORMAT || 'auto').toLowerCase();
+const DEEPSEEK_TEMP = Number(process.env.LLM_TEMP || process.env.DEEPSEEK_TEMP || 0.7);
 const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || '你是一个友善、聪明的聊天助手，请用简体中文自然地交流。';
 const MAX_HIST = Math.max(2, Number(process.env.MAX_HIST || 40));
+
+/* ============================================================
+   访问控制（可选，但破坏性接口默认只允许本机）
+   为什么需要：房间号只是「知道就能进」，不是身份认证。
+   一旦把站点放到公网，任何人都能调接口——尤其是删文件的接口。
+   策略：
+     - 设了 AUTH_TOKEN：破坏性接口必须带对令牌（请求头 x-auth-token 或 ?token=）
+     - 没设 AUTH_TOKEN：破坏性接口只允许本机回环地址调用
+   普通页面与聊天接口不受影响，避免把自用门槛抬得太高。
+   ============================================================ */
+const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
+function isLoopback(req) {
+  const ip = (req.socket && req.socket.remoteAddress) || '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+function guardAdmin(req, res) {
+  if (AUTH_TOKEN) {
+    let given = req.headers['x-auth-token'] || '';
+    if (!given) {
+      try { given = new URL(req.url, 'http://x').searchParams.get('token') || ''; } catch (e) {}
+    }
+    if (given === AUTH_TOKEN) return true;
+    json(res, { error: '未授权：需要有效的 AUTH_TOKEN' });
+    return false;
+  }
+  if (isLoopback(req)) return true;
+  json(res, { error: '该接口默认仅限本机调用；如需远程使用，请设置 AUTH_TOKEN 并在请求中携带' });
+  return false;
+}
 
 /* ============================================================
    [EXTERNAL-DEP · PATCH 1/8] 外部系统依赖，勿删改
@@ -149,7 +206,7 @@ const SHARED_FILE = process.env.SHARED_STATE || path.join(WORKSPACE, 'shared-sta
  * 加载失败 / 渲染为空时，fullSystemPrompt() 自动回落到下面的原有实现。
  * 设 FOUR_LAYER=0 可一键关掉，无需改代码。 */
 let fourLayer = null;
-try { fourLayer = require(path.join(MEM_DIR, 'memory/bridge.js')); } catch {}
+try { fourLayer = require(path.join(__dirname, 'memory', 'bridge.js')); } catch {}
 const FOUR_LAYER_OFF = process.env.FOUR_LAYER === '0';
 
 /* ============================================================
@@ -778,6 +835,7 @@ const server = http.createServer(safe(async (req, res) => {
   /* 手动清理：删除超过 keepDays 天、且没有被任何聊天存档引用的上传文件 */
   if (p === '/api/room/cleanup-uploads') {
     if (req.method !== 'POST') return json(res, { error: '只支持 POST' });
+    if (!guardAdmin(req, res)) return;   // 删除类接口：默认只允许本机或持令牌者
     const rawDays = Number(u.searchParams.get('keepDays'));
     const keepDays = Number.isFinite(rawDays) && rawDays >= 1 ? Math.min(3650, rawDays) : 30;
     const cutoff = Date.now() - keepDays * 24 * 3600 * 1000;
@@ -1290,7 +1348,8 @@ const server = http.createServer(safe(async (req, res) => {
   }
 
   if (p === '/api/health') {
-    return json(res, { ok: true, fmt: FMT, model: DEEPSEEK_MODEL, base: DEEPSEEK_BASE, upload: MAX_UPLOAD });
+    /* 不回显模型服务地址：那属于部署方内部信息，公开实例上没必要暴露 */
+    return json(res, { ok: true, fmt: FMT, model: DEEPSEEK_MODEL, llm: Boolean(DEEPSEEK_KEY), upload: MAX_UPLOAD });
   }
   /* ==========================================================
      [EXTERNAL-DEP · PATCH 3/8] 外部系统依赖，勿删改
@@ -1442,7 +1501,7 @@ function proxyStream(req, res, messages, onAnswer) {
     upstreamRes.on('error', e => { sse('error', { message: String(e.message || e) }); res.end(); });
   });
   upstream.on('error', e => {
-    sse('error', { message: `连不上 deepseek（${chatURL()}）：${e.message || e}。请检查 DEEPSEEK_BASE_URL 是否可达。` });
+    sse('error', { message: `连不上模型服务（${chatURL()}）：${e.message || e}。请检查 .env 里的 LLM_BASE_URL 是否正确、对应服务是否已启动。` });
     res.end();
   });
   res.on('close', () => { if (!res.writableEnded) { try { upstream.destroy(); } catch (_) {} } });
@@ -1458,7 +1517,11 @@ server.listen(PORT, HOST, () => {
   console.log(`     与鱼 /yu  ·  心有灵犀 /lingxi`);
   console.log(`     心有灵犀联机：/lingxi 点「🌐 联机」，接口 /api/lx/*`);
   console.log(`     上传图片：单文件最大 ${Math.round(MAX_UPLOAD / 1048576)}MB，存在 ${UPLOADS}`);
-  console.log(`     AI 助手（可选）：${FMT} 格式，模型 ${DEEPSEEK_MODEL}`);
+  if (DEEPSEEK_KEY) {
+    console.log(`     AI 助手：${FMT} 格式，模型 ${DEEPSEEK_MODEL}（已读取到密钥）`);
+  } else {
+    console.log('     AI 助手：未配置（在 .env 里填 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 后重启即可启用）');
+  }
   console.log(`     记得在云服务器安全组放行 ${PORT} 端口\n`);
 });
 process.on('uncaughtException', e => console.error('[uncaught]', e && e.stack || e));
