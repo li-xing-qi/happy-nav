@@ -148,6 +148,51 @@ NO_CARD=1 NO_GOMOKU=1 NO_LINGXI=1 node index.js   # 只开聊天室
 
 > 已知缺口（原版就有的遗留问题）：卡牌场景没有明确的「局终」信号，所以它不会触发局终归档；聊天室场景也不处理「约定」类指令（只在与鱼与游戏场景生效）。这两处要补的话，位置分别在 `scenes/card.js` 与 `scenes/chat.js` 的消息处理入口。
 
+## 记忆的判断权：模型裁决，脚本落盘
+
+以前「是否该记 / 记成什么 / 作用域多长 / 撤销哪条」全靠词表 `includes` 和字符串截取，于是随口一句「这局打不过，以后再说吧」会被写成规则「再说吧」。现在这些**语义判断交给模型**，脚本只负责候选召回、写入、归档、裁剪这些确定性工作。
+
+| 环节 | 谁决定 |
+|---|---|
+| 是否是约定 / 是不是拖延、反话、完成态陈述 | **模型**（输出严格 JSON，带置信度） |
+| 规则正文写什么（由模型重写，不再 slice 原话） | **模型** |
+| 作用域 once / session / game | **模型** |
+| 撤销哪一条（必须给 id，不猜、不批量） | **模型 + 用户确认** |
+| 原子写入、只归档不删除、去重、预算裁剪、降级 | 脚本 |
+
+**两道防线，缺一不可**（止血 ≠ 根治）：
+
+- **止血**：缺有效 ctx（`game` / `sessionId`）的通道一律**不落库**。为什么不「改 scope / 降级 once / 补齐 sid」——注入端只对 session 档校验 sid，改成 once 或 game 反而会让错误规则立刻进 prompt 生效；game 档更糟，会永久生效。任何让规则变可见的止血动作都会把未修的语义误判暴露到决策链。
+- **根治**：AI 语义门槛覆盖**所有写入入口**（与鱼桥、`记住：…` 直写长期记忆的旁路），并配可见/审计路径。
+
+**没配模型时**：自动走保守兜底——只认显式立约定词，一票否决拖延/完成态/元语言否定，宁可少记不可错记。网站照常可用，`FOUR_LAYER=0` 仍可一键关闭。
+
+查看与精确撤销：
+
+```bash
+node memory/audit.js list                  # 列出生效约定（含 id）
+node memory/audit.js all                   # 含已归档
+node memory/audit.js revoke <id>           # 按 id 精确撤销
+node memory/audit.js archive-ghosts        # 归档存量幽灵规则
+node memory/audit.js llm                   # 查看裁决器状态
+node memory/verify-semantic.js            # 跑 34 项语义验收
+```
+
+> 「这条不算了」不再批量清空当前作用域。未点名时会列出候选让你指定，一条都不动——以前它会把你真正在用的长期偏好一起归档，还回一句「好，那条不算了」。
+
+### 验收判据（顺序不能换）
+
+改这块代码后必须跑 `node memory/verify-semantic.js`，判据如下：
+
+1. `readAdapters()` 中不存在 `text==='再说吧'` 的 active 记录，且总条数不增 —— **第一道门槛，必须最先判**。只看注入侧会把「完全没修」误判为已修，因为幽灵规则的定义就是「写入但不注入」。
+2. `handleCommand()` 返回空串，且不含「这局听你的」「记下了，以后都这样」「这步听你的」等肯定确认语。
+3. `activeAdapters(ctx) === []`。
+4. `adapterPrompt(ctx)` 不含「再说吧」。
+5. `pendingOnceIds(ctx)` 为空。
+6. 存量 active 规则可列出、可按 id 精确撤销，`rule:''` 不再触发批量撤销。
+
+回归基线还覆盖：3 个 ctx（game / 与鱼 / api-chat）、4 个反例、幽灵规则归档、模型重写 `rule`、模型不可达时降级且正常约定仍可写入。
+
 ## AI 伙伴：四层记忆是怎么工作的
 
 它不是一个「每次对话都从零开始」的聊天机器人。记忆分四层，越往下越久、越粗：
@@ -236,6 +281,8 @@ npm run check                # 语法自检（五个服务端文件）
 bash scripts/check-deps.sh   # 环境体检：缺什么、有什么可选组件
 cd agent-bot && npm install && node index.js   # 启动 AI 陪玩
 node memory/compact.js --dry-run              # 预览记忆浓缩（不写盘）
+node memory/verify-semantic.js                # 语义门槛 34 项验收
+node memory/audit.js list                     # 查看当前生效的约定
 bash scripts/smoke-test.sh   # 冒烟：页面与接口是否都活着
 bash deploy.sh --check # 只检查环境，不启动
 bash deploy.sh --daemon# 后台启动

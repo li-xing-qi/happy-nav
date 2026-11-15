@@ -503,7 +503,7 @@ async function reply(msgs) {
     '  · 不要说「我发了个表情包：xxx.jpg」这种描述性的话（那是机器人腔）',
     '  · 不要输出文件名、路径、链接',
     '  · 最多顺口说一句「发你了」「喏」，或者干脆不说',
-    '- 问课表/安排：先按上面「关于老板」里的课表推今天和明天是周几，对得上就直接答，别再说「我查一下」',
+    '- 问安排/日程：先按上面「关于老板」里记录的安排推算，对得上就直接答，别再说「我查一下」',
     '- **上面如果有「刚刚发生的事」区块，那就是真的发生过**。他说「刚才那局」「我上的哪手」，直接从那儿答，不许说「没存下来」「没有记录」',
     '- 老板问「你还记得吗」时，先看上面有没有相关内容，有就答有，没有再说没有。别一上来就翻旧记忆说没有',
     '- **你有工具可以发图**：想发表情包就调用 `qq_send_image`，传表情库里的文件名。',
@@ -638,7 +638,7 @@ async function reply(msgs) {
     logChat('assistant', out);
     // 说「记住 XX」→ 先落盘，再回一句「记好了」（不是只念命令）
     let wrote = false;
-    if (remembered) wrote = remember(remembered);
+    if (remembered) wrote = await remember(remembered);
     if (remembered && !wrote) {
       await say('我这边写记忆的时候卡了一下，你回头再说一遍我重试下。');
     }
@@ -673,8 +673,8 @@ function detectRemember(text) {
 
 const memoryWrite = require('../lib/remember.js');
 
-function remember(fact) {
-  const r = memoryWrite.remember(fact);
+async function remember(fact) {
+  const r = await memoryWrite.rememberAsync(fact);
   if (r.ok) {
     log(r.skipped ? '记忆已有类似条目，跳过:' : '已写入长期记忆:', fact, '|', r.message);
     return true;

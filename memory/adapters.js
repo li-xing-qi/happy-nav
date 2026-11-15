@@ -13,6 +13,7 @@
 
 const C = require('./constants');
 const store = require('./store');
+const llm = require('./llm');
 
 /** 缓存：{key, at, records}，最多 1 秒；任何写规则 / 局终后 invalidateCache()。 */
 let cache = { key: '', at: 0, records: [] };
@@ -172,40 +173,179 @@ function activeAdapters(opts) {
  * @param {object} ctx {game, sessionId, channel}
  * @returns {string|null}
  */
-function applyAdapterCommand(text, ctx) {
-  const parsed = parseAdapterCommand(text, ctx);
-  if (!parsed) return null;
-  const context = ctx && typeof ctx === 'object' ? ctx : {};
-  if (parsed.action === 'revoke') {
-    let revoked = [];
-    if (parsed.rule) {
-      revoked = store.revokeAdapter(parsed.rule);
-    } else {
-      // 未点名：撤销当前玩法下所有仍生效的约定（含 game / session / once）。
-      // 用户说「这条不算了」通常就是指「刚才那条」，按作用域批量撤更符合直觉。
-      const game = context.game == null ? null : String(context.game);
-      const sid = context.sessionId == null ? null : String(context.sessionId);
-      for (const r of store.readAdapters()) {
-        if (!r || r.status !== 'active') continue;
-        if (game && r.game && String(r.game) !== game) continue;
-        if (String(r.scope) === C.SCOPE.SESSION && sid && r.sessionId && String(r.sessionId) !== sid) continue;
+/* ============================================================
+   语义门槛：判断权交给模型，脚本只做候选召回与保守兜底
+   ------------------------------------------------------------
+   背景：「这局打不过，以后再说吧」原本靠词表命中「以后」被截成规则「再说吧」。
+   现在由模型裁决意图、重写规则正文、判定作用域；模型不可用时走保守兜底。
+
+   保守兜底刻意比旧词表严格得多：只认显式立约定词，且拒绝拖延/放弃类残句。
+   没配模型时宁可少记，也不要错记 —— 这是「止血 ≠ 根治」里可离线生效的那一半。
+   ============================================================ */
+
+/** 只在离线兜底时认可的显式立约定词（不含「以后」「记住」这类宽词） */
+const STRICT_ADD_WORDS = [
+  '约定', '规则：', '规则:', '定个规矩', '记住这条规则', '从今往后', '开局规则',
+  '以后都', '都这样', '每次', '默认', '规则改成', '打法改成',
+];
+/** 明确的「只影响下一步」指令，兜底时也可以安全接受 */
+const STRICT_ONCE_WORDS = ['这次', '这一手', '下一步', '就这一次', '就这一下'];
+/** 兜底时一票否决的拖延 / 放弃 / 敷衍表达 */
+const DISCOURSE_WORDS = ['再说吧', '算了', '回头说', '下次吧', '先这样', '不玩了', '打不过', '以后再说', '到时候再说'];
+
+function conservativeParse(text, ctx) {
+  const raw = String(text == null ? '' : text).trim();
+  if (!raw) return { action: 'none', source: 'fallback' };
+  if (DISCOURSE_WORDS.some((w) => raw.includes(w))) {
+    return { action: 'none', source: 'fallback' };
+  }
+  const revokeWord = C.REVOKE_COMMAND_WORDS.find((w) => raw.includes(w));
+  if (revokeWord) {
+    const rest = raw.replace(revokeWord, '').replace(/[，,。.、！!？?\s]+/g, ' ').trim();
+    // 未点名时绝不批量撤销；返回候选交给用户看，由精确撤销收尾
+    return { action: 'revoke', rule: rest, revokeId: '', scope: classifyScope(raw, ctx), source: 'fallback' };
+  }
+  const addWord = STRICT_ADD_WORDS.find((w) => raw.includes(w));
+  if (addWord) {
+    const body = raw.slice(raw.indexOf(addWord) + addWord.length)
+      .replace(/^[，,：:、\s]+/, '').replace(/[。.！!？?]+$/g, '').trim();
+    if (body.length < 4) return { action: 'none', source: 'fallback' };
+    return { action: 'add', rule: body, scope: classifyScope(raw, ctx), source: 'fallback' };
+  }
+  // 「下一步别连」这类即时指令：有显式 once 词 + 动作动词才接受
+  const onceWord = STRICT_ONCE_WORDS.find((w) => raw.includes(w));
+  if (onceWord && /别|不要|先|打|出|连|走|下|挡|让|给|改/.test(raw)) {
+    return { action: 'add', rule: raw, scope: C.SCOPE.ONCE, source: 'fallback' };
+  }
+  return { action: 'none', source: 'fallback' };
+}
+
+/**
+ * 语义裁决（异步）。模型可用时以模型为准；不可用/超时/低置信度 → 保守兜底。
+ * @returns {Promise<{action:string, rule?:string, scope?:string, revokeId?:string, source:string}>}
+ */
+async function judgeAdapterCommand(text, ctx = {}) {
+  let active = [];
+  try { active = store.readAdapters().filter((r) => r && r.status === 'active'); } catch {}
+  const verdict = await llm.judge(text, ctx, active);
+  if (verdict) return Object.assign({}, verdict, { source: 'llm' });
+  return conservativeParse(text, ctx);
+}
+
+/** 可见 / 审计：列出当前仍生效的规则（含 id，供按 id 精确撤销）。 */
+function listActive(ctx = {}) {
+  const c = ctx && typeof ctx === 'object' ? ctx : {};
+  const game = c.game == null ? null : String(c.game);
+  const sid = c.sessionId == null ? null : String(c.sessionId);
+  try {
+    return store.readAdapters().filter((r) => {
+      if (!r || r.status !== 'active') return false;
+      if (game && r.game && String(r.game) !== game) return false;
+      if (String(r.scope) === C.SCOPE.SESSION && sid && r.sessionId && String(r.sessionId) !== sid) return false;
+      return true;
+    }).map((r) => ({ id: r.id, text: r.text, scope: r.scope, game: r.game, at: r.at }));
+  } catch { return []; }
+}
+
+/** 精确撤销：只按 id，绝不按模糊文本，更不批量。 */
+function revokeById(id) {
+  const key = String(id || '').trim();
+  if (!key) return [];
+  try {
+    const hit = store.revokeAdapter(key);
+    if (hit.length) invalidateCache();
+    return hit;
+  } catch { return []; }
+}
+
+/**
+ * 止血守卫（第 0 步，唯一安全方向＝不落库）：
+ * 缺有效 ctx 的通道一律不允许写入适配器。
+ *
+ * 为什么不「改 scope / 降级 once / 补 sid 放通」：注入端的 sid 校验只作用于
+ * session 档，改成 once 或 game 档反而会让错误规则立刻进 prompt 生效；
+ * 补齐 sid 同理。任何让规则变可见的动作都会把未修的语义误判暴露到决策链。
+ * 所以唯一安全的止血是「根本不写」。
+ */
+function hasEffectiveCtx(ctx) {
+  const c = ctx && typeof ctx === 'object' ? ctx : {};
+  return Boolean(String(c.sessionId || '').trim()) || Boolean(String(c.game || '').trim());
+}
+
+/** 存量幽灵规则（有 active 但永远注入不到）单独归档，不改注入端。 */
+function archiveGhosts() {
+  let n = 0;
+  try {
+    for (const r of store.readAdapters()) {
+      if (!r || r.status !== 'active') continue;
+      if (String(r.scope) === C.SCOPE.SESSION && !String(r.sessionId || '').trim()) {
         const hit = store.revokeAdapter(String(r.id || ''));
-        revoked = revoked.concat(hit);
+        n += hit.length;
       }
     }
-    invalidateCache();
-    return revoked.length ? '好，那条不算了' : '没找到那条规则，你再说清楚点是哪条';
+    if (n) invalidateCache();
+  } catch {}
+  return n;
+}
+
+/**
+ * 落地一条已裁决的命令。parsed 由 judgeAdapterCommand 提供（模型或保守兜底）。
+ * 返回给小鱼的确认语；不是指令 / 被止血拒绝时返回空串 —— 绝不回虚假确认语。
+ */
+async function applyAdapterCommand(text, ctx) {
+  const context = ctx && typeof ctx === 'object' ? ctx : {};
+  const parsed = await judgeAdapterCommand(text, context);
+  if (!parsed || parsed.action === 'none') return '';
+
+  if (parsed.action === 'revoke') {
+    // 未点名：不再批量撤销。列出候选让用户指定，一条都不动。
+    if (!parsed.revokeId) {
+      const list = listActive(context);
+      if (!list.length) return '';
+      return '你想撤哪条？现在生效的有：' + list.map((r) => `[${r.id}] ${r.text}`).join('；');
+    }
+    const revoked = revokeById(parsed.revokeId);
+    return revoked.length ? '好，那条不算了' : '';
   }
+
+  if (parsed.action !== 'add') return '';
+
+  // 止血：缺有效 ctx 直接丢弃，不落库、不回确认语
+  if (!hasEffectiveCtx(context)) return '';
+  const ruleText = String(parsed.rule || '').trim();
+  if (!ruleText || ruleText.length < 2) return '';
+
   const rule = store.addAdapter({
-    text: parsed.rule,
+    text: ruleText,
     scope: parsed.scope,
     game: context.game == null ? null : String(context.game),
     sessionId: parsed.scope === C.SCOPE.GAME ? null : context.sessionId == null ? null : String(context.sessionId),
-    source: context.channel == null ? null : String(context.channel),
+    source: parsed.source || (context.channel == null ? null : String(context.channel)),
     replacePrevious: parsed.scope === C.SCOPE.GAME,
   });
   invalidateCache();
-  if (!rule) return '这条我没记下来，等下再试一次';
+  if (!rule) return '';
+  if (parsed.scope === C.SCOPE.GAME) return '记下了，以后都这样';
+  if (parsed.scope === C.SCOPE.SESSION) return '这局听你的';
+  return '这步听你的';
+}
+
+/** 离线同步入口（仅测试 / 无模型环境用）：强制走保守兜底，不调模型。 */
+function applyAdapterCommandSync(text, ctx) {
+  const context = ctx && typeof ctx === 'object' ? ctx : {};
+  const parsed = conservativeParse(text, context);
+  if (!parsed || parsed.action !== 'add') return '';
+  if (!hasEffectiveCtx(context)) return '';
+  const rule = store.addAdapter({
+    text: String(parsed.rule || '').trim(),
+    scope: parsed.scope,
+    game: context.game == null ? null : String(context.game),
+    sessionId: parsed.scope === C.SCOPE.GAME ? null : context.sessionId == null ? null : String(context.sessionId),
+    source: parsed.source,
+    replacePrevious: parsed.scope === C.SCOPE.GAME,
+  });
+  if (rule) invalidateCache();
+  if (!rule) return '';
   if (parsed.scope === C.SCOPE.GAME) return '记下了，以后都这样';
   if (parsed.scope === C.SCOPE.SESSION) return '这局听你的';
   return '这步听你的';
@@ -227,6 +367,13 @@ module.exports = {
   activeAdapters,
   activeAdapterRecords,
   applyAdapterCommand,
+  applyAdapterCommandSync,
+  judgeAdapterCommand,
+  conservativeParse,
+  listActive,
+  revokeById,
+  archiveGhosts,
+  hasEffectiveCtx,
   endSession,
   invalidateCache,
 };

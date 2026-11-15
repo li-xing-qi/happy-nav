@@ -1397,12 +1397,9 @@ const server = http.createServer(safe(async (req, res) => {
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
     if (lastUser && lastUser.content) {
       logChat('user', lastUser.content);
-      /* 记忆写入：站点只管「约定 / 撤销」这一种，落子与局终归 agent-bot。
-       * 为什么站点不写落子：站点只按 pid 区分玩家，分不清谁是 AI，
-       * 写进去会把人类玩家的动作也记成「鱼的临时记忆」，反而污染。 */
-      if (!FOUR_LAYER_OFF && fourLayer) {
-        try { fourLayer.handleCommand(lastUser.content, { channel: 'api-chat' }); } catch {}
-      }
+      /* 站点不写适配器：/api/chat 缺少 game / sessionId 这类局面信息，
+       * 写进去的规则要么变成永远注入不到的幽灵规则，要么被语义误判污染。
+       * 约定/撤销统一由 agent-bot 的与鱼通道处理（那边会补全 ctx 并走语义门槛）。 */
     }
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     // ★ 外部系统依赖：流正常结束时把小鱼的回复也记进流水账

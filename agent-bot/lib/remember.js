@@ -73,4 +73,46 @@ function remember(raw, opts = {}) {
   }
 }
 
-module.exports = { remember, MARK_LONG, MARK_RECENT };
+/* ============================================================
+   语义门槛（异步）：判断权交给模型，脚本只做保守兜底
+   ------------------------------------------------------------
+   原实现由 detectRemember 的正则直接落盘，「我记住了，谢谢你」会被写成
+   「了，谢谢你」。现在先由 llm.judgeFact 裁决，模型不可用时走保守兜底。
+   ============================================================ */
+
+const llm = require('../../memory/llm.js');
+
+/** 兜底时一票否决的表达（完成态 / 拖延 / 元语言否定 / 反问） */
+const REJECT_WORDS = [
+  '我记住了', '记住了，谢谢', '再说吧', '算了', '回头说', '下次吧',
+  '我不是这个意思', '不是这个意思', '打不过', '不玩了', '记不住',
+];
+/** 兜底时只认这些显式祈使前缀 */
+const STRICT_PREFIXES = ['记住：', '记住:', '记一下：', '记一下:', '帮我记', '别忘了', '记着：', '记着:'];
+
+function conservativeFact(rawText) {
+  const t = String(rawText || '').trim();
+  if (!t || REJECT_WORDS.some((w) => t.includes(w))) return null;
+  const hit = STRICT_PREFIXES.find((w) => t.startsWith(w));
+  if (!hit) return null;
+  const fact = t.slice(hit.length).replace(/^[，,：:\s]+/, '').replace(/[。.！!？?]+$/g, '').trim();
+  if (fact.length < 2) return null;
+  return fact;
+}
+
+/**
+ * 带语义裁决的写入（主链路用这个）。
+ * @param {string} text 用户原话（完整）
+ * @param {object} [opts] {file}
+ * @returns {Promise<{ok:boolean, skipped?:boolean, message:string, file?:string}>}
+ */
+async function rememberAsync(text, opts = {}) {
+  const raw = String(text == null ? '' : text).trim();
+  if (!raw) return { ok: false, message: '内容为空' };
+  const verdict = await llm.judgeFact(raw);
+  const fact = verdict ? (verdict.keep ? verdict.fact : null) : conservativeFact(raw);
+  if (!fact) return { ok: true, skipped: true, message: '不是需要长期记住的事实，跳过' };
+  return remember(fact, opts);
+}
+
+module.exports = { remember, rememberAsync, conservativeFact, MARK_LONG, MARK_RECENT };

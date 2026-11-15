@@ -82,10 +82,10 @@ function adapterPrompt(ctx = {}) {
   try { return memory.adapterPrompt(ctx); } catch { return ''; }
 }
 
-/** 识别用户说的「约定 / 这条不算了」，返回确认语；非指令返回空串 */
-function handleMemoryCommand(text, ctx = {}) {
+/** 识别用户说的「约定 / 这条不算了」，返回确认语；非指令返回空串（异步：内部走语义裁决） */
+async function handleMemoryCommand(text, ctx = {}) {
   if (FOUR_LAYER_OFF || !memory) return '';
-  try { return memory.handleCommand(text, ctx); } catch { return ''; }
+  try { return await memory.handleCommand(text, ctx); } catch { return ''; }
 }
 
 /** 往 L1 临时记忆记一条局内数据（每步落子 / 每张出牌） */

@@ -14,6 +14,32 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 
+/* ---------- 自动加载仓库根的 .env ----------
+ * 站点进程有自己的加载器，agent-bot 是独立进程，以前只认 shell 里 export 的变量，
+ * 用户照 README 填了 .env 却不生效。这里补上，规则与站点一致：
+ * 已存在的真实环境变量优先，.env 只补空缺。 */
+(function loadDotEnv() {
+  try {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const file = path.join(__dirname, '..', '.env');
+    if (!fs.existsSync(file)) return;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t[0] === '#') continue;
+      const eq = t.indexOf('=');
+      if (eq < 1) continue;
+      const key = t.slice(0, eq).trim();
+      let val = t.slice(eq + 1).trim();
+      if (val.length >= 2) {
+        const a = val[0], b = val[val.length - 1];
+        if ((a === '"' && b === '"') || (a === "'" && b === "'")) val = val.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = val;
+    }
+  } catch {}
+})();
+
 /** 仓库根目录（agent-bot 的上一级） */
 const REPO_ROOT = path.join(__dirname, '..');
 

@@ -630,7 +630,7 @@ async function poll() {
     //   因为 chatlog.py 靠 name in ('老板','owner') 判断是不是老板本人说的，
     //   写游戏/房间昵称会导致不被标记重要（五子棋那边踩过同样的坑）。
     logChat('user', msgText(m), '老板');
-    forwardToDsh(m);
+    await forwardToDsh(m);
   }
   if (seenIds.size > 500) {
     const keep = [...seenIds].slice(-200);
@@ -662,7 +662,7 @@ function yuFileToLocal(url) {
  * 2026-11-11 修：原来只处理 text，语音/图片全丢。
  * 现在按与鱼的 m.type 转成 OneBot 消息段，DSH 那边就知道老板发了什么。
  */
-function forwardToDsh(m) {
+async function forwardToDsh(m) {
   const segs = [];
   let raw = '';
 
@@ -710,8 +710,16 @@ function forwardToDsh(m) {
     try {
       // 与鱼是没有玩法上下文的通用通道；includeAllGames 让「先打格挡牌」
       // 这类绑定了玩法的长期偏好也能被同一条鱼看见（一条鱼要求）。
-      const ctx = { channel: 'yu', game: '', sessionId: '', room: CONF.room, includeAllGames: true };
-      const confirm = fourLayer.handleCommand(raw, ctx);
+      const ctx = {
+        channel: 'yu',
+        game: '',
+        /* 用房间号作稳定 sessionId：原来留空会让 session 档规则永远注入不到，
+         * 变成看不见也改不掉的幽灵规则。 */
+        sessionId: String(CONF.room || 'yu'),
+        room: CONF.room,
+        includeAllGames: true,
+      };
+      const confirm = await fourLayer.handleCommand(raw, ctx);
       const adapters = fourLayer.adapterPrompt(ctx);
       const wantFull = Date.now() - _lastFullInjection > FULL_INJECTION_GAP;
       const full = wantFull ? fourLayer.renderFor('yu') : '';

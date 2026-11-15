@@ -180,17 +180,17 @@ function testCommandsAndL1() {
   writeFixture(p);
 
   assert.strictEqual(
-    adapters.applyAdapterCommand('以后都先打给格挡的牌', { game: 'gomoku', sessionId: 's1' }),
+    adapters.applyAdapterCommandSync('以后都先打给格挡的牌', { game: 'gomoku', sessionId: 's1' }),
     '记下了，以后都这样',
     'game 档确认语'
   );
   assert.strictEqual(
-    adapters.applyAdapterCommand('约定 这局别连五子', { game: 'gomoku', sessionId: 's1' }),
+    adapters.applyAdapterCommandSync('约定 这局别连五子', { game: 'gomoku', sessionId: 's1' }),
     '这局听你的',
     'session 档确认语'
   );
   assert.strictEqual(
-    adapters.applyAdapterCommand('下一步别连', { game: 'gomoku', sessionId: 's1' }),
+    adapters.applyAdapterCommandSync('下一步别连', { game: 'gomoku', sessionId: 's1' }),
     '这步听你的',
     'once 档确认语'
   );

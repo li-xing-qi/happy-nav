@@ -94,26 +94,48 @@ function adapterPrompt(ctx = {}) {
 }
 
 /**
- * 识别并执行用户说的「约定 / 撤销」类指令。
- * 返回确认语供小鱼自然地回一句；不是指令时返回空串。
- * @param {string} text 用户原话
- * @param {object} ctx {game, sessionId, room, channel}
- * @returns {string}
+ * 识别并执行用户说的「约定 / 撤销」类指令（异步：内部走模型语义裁决）。
+ *
+ * 现在判断权在 memory/llm.js：模型决定「是否该记 / 记成什么 / 作用域」，
+ * 模型不可用时由 adapters 的保守兜底接管。缺有效 ctx 的通道一律不落库。
+ * 返回确认语；不是指令 / 被止血拒绝时返回空串（绝不回虚假确认语）。
+ *
+ * @param {string} text 用户原话（完整传入，不裁剪）
+ * @param {object} ctx {channel, game, sessionId, board, situation}
+ * @returns {Promise<string>}
  */
-function handleCommand(text, ctx = {}) {
+async function handleCommand(text, ctx = {}) {
   const a = mod('adapters');
   if (!a || typeof a.applyAdapterCommand !== 'function') return '';
   try {
-    const parsed = typeof a.parseAdapterCommand === 'function'
-      ? a.parseAdapterCommand(text, ctx) : null;
-    if (!parsed || !parsed.action) return '';
-    const r = a.applyAdapterCommand(text, ctx);
+    const r = await a.applyAdapterCommand(text, ctx);
     if (!r) return '';
     return typeof r === 'string' ? r : (r.confirm || '');
   } catch (e) {
     try { console.warn('[memory:bridge] handleCommand 降级：', e.message); } catch {}
     return '';
   }
+}
+
+/** 可见 / 审计：列出当前生效的约定（含 id）。 */
+function listAdapters(ctx = {}) {
+  const a = mod('adapters');
+  if (!a || typeof a.listActive !== 'function') return [];
+  try { return a.listActive(ctx); } catch { return []; }
+}
+
+/** 按 id 精确撤销一条约定；绝不批量、绝不模糊匹配。 */
+function revokeAdapter(id) {
+  const a = mod('adapters');
+  if (!a || typeof a.revokeById !== 'function') return [];
+  try { return a.revokeById(id); } catch { return []; }
+}
+
+/** 归档存量幽灵规则（只在维护脚本里调用，不改注入端）。 */
+function archiveGhostAdapters() {
+  const a = mod('adapters');
+  if (!a || typeof a.archiveGhosts !== 'function') return 0;
+  try { return a.archiveGhosts(); } catch { return 0; }
 }
 
 /**
@@ -197,6 +219,9 @@ module.exports = {
   renderFor,
   adapterPrompt,
   handleCommand,
+  listAdapters,
+  revokeAdapter,
+  archiveGhostAdapters,
   noteStep,
   endSession,
   consumeOnce,
