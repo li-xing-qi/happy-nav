@@ -1,5 +1,5 @@
 {
-  "name": "heyu-nav",
+  "name": "happy-nav",
   "version": "1.0.0",
   "private": false,
   "description": "和鱼的快乐导航 - 带 AI 伙伴的多玩法网页导航站：万象牌 / 五子棋 / 心有灵犀 / 聊天室 / 与鱼",
@@ -12,7 +12,7 @@
     "card-game",
     "gomoku"
   ],
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "engines": {
     "node": ">=18.0.0"
   },

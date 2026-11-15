@@ -27,8 +27,8 @@ MODE="foreground"
 
 # ---------- 0. 停止 ----------
 if [ "$MODE" = "stop" ]; then
-  if command -v pm2 >/dev/null 2>&1 && pm2 describe heyu-nav >/dev/null 2>&1; then
-    pm2 stop heyu-nav && pm2 delete heyu-nav && ok "已停止 pm2 实例"
+  if command -v pm2 >/dev/null 2>&1 && pm2 describe happy-nav >/dev/null 2>&1; then
+    pm2 stop happy-nav && pm2 delete happy-nav && ok "已停止 pm2 实例"
   else
     PIDS=$(pgrep -f "node .*server\.js" 2>/dev/null || true)
     if [ -n "$PIDS" ]; then kill $PIDS 2>/dev/null || true; ok "已停止进程：$PIDS"; else warn "没有运行中的实例"; fi
@@ -79,19 +79,19 @@ PATCHES=$(grep -o 'PATCH [0-9]/8' server.js | sort -u | wc -l | tr -d ' ')
 # ---------- 5. 启动 ----------
 if [ "$MODE" = "daemon" ]; then
   if command -v pm2 >/dev/null 2>&1; then
-    pm2 start server.js --name heyu-nav --update-env >/dev/null
+    pm2 start server.js --name happy-nav --update-env >/dev/null
     pm2 save >/dev/null 2>&1 || true
-    ok "已用 pm2 后台启动（pm2 logs heyu-nav 看日志）"
+    ok "已用 pm2 后台启动（pm2 logs happy-nav 看日志）"
   else
-    PORT="$PORT" nohup node server.js > heyu-nav.log 2>&1 &
-    echo $! > heyu-nav.pid
-    ok "已用 nohup 后台启动（日志：heyu-nav.log）"
+    PORT="$PORT" nohup node server.js > happy-nav.log 2>&1 &
+    echo $! > happy-nav.pid
+    ok "已用 nohup 后台启动（日志：happy-nav.log）"
   fi
   sleep 2
   if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
     ok "健康检查通过 → http://127.0.0.1:${PORT}"
   else
-    warn "健康检查未通过，请看日志：pm2 logs heyu-nav  或  tail -50 heyu-nav.log"
+    warn "健康检查未通过，请看日志：pm2 logs happy-nav  或  tail -50 happy-nav.log"
   fi
 else
   ok "启动服务（Ctrl+C 停止）→ http://127.0.0.1:${PORT}"

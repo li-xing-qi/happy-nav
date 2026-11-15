@@ -14,8 +14,8 @@
 ### 方式一：Docker（最省事，推荐）
 
 ```bash
-git clone <本仓库地址> heyu-nav
-cd heyu-nav
+git clone https://github.com/li-xing-qi/happy-nav.git
+cd happy-nav
 docker compose up -d
 ```
 
@@ -24,8 +24,8 @@ docker compose up -d
 ### 方式二：一条命令（Linux / macOS，有 Node 就行）
 
 ```bash
-git clone <本仓库地址> heyu-nav
-cd heyu-nav
+git clone https://github.com/li-xing-qi/happy-nav.git
+cd happy-nav
 bash deploy.sh
 ```
 
@@ -205,7 +205,17 @@ bash deploy.sh --stop  # 停止
 
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。可自由使用、修改、分发。
+采用 [PolyForm Noncommercial 1.0.0](LICENSE)。用大白话说：
+
+- ✅ **自己用、自己部署、随便改、改完再发给朋友** —— 都行，不用问我
+- ✅ **二次开发、做成你自己的版本公开出去** —— 也行
+- ✅ 学校、社团、非营利组织内部使用 —— 算非商业用途，同样可以
+- ❌ **拿它做商业产品、卖钱、做成付费服务** —— 这个要先获得许可
+
+不是想设卡。只是不希望有人把它打包一下直接拿去卖钱，然后原作者什么都得不到。
+真想商用的话，开个 issue 说一声，基本都好商量。
+
+注：这不是一个 OSI 认证的「开源」协议，而是一个「源码公开、允许非商业自由使用」的协议。如果你需要能用于商业项目的版本，可以自己换掉 `LICENSE` 文件——代码本身没有为此设任何技术限制。
 
 ## 致谢
 
