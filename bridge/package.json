@@ -1,0 +1,17 @@
+{
+  "name": "yufish-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "把「与鱼」房间桥接到 dsh（OneBot 反向 WebSocket）",
+  "main": "yufish-bridge.js",
+  "scripts": {
+    "start": "node yufish-bridge.js"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
