@@ -11,7 +11,17 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const cfg = require('../config.js');
+/* 目标文件可由 MEMORY_MD_FILE 指定：某些部署的工作区不在仓库内
+ * （例如独立工作区 + 独立 agent-bot 目录），此时没有 config.js 也能用。 */
+let cfg = null;
+try { cfg = require('../config.js'); } catch {}
+
+function memoryFile(opts) {
+  if (opts && opts.file) return opts.file;
+  if (process.env.MEMORY_MD_FILE) return process.env.MEMORY_MD_FILE;
+  if (cfg && cfg.personaDir) return path.join(cfg.personaDir, 'MEMORY.md');
+  return path.join(__dirname, '..', '..', 'workspace', 'MEMORY.md');
+}
 
 const MARK_LONG = '## 关于老板';
 const MARK_RECENT = '## 最近动态';
@@ -27,7 +37,7 @@ function remember(raw, opts = {}) {
   if (!text) return { ok: false, message: '内容为空' };
 
   const line = text.startsWith('- ') ? text : `- ${text}`;
-  const file = opts.file || path.join(cfg.personaDir, 'MEMORY.md');
+  const file = memoryFile(opts);
 
   let txt = '';
   try {
@@ -80,7 +90,15 @@ function remember(raw, opts = {}) {
    「了，谢谢你」。现在先由 llm.judgeFact 裁决，模型不可用时走保守兜底。
    ============================================================ */
 
-const llm = require('../../memory/llm.js');
+/* 模型裁决器路径可配置：仓库布局是 ../../memory/llm.js，
+ * 某些部署（如独立工作区）可用 MEMORY_LLM_MODULE 指向别处。
+ * 找不到时降级为「永远返回 null」，由保守兜底接管，不影响主链路。 */
+let llm;
+try {
+  llm = require(process.env.MEMORY_LLM_MODULE || '../../memory/llm.js');
+} catch {
+  llm = { judgeFact: async () => null };
+}
 
 /** 兜底时一票否决的表达（完成态 / 拖延 / 元语言否定 / 反问） */
 const REJECT_WORDS = [

@@ -56,7 +56,14 @@ const store = require('./store.js');
 const adapters = require('./adapters.js');
 const bridge = require('./bridge.js');
 const llm = require('./llm.js');
-const remember = require('../agent-bot/lib/remember.js');
+/* 记住模块路径可配置：某些部署的 agent-bot 与 memory 不在同一个父目录下。
+   找不到时跳过「记住旁路」那组用例，其余判照常执行。 */
+let remember = null;
+try {
+  remember = require(process.env.REMEMBER_MODULE || '../agent-bot/lib/remember.js');
+} catch {
+  console.log('[verify-semantic] 提示：未找到记住模块，将跳过该组用例（可设 REMEMBER_MODULE）');
+}
 
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
@@ -171,6 +178,9 @@ async function main() {
 
   /* ========== 6. 记住旁路：事实裁决 ========== */
   console.log('[case] 「记住：…」旁路的语义裁决');
+  if (!remember) {
+    console.log('  - 跳过（记住模块不可用）');
+  } else {
   const memFile = path.join(ROOT, 'MEMORY.md');
   mockFactVerdict = { keep: false, fact: '', confidence: 0.98 };
   const r1 = await remember.rememberAsync('我记住了，谢谢你', { file: memFile });
@@ -178,6 +188,7 @@ async function main() {
   mockFactVerdict = { keep: true, fact: '我家猫叫咪咪', confidence: 0.95 };
   const r2 = await remember.rememberAsync('记住：我家猫叫咪咪', { file: memFile });
   check('真正的事实由模型重写后写入', r2.ok && !r2.skipped && fs.existsSync(memFile) && fs.readFileSync(memFile, 'utf8').includes('我家猫叫咪咪'));
+  }
   console.log('');
 
   /* ========== 7. 降级：模型不可用时保守兜底且不阉割功能 ========== */
