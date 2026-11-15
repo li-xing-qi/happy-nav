@@ -1,0 +1,21 @@
+{
+  "name": "happy-nav-agent-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI 陪玩进程：聊天室 / 卡牌 / 五子棋 / 心有灵犀 四个场景，共用一份人设与四层记忆",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js && node --check core.js && node --check config.js && node --check yufish.js && node --check tools.js && node --check lib/remember.js && node --check scenes/chat.js && node --check scenes/card.js && node --check scenes/gomoku.js && node --check scenes/lingxi.js"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}

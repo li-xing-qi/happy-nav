@@ -17,6 +17,12 @@ COPY server.js yu.js lx.js engine.js content.js ./
 COPY public ./public
 COPY scripts ./scripts
 
+# AI 陪玩与四层记忆（可选启用；不跑 agent-bot 时不影响站点）
+COPY memory ./memory
+COPY agent-bot ./agent-bot
+COPY workspace.example ./workspace.example
+RUN cd agent-bot && npm install --omit=optional --no-audit --no-fund
+
 # 运行时数据目录（会被 volume 覆盖）
 RUN mkdir -p /app/data/uploads /app/data/chat /app/data/gomoku /app/data/yu /app/data/lx /app/data/yu-files /app/workspace
 

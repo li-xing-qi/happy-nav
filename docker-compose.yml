@@ -38,3 +38,34 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ============================================================
+  # AI 陪玩（可选）：四个场景的 AI 都在这里
+  # 只写 docker compose up -d 不会启动它；要 AI 就加 --profile ai
+  #   docker compose --profile ai up -d
+  # 需要 .env 里配好 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+  # ============================================================
+  agent-bot:
+    build: .
+    image: happy-nav:latest
+    container_name: happy-nav-agent
+    restart: unless-stopped
+    profiles: ["ai"]
+    depends_on:
+      - happy-nav
+    working_dir: /app/agent-bot
+    command: ["node", "index.js"]
+    environment:
+      TZ: Asia/Shanghai
+      BASE: "http://happy-nav:3000"
+      WORKSPACE_DIR: "/app/workspace"
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_MODEL: "${LLM_MODEL:-}"
+      NO_CHAT: "${NO_CHAT:-0}"
+      NO_CARD: "${NO_CARD:-0}"
+      NO_GOMOKU: "${NO_GOMOKU:-0}"
+      NO_LINGXI: "${NO_LINGXI:-0}"
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
