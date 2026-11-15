@@ -988,7 +988,19 @@ function warmup() {
     }
     log(`上下文预热 ${hist.size()} 条`);
   } catch (e) {
-    log('预热失败:', e.message);
+    /* 首次部署时流水账还不存在，属于正常情况，不该当成错误刷屏。
+     * 站点只在自己被使用时才写这个文件，所以「还没人聊过」= 没有文件。 */
+    if (e && e.code === 'ENOENT') {
+      try {
+        fs.mkdirSync(require('node:path').dirname(conf.chatlog), { recursive: true });
+        fs.writeFileSync(conf.chatlog, '', { flag: 'a' });
+        log('流水账尚未创建，已初始化空文件（等第一次聊天后开始记录）');
+      } catch {
+        log('流水账尚未创建，跳过预热（等第一次聊天后会生成）');
+      }
+    } else {
+      log('预热失败:', e.message);
+    }
   }
 }
 

@@ -32,6 +32,17 @@ async function main() {
   log('agent-bot 启动，人设长度', core.persona().length, '字');
   log('启用的场景:', Object.entries(ENABLE).filter(([, v]) => v).map(([k]) => k).join(', '));
 
+  /* 房号就是访问凭证：知道号码就能进。默认值（0000 / main）人人会猜，
+   * 局域网或组网环境里等于敞着门，所以这里提醒一次。 */
+  const cfgRooms = require('./config.js').rooms;
+  const guessed = [];
+  if (ENABLE.chat && cfgRooms.chat === '0000') guessed.push('CHAT_ROOM');
+  if (ENABLE.card && cfgRooms.card === 'main') guessed.push('CARD_ROOM');
+  if (ENABLE.gomoku && cfgRooms.gomoku === '0000') guessed.push('GOMOKU_ROOM');
+  if (guessed.length) {
+    log(`提示：${guessed.join(' / ')} 仍是默认值。房号即凭证，建议改成不容易猜的（改 .env 即可）`);
+  }
+
   for (const name of ['chat', 'card', 'gomoku', 'lingxi']) {
     if (!ENABLE[name]) {
       log(`跳过场景 ${name}（已禁用）`);

@@ -232,6 +232,11 @@ const SHARED_FILE = process.env.SHARED_STATE || path.join(WORKSPACE, 'shared-sta
 /* 四层记忆 · 可选增强（PATCH 之外的新增，不改动上面任何 PATCH 块）
  * 加载失败 / 渲染为空时，fullSystemPrompt() 自动回落到下面的原有实现。
  * 设 FOUR_LAYER=0 可一键关掉，无需改代码。 */
+/* 让 memory/ 模块跟随站点的工作区：
+ * 它自己读 QQ_WORKSPACE_ROOT，默认指向仓库内 workspace/；
+ * 不注入的话，站点用了 WORKSPACE_DIR 时，记忆会写到另一个目录去。 */
+if (!process.env.QQ_WORKSPACE_ROOT) process.env.QQ_WORKSPACE_ROOT = WORKSPACE;
+
 let fourLayer = null;
 try { fourLayer = require(path.join(__dirname, 'memory', 'bridge.js')); } catch {}
 const FOUR_LAYER_OFF = process.env.FOUR_LAYER === '0';
@@ -1390,7 +1395,15 @@ const server = http.createServer(safe(async (req, res) => {
     if (!msgs.length || msgs[0].role !== 'system') msgs = [{ role: 'system', content: fullSystemPrompt() }, ...msgs];
     // ★ 外部系统依赖：把老板这句话记进跨通道流水账
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
-    if (lastUser && lastUser.content) logChat('user', lastUser.content);
+    if (lastUser && lastUser.content) {
+      logChat('user', lastUser.content);
+      /* 记忆写入：站点只管「约定 / 撤销」这一种，落子与局终归 agent-bot。
+       * 为什么站点不写落子：站点只按 pid 区分玩家，分不清谁是 AI，
+       * 写进去会把人类玩家的动作也记成「鱼的临时记忆」，反而污染。 */
+      if (!FOUR_LAYER_OFF && fourLayer) {
+        try { fourLayer.handleCommand(lastUser.content, { channel: 'api-chat' }); } catch {}
+      }
+    }
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     // ★ 外部系统依赖：流正常结束时把小鱼的回复也记进流水账
     try { proxyStream(req, res, msgs, (a) => logChat('assistant', a)); }
