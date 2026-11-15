@@ -108,7 +108,10 @@ node server.js
 
 ```bash
 cd agent-bot
-npm install          # 只有一个必需依赖 ws；画图能力另需 puppeteer-core（可选）
+npm install          # 必需依赖只有一个 ws
+# 想让 AI 能画图，再多两步（不装也不影响聊天与棋牌）：
+#   npm install puppeteer-core
+#   装一个 Chromium/Chrome，或用 CHROME_BIN 指向已有的可执行文件
 cd ..
 # 确保 .env 里模型配置正确，然后启动
 cd agent-bot && node index.js
