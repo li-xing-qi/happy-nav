@@ -1,0 +1,29 @@
+{
+  "name": "heyu-nav",
+  "version": "1.0.0",
+  "private": false,
+  "description": "和鱼的快乐导航 - 带 AI 伙伴的多玩法网页导航站：万象牌 / 五子棋 / 心有灵犀 / 聊天室 / 与鱼",
+  "keywords": [
+    "nodejs",
+    "express-free",
+    "self-hosted",
+    "ai-companion",
+    "chatroom",
+    "card-game",
+    "gomoku"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js && node --check yu.js && node --check lx.js && node --check engine.js && node --check content.js",
+    "smoke": "bash scripts/smoke-test.sh",
+    "migrate:uploads": "node scripts/migrate-uploads.js"
+  },
+  "dependencies": {},
+  "optionalDependencies": {}
+}

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>聊天室 · 和鱼的开心导航</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --ink:#141414; --ink-2:#5c5c5c; --ink-3:#9a9a9a;
+    --line:#e8e6e2; --line-2:#d8d5cf;
+    --paper:#ffffff; --paper-2:#f6f5f2; --paper-3:#efeeea;
+    --accent:#2f5fa8; --accent-soft:#eef4fd; --grad:linear-gradient(135deg,#f2f7ff 0%,#fff 72%);
+    --seal:var(--accent); --mine:#1b1b1b;
+  }
+  html{height:100%;-webkit-text-size-adjust:100%;}
+  body{
+    height:100%; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .hidden{display:none !important;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ================= 进门 ================= */
+  #join{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:radial-gradient(120% 80% at 50% 0%,#fbfaf8 0%,#fff 55%);overflow-y:auto;}
+  .jcard{width:min(380px,100%);}
+  .jbrand{display:flex;align-items:center;gap:9px;font-size:19px;font-weight:700;letter-spacing:.08em;}
+  .seal{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;
+    background:var(--seal);color:#fff;font-size:13px;font-weight:700;
+    font-family:"Songti SC","Noto Serif SC",serif;}
+  .jlead{margin-top:10px;font-size:13px;line-height:1.85;color:var(--ink-2);}
+  .jlabel{margin:20px 0 7px;font-size:11px;letter-spacing:.2em;color:var(--ink-3);}
+  .jinput{width:100%;padding:13px 14px;border:1px solid var(--line-2);border-radius:11px;background:#fff;
+    font-size:15px;color:var(--ink);outline:none;transition:border-color .15s;}
+  .jinput:focus{border-color:var(--ink);}
+  #roomIn{letter-spacing:.24em;font-weight:700;text-transform:uppercase;}
+  .jbtn{margin-top:22px;width:100%;padding:14px;border:none;border-radius:11px;background:var(--ink);
+    color:#fff;font-size:15px;font-weight:600;letter-spacing:.06em;transition:opacity .15s,transform .1s;}
+  .jbtn:hover{opacity:.9;}
+  .jbtn:active{transform:scale(.99);}
+  .jbtn:disabled{opacity:.45;cursor:default;}
+  .jrow{margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .jlink{background:none;border:none;padding:0;font-size:12.5px;color:var(--ink-2);text-decoration:none;letter-spacing:.04em;}
+  .jlink:hover{color:var(--ink);}
+  .jmsg{margin-top:14px;font-size:12.5px;line-height:1.7;color:var(--seal);min-height:18px;}
+  .jmsg.ok{color:#2f7a4e;}
+
+  /* ================= 聊天 ================= */
+  #room{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--paper);}
+  header{
+    flex:0 0 auto;display:flex;align-items:center;gap:10px;
+    padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:10px;
+    padding-left:max(14px,calc((100% - 780px)/2));padding-right:max(14px,calc((100% - 780px)/2));
+    border-bottom:1px solid var(--line);background:rgba(255,255,255,.92);
+    -webkit-backdrop-filter:saturate(180%) blur(12px);backdrop-filter:saturate(180%) blur(12px);
+  }
+  .back{width:32px;height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:15px;}
+  .back:hover{background:var(--paper-2);}
+  .rmeta{flex:1 1 auto;min-width:0;}
+  .rname{font-size:14px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:7px;}
+  .rname b{font-variant-numeric:tabular-nums;letter-spacing:.16em;}
+  .rsub{font-size:11px;color:var(--ink-3);margin-top:2px;display:flex;align-items:center;gap:5px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:#cfcfcf;flex:0 0 auto;}
+  .dot.on{background:#3ec06a;box-shadow:0 0 0 3px rgba(62,192,106,.16);}
+  .hbtn{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+  #msgs{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+    padding-top:18px;padding-bottom:8px;
+    padding-left:max(14px,calc((100% - 780px)/2));padding-right:max(14px,calc((100% - 780px)/2));
+    display:flex;flex-direction:column;gap:3px;scroll-behavior:smooth;}
+  #msgs::before{content:'';flex:0 0 0;margin-top:auto;}   /* 消息少的时候贴着底部 */
+  .empty{margin:auto;text-align:center;font-size:12.5px;line-height:2;color:var(--ink-3);}
+  .empty .big{font-size:22px;display:block;margin-bottom:8px;}
+  .earlier{flex:0 0 auto;align-self:center;margin:0 auto 8px;padding:7px 15px;border-radius:99px;
+    border:1px solid var(--line);background:#fff;color:var(--ink-2);font-size:11.5px;letter-spacing:.06em;
+    transition:background .14s,color .14s;}
+  .earlier:hover{background:var(--paper-2);color:var(--ink);}
+  .earlier:disabled{opacity:.55;cursor:default;}
+
+  .day{text-align:center;font-size:10.5px;color:var(--ink-3);margin:14px 0 10px;letter-spacing:.08em;}
+  .sys{text-align:center;font-size:11px;color:var(--ink-3);margin:8px 0;}
+  .row{display:flex;gap:8px;align-items:flex-end;margin-top:10px;}
+  .row.me{flex-direction:row-reverse;}
+  .av{width:28px;height:28px;flex:0 0 auto;border-radius:50%;background:var(--paper-3);
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-2);font-weight:600;}
+  .col{display:flex;flex-direction:column;gap:4px;min-width:0;max-width:min(74%,520px);}
+  .row.me .col{align-items:flex-end;}
+  .who{font-size:10.5px;color:var(--ink-3);padding:0 3px;}
+  .bub{padding:9px 13px;border-radius:14px;background:var(--paper-2);border:1px solid var(--line);
+    font-size:14.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);}
+  .row.me .bub{background:var(--mine);border-color:var(--mine);color:#fff;border-bottom-right-radius:5px;}
+  .row.them .bub{border-bottom-left-radius:5px;}
+  .bub a{color:inherit;text-decoration:underline;text-underline-offset:2px;}
+  .time{font-size:9.5px;color:var(--ink-3);padding:0 3px;}
+  .imgmsg{border-radius:13px;overflow:hidden;border:1px solid var(--line);background:var(--paper-2);
+    max-width:min(240px,62vw);cursor:zoom-in;display:block;line-height:0;}
+  .imgmsg img{display:block;width:100%;height:auto;max-height:320px;object-fit:contain;}
+  .sticker{max-width:min(160px,42vw);max-height:160px;cursor:zoom-in;display:block;border-radius:8px;}
+  .pending{opacity:.45;}
+  .jump{position:absolute;left:50%;transform:translateX(-50%);bottom:86px;z-index:5;
+    padding:7px 15px;border-radius:99px;background:var(--ink);color:#fff;font-size:12px;border:none;
+    box-shadow:0 8px 22px rgba(0,0,0,.18);}
+
+  /* 输入区 */
+  .composer{flex:0 0 auto;border-top:1px solid var(--line);background:#fff;
+    padding:9px max(10px,calc((100% - 780px)/2)) calc(env(safe-area-inset-bottom) + 9px);}
+  .crow{display:flex;align-items:flex-end;gap:7px;}
+  .cbtn{width:40px;height:40px;flex:0 0 auto;border-radius:11px;border:1px solid var(--line);
+    background:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;transition:background .14s;}
+  .cbtn:hover{background:var(--paper-2);}
+  .cbtn.on{background:var(--paper-3);border-color:var(--line-2);}
+  #inp{flex:1 1 auto;min-height:40px;max-height:132px;resize:none;padding:10px 14px;border:1px solid var(--line);
+    border-radius:20px;background:var(--paper-2);font:14.5px/1.45 inherit;color:var(--ink);outline:none;
+    transition:border-color .15s,background .15s;}
+  #inp:focus{border-color:var(--line-2);background:#fff;}
+  #sendBtn{flex:0 0 auto;height:40px;padding:0 17px;border:none;border-radius:20px;background:var(--ink);
+    color:#fff;font-size:14px;font-weight:600;letter-spacing:.04em;transition:opacity .15s;}
+  #sendBtn:disabled{opacity:.3;}
+
+  /* 表情包抽屉 */
+  .tray{flex:0 0 auto;border-top:1px solid var(--line);background:var(--paper-2);
+    padding:10px max(12px,calc((100% - 780px)/2)) calc(env(safe-area-inset-bottom) + 10px);}
+  .tray-h{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-2);margin-bottom:9px;}
+  .tray-h span{color:var(--ink-3);font-size:10.5px;}
+  .tray-h .x{margin-left:auto;border:none;background:none;font-size:14px;color:var(--ink-3);padding:2px 6px;}
+  .tray-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;max-height:34vh;overflow-y:auto;}
+  .stk{aspect-ratio:1;border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;padding:0;}
+  .stk img{width:100%;height:100%;object-fit:contain;pointer-events:none;}
+  .stk:hover{border-color:var(--ink-3);}
+  .tray-add{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;padding:11px;
+    border:1px dashed var(--line-2);border-radius:10px;font-size:12.5px;color:var(--ink-2);cursor:pointer;background:#fff;}
+
+  /* 大图 */
+  .lightbox{position:fixed;inset:0;z-index:99;background:rgba(8,8,8,.92);display:flex;align-items:center;
+    justify-content:center;padding:18px;}
+  .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;}
+  .lightbox .lx{position:absolute;top:calc(env(safe-area-inset-top) + 14px);right:16px;width:36px;height:36px;
+    border-radius:50%;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:16px;}
+
+  .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 64px);transform:translateX(-50%);
+    z-index:120;background:rgba(20,20,20,.92);color:#fff;font-size:12.5px;padding:9px 16px;border-radius:99px;
+    max-width:86vw;text-align:center;line-height:1.5;}
+  /* 图片失效时的占位：别留一个空的裂图框（外部系统依赖，勿删） */
+  .imgerr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    min-width:140px;height:96px;padding:12px;font-size:12.5px;color:var(--ink-2);
+    background:repeating-linear-gradient(45deg,var(--paper-2),var(--paper-2) 8px,var(--line) 8px,var(--line) 9px);}
+  .imgerr span{font-size:10.5px;color:var(--ink-3);}
+</style>
+</head>
+<body>
+
+<!-- ================= 进门 ================= -->
+<div id="join">
+  <div class="jcard">
+    <div class="jbrand"><span class="seal">和</span>聊天室</div>
+    <div class="jlead">和一个朋友聊天。输入同一个房间号就会合，房间不存在会自动建一间。<br>一个房间最多两个人。</div>
+
+    <div class="jlabel">房间号</div>
+    <input class="jinput" id="roomIn" maxlength="12" placeholder="例如 7K2M9" autocomplete="off"
+           autocapitalize="characters" spellcheck="false">
+    <div class="jlabel">你的昵称</div>
+    <input class="jinput" id="nameIn" maxlength="12" placeholder="随便起一个" autocomplete="off">
+    <button class="jbtn" id="enterBtn">进入房间</button>
+    <div class="jrow">
+      <button class="jlink" id="randBtn">🎲 随机开一间</button>
+      <a class="jlink" href="/">← 回大厅</a>
+    </div>
+    <div class="jmsg" id="joinMsg"></div>
+  </div>
+</div>
+
+<!-- ================= 聊天 ================= -->
+<div id="room" class="hidden">
+  <header>
+    <a class="back" href="/" title="回大厅">←</a>
+    <div class="rmeta">
+      <div class="rname">房间 <b id="codeTxt">—</b></div>
+      <div class="rsub"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方进入…</span></div>
+    </div>
+    <button class="hbtn" id="infoBtn" title="邀请对方">🔗</button>
+  </header>
+
+  <main id="msgs"></main>
+  <button class="jump hidden" id="jump">↓ 有新消息</button>
+
+  <div class="tray hidden" id="tray">
+    <div class="tray-h">表情包 <span>点一下就发出去</span><button class="x" id="trayX">✕</button></div>
+    <div class="tray-g" id="trayGrid"></div>
+    <label class="tray-add">＋ 上传图片 / GIF 当表情
+      <input type="file" id="stkFile" accept="image/*" hidden>
+    </label>
+  </div>
+
+  <div class="composer">
+    <div class="crow">
+      <button class="cbtn" id="imgBtn" title="发送图片或 GIF">🖼</button>
+      <button class="cbtn" id="stkBtn" title="表情包">😀</button>
+      <textarea id="inp" rows="1" placeholder="说点什么…" enterkeyhint="send"></textarea>
+      <button id="sendBtn" disabled>发送</button>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox hidden" id="lightbox"><img id="lbImg" alt=""><button class="lx" id="lbX">✕</button></div>
+
+<input type="file" id="imgFile" accept="image/*" multiple hidden>
+
+<script src="/audio.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+let PID = localStorage.getItem('wx_pid');
+if (!PID) { PID = 'u' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('wx_pid', PID); }
+
+let CODE = '', ME = '', MAXUP = 10 * 1024 * 1024, es = null, pollT = null;
+let lastId = 0, rendered = new Set(), stickers = [], peerOnline = false, atBottom = true;
+/* 历史折叠：allMsgs 保存全部消息，historyStart 是"已渲染区间"的起点 */
+const PAGE = 30;
+let allMsgs = [], historyStart = 0, historyBusy = false;
+let histAnchor = null, histAnchorTop = 0, histAnchorUntil = 0, progScroll = false;
+
+/* ---------------- 小工具 ---------------- */
+function toast(msg, ms) {
+  const d = document.createElement('div');
+  d.className = 'toast'; d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), ms || 2400);
+}
+const hhmm = t => {
+  const d = new Date(t || Date.now());
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+function scrollBottom(force) {
+  const m = $('msgs');
+  if (force || atBottom) {
+    progScroll = true;
+    const sw = m.style.scrollBehavior;
+    m.style.scrollBehavior = 'auto';   // 直接到位，避免平滑滚动被节流后停在半路
+    m.scrollTop = m.scrollHeight;
+    m.style.scrollBehavior = sw;
+    $('jump').classList.add('hidden');
+    setTimeout(() => { progScroll = false; }, 0);
+  }
+}
+$('msgs').addEventListener('scroll', () => {
+  const m = $('msgs');
+  atBottom = m.scrollHeight - m.scrollTop - m.clientHeight < 60;
+  if (atBottom) $('jump').classList.add('hidden');
+  if (!progScroll) histAnchor = null;   // 用户自己滚了，就别再按旧锚点校正
+  // 触顶自动加载：只有内容真的能滚动时才触发，避免首屏 30 条较矮时连环加载
+  if (!historyBusy && historyStart > 0 && m.scrollTop < 100 && m.scrollHeight > m.clientHeight + 40) loadEarlier();
+});
+
+/* ---------------- 历史折叠 ---------------- */
+function updateEarlierUI() {
+  const btn = $('earlierBtn');
+  if (!btn) return;
+  if (historyStart <= 0) {
+    if (allMsgs.length > PAGE) { btn.classList.remove('hidden'); btn.disabled = true; btn.textContent = '没有更早的消息了'; }
+    else btn.classList.add('hidden');
+  } else {
+    btn.classList.remove('hidden'); btn.disabled = false; btn.textContent = '查看更早的消息';
+  }
+}
+function keepAnchor() {
+  if (!histAnchor || Date.now() > histAnchorUntil) return;
+  const m = $('msgs');
+  const d = histAnchor.getBoundingClientRect().top - histAnchorTop;
+  if (!d) return;
+  progScroll = true;
+  const sw = m.style.scrollBehavior;
+  m.style.scrollBehavior = 'auto';     // 平滑滚动会让校正变成动画，临时关掉
+  m.scrollTop += d;
+  m.style.scrollBehavior = sw;
+  setTimeout(() => { progScroll = false; }, 0);
+}
+async function loadEarlier() {
+  if (historyBusy || historyStart <= 0) return;
+  historyBusy = true;
+  const btn = $('earlierBtn');
+  btn.disabled = true; btn.textContent = '加载中…';
+  // 让「加载中…」先渲染一下（后台标签页里 rAF 会被节流，用定时器更稳）
+  await new Promise(r => setTimeout(r, 30));
+  const box = $('msgs');
+  const anchor = btn.nextElementSibling;          // 现在最上面那条消息
+  const prevH = box.scrollHeight, prevTop = box.scrollTop;
+  if (anchor) { histAnchor = anchor; histAnchorTop = anchor.getBoundingClientRect().top; histAnchorUntil = Date.now() + 3000; }
+  const from = Math.max(0, historyStart - PAGE);
+  const batch = allMsgs.slice(from, historyStart);
+  batch.forEach(m => renderMsg(m, anchor));        // 依次插到当前最上面那条消息之前
+  historyStart = from;
+  const sw = box.style.scrollBehavior;
+  box.style.scrollBehavior = 'auto';
+  progScroll = true;
+  box.scrollTop = prevTop + (box.scrollHeight - prevH);   // 用高度差保持视觉位置
+  box.style.scrollBehavior = sw;
+  setTimeout(() => { progScroll = false; }, 0);
+  if (anchor) histAnchorTop = anchor.getBoundingClientRect().top;
+  historyBusy = false;
+  updateEarlierUI();
+}
+
+/* ---------------- 进门 ---------------- */
+const qs = new URLSearchParams(location.search);
+$('roomIn').value = (qs.get('room') || '').toUpperCase();
+$('nameIn').value = localStorage.getItem('wx_name') || '';
+
+$('roomIn').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''); });
+$('roomIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('nameIn').focus(); });
+$('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter') enterRoom(); });
+$('randBtn').addEventListener('click', () => {
+  const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 5; i++) c += s[Math.floor(Math.random() * s.length)];
+  $('roomIn').value = c;
+  $('nameIn').focus();
+});
+$('enterBtn').addEventListener('click', enterRoom);
+
+function joinMsg(t, ok) {
+  const el = $('joinMsg');
+  el.textContent = t;
+  el.className = 'jmsg' + (ok ? ' ok' : '');
+}
+
+async function enterRoom() {
+  const code = $('roomIn').value.trim().toUpperCase();
+  const name = $('nameIn').value.trim() || '我';
+  if (!code) return joinMsg('先填个房间号，或者点「随机开一间」');
+  $('enterBtn').disabled = true;
+  joinMsg('正在连接…', true);
+  let r;
+  try {
+    r = await fetch('/api/room/enter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name, pid: PID })
+    }).then(x => x.json());
+  } catch (e) {
+    $('enterBtn').disabled = false;
+    return joinMsg('连不上服务器，检查一下网络');
+  }
+  if (r.error) { $('enterBtn').disabled = false; return joinMsg(r.error); }
+
+  CODE = r.code; ME = r.name; MAXUP = r.maxUpload || MAXUP;
+  stickers = r.stickers || [];
+  localStorage.setItem('wx_name', ME);
+  localStorage.setItem('wx_last_room', CODE);
+  history.replaceState(null, '', '/chat?room=' + encodeURIComponent(CODE));
+
+  $('join').classList.add('hidden');
+  $('room').classList.remove('hidden');
+  $('codeTxt').textContent = CODE;
+  $('msgs').innerHTML = '<button class="earlier hidden" id="earlierBtn" type="button">查看更早的消息</button>';
+  $('earlierBtn').addEventListener('click', loadEarlier);
+  rendered.clear(); lastId = 0;
+  allMsgs = (r.msgs || []).slice().sort((a, b) => (a.id || 0) - (b.id || 0));
+  historyStart = Math.max(0, allMsgs.length - PAGE);   // 首屏只渲染最近 30 条
+  allMsgs.forEach(m => { lastId = Math.max(lastId, m.id || 0); });
+  allMsgs.slice(historyStart).forEach(m => renderMsg(m));
+  if (!allMsgs.length) {
+    $('msgs').innerHTML = '<button class="earlier hidden" id="earlierBtn" type="button">查看更早的消息</button><div class="empty"><span class="big">💬</span>房间已经开好了<br>发第一句话，或者丢张图过去</div>';
+    $('earlierBtn').addEventListener('click', loadEarlier);
+  }
+  updateEarlierUI();
+  updatePeer(r.peer, r.members);
+  drawTray();
+  scrollBottom(true);
+  $('enterBtn').disabled = false;
+  connect();
+  setTimeout(() => $('inp').focus(), 60);
+}
+
+/* ---------------- 实时 ---------------- */
+function connect() {
+  if (es) { try { es.close(); } catch (e) {} }
+  if (pollT) { clearInterval(pollT); pollT = null; }
+  es = new EventSource('/api/room/stream?code=' + encodeURIComponent(CODE) + '&pid=' + encodeURIComponent(PID) + '&since=' + lastId);
+  es.addEventListener('hello', e => {
+    const d = JSON.parse(e.data);
+    stickers = d.stickers || stickers; drawTray();
+    updatePeer(d.peer);
+  });
+  es.addEventListener('msgs', e => {
+    const d = JSON.parse(e.data);
+    const before = $('msgs').scrollHeight;
+    ingestMany(d.msgs);
+    if (atBottom) scrollBottom(false);
+    else if ($('msgs').scrollHeight > before) $('jump').classList.remove('hidden');
+  });
+  es.addEventListener('peer', e => updatePeer(JSON.parse(e.data).peer));
+  es.addEventListener('stickers', e => { stickers = JSON.parse(e.data).stickers || []; drawTray(); });
+  es.addEventListener('bye', () => updatePeer(null));
+  es.onerror = () => { if (!pollT) pollT = setInterval(pollOnce, 3000); };
+  es.onopen = () => { if (pollT) { clearInterval(pollT); pollT = null; } };
+}
+async function pollOnce() {
+  try {
+    const r = await fetch('/api/room/state?code=' + encodeURIComponent(CODE) + '&pid=' + encodeURIComponent(PID) + '&since=' + lastId).then(x => x.json());
+    if (r.needJoin) return;
+    const before = $('msgs').scrollHeight;
+    ingestMany(r.msgs);
+    stickers = r.stickers || stickers; drawTray();
+    updatePeer(r.peer);
+    if (atBottom) scrollBottom(false);
+    else if ($('msgs').scrollHeight > before) $('jump').classList.remove('hidden');
+  } catch (e) {}
+}
+function updatePeer(peer, members) {
+  const on = !!(peer && peer.online);
+  peerOnline = on;
+  $('peerDot').classList.toggle('on', on);
+  $('peerTxt').textContent = peer
+    ? (peer.name + (on ? ' 在线' : ' 离线中'))
+    : (members && members.length ? '等待对方进入…' : '等待对方进入…');
+}
+
+/* ---------------- 渲染消息 ---------------- */
+function renderMsg(m, before) {
+  if (!m || m.id == null || rendered.has(m.id)) return null;
+  const box = $('msgs');
+  let node;
+  if (m.type === 'sys') {
+    node = document.createElement('div');
+    node.className = 'sys'; node.textContent = m.text || '';
+  } else {
+    const me = m.pid === PID;
+    const row = document.createElement('div');
+    row.className = 'row ' + (me ? 'me' : 'them');
+    const initial = esc((m.name || '?').slice(0, 1));
+    const inner = [];
+    if (m.type === 'text') {
+      inner.push(`<div class="bub">${linkify(esc(m.text || ''))}</div>`);
+    } else if (m.type === 'sticker') {
+      inner.push(`<img class="sticker" src="${esc(m.url)}" alt="表情" loading="lazy" data-full="${esc(m.url)}">`);
+    } else {
+      inner.push(`<div class="imgmsg"><img src="${esc(m.url)}" alt="图片" loading="lazy" data-full="${esc(m.url)}"></div>`);
+    }
+    row.innerHTML = `<div class="av">${initial}</div>
+      <div class="col">${me ? '' : `<div class="who">${esc(m.name || '')}</div>`}${inner.join('')}
+      <div class="time">${hhmm(m.at)}</div></div>`;
+    row.querySelectorAll('img[data-full]').forEach(img => {
+      img.onclick = () => openLightbox(img.dataset.full);
+      img.onload = () => { if (atBottom && !histAnchor) scrollBottom(); else keepAnchor(); };
+      // 外部系统依赖，勿删：图挂了要说明白，别留一个空的裂图让人猜。
+      // 2026-11-08 踩过——清理测试图片时把已经发出去的图删了，聊天室里只剩一个打不开的空框。
+      // ★ 2026-11-11 修位置：原来这段被插在了脚本块末尾之外，那里 img 变量不存在，
+      //   整段是死代码。现在放在 forEach 回调里，img 就在作用域内。
+      img.onerror = () => {
+        const wrap = img.closest('.imgmsg') || img.parentElement;
+        if (wrap) wrap.innerHTML = '<div class="imgerr">图片已失效<br><span>文件可能被清理了</span></div>';
+      };
+    });
+    node = row;
+  }
+  rendered.add(m.id);
+  const empty = box.querySelector('.empty');
+  if (empty) empty.remove();
+  if (before && before.parentNode === box) box.insertBefore(node, before);
+  else box.appendChild(node);
+  return node;
+}
+/* 新消息统一入口：进内存 → 渲染 → 维护 lastId */
+function ingest(m) {
+  if (!m || m.id == null || m.id <= lastId) return;
+  allMsgs.push(m);
+  renderMsg(m);
+  lastId = m.id;
+}
+function ingestMany(list) { (list || []).forEach(ingest); }
+function linkify(s) {
+  return s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function openLightbox(url) {
+  $('lbImg').src = url;
+  $('lightbox').classList.remove('hidden');
+}
+$('lbX').addEventListener('click', () => $('lightbox').classList.add('hidden'));
+$('lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') $('lightbox').classList.add('hidden'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').classList.add('hidden'); });
+$('jump').addEventListener('click', () => scrollBottom(true));
+
+/* ---------------- 发送 ---------------- */
+const inp = $('inp');
+function setPh() { inp.placeholder = window.innerWidth > 700 ? '说点什么…（Enter 发送，Shift+Enter 换行）' : '说点什么…'; }
+setPh(); window.addEventListener('resize', setPh);
+function autoGrow() {
+  inp.style.height = 'auto';
+  inp.style.height = Math.min(132, inp.scrollHeight) + 'px';
+}
+inp.addEventListener('input', () => { autoGrow(); $('sendBtn').disabled = !inp.value.trim(); });
+inp.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendText(); }
+});
+$('sendBtn').addEventListener('click', sendText);
+
+async function sendText() {
+  const text = inp.value.replace(/\s+$/, '');
+  if (!text.trim()) return;
+  inp.value = ''; autoGrow(); $('sendBtn').disabled = true;
+  try {
+    const r = await fetch('/api/room/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, pid: PID, type: 'text', text })
+    }).then(x => x.json());
+    if (r.error) { toast(r.error); inp.value = text; $('sendBtn').disabled = false; return; }
+    if (r.msg) { ingest(r.msg); scrollBottom(true); }
+  } catch (e) { toast('发送失败，检查网络'); inp.value = text; }
+  if (window.innerWidth > 700) inp.focus();
+}
+
+async function sendMedia(type, url) {
+  try {
+    const r = await fetch('/api/room/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, pid: PID, type, url })
+    }).then(x => x.json());
+    if (r.error) return toast(r.error);
+    if (r.msg) { ingest(r.msg); scrollBottom(true); }
+  } catch (e) { toast('发送失败，检查网络'); }
+}
+
+async function upload(file, asSticker) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) return toast('只能发图片 / GIF');
+  if (file.size > MAXUP) return toast(`文件太大了，最多 ${Math.round(MAXUP / 1048576)}MB`);
+  const url = '/api/room/upload?code=' + encodeURIComponent(CODE) + '&pid=' + encodeURIComponent(PID) + '&sticker=' + (asSticker ? 1 : 0);
+  const ph = document.createElement('div');
+  ph.className = 'row me pending';
+  ph.innerHTML = `<div class="av">我</div><div class="col"><div class="bub">${asSticker ? '表情上传中…' : '图片上传中…'}</div></div>`;
+  $('msgs').appendChild(ph); scrollBottom(true);
+  try {
+    const r = await fetch(url, { method: 'POST', body: file }).then(x => x.json());
+    ph.remove();
+    if (r.error) return toast(r.error);
+    await sendMedia(asSticker ? 'sticker' : 'img', r.url);
+    if (asSticker) {
+      // 服务端已加进抽屉，这里也顺手更新一下（等 SSE 回来之前先看得见）
+      if (stickers.indexOf(r.url) < 0) { stickers.push(r.url); drawTray(); }
+      $('tray').classList.add('hidden');
+      $('stkBtn').classList.remove('on');
+    }
+  } catch (e) { ph.remove(); toast('上传失败，检查网络或文件大小'); }
+}
+
+$('imgBtn').addEventListener('click', () => $('imgFile').click());
+$('imgFile').addEventListener('change', async e => {
+  const fs = Array.from(e.target.files || []).slice(0, 4);
+  e.target.value = '';
+  for (const f of fs) await upload(f, false);
+});
+$('stkFile').addEventListener('change', async e => {
+  const f = (e.target.files || [])[0];
+  e.target.value = '';
+  if (f) await upload(f, true);
+});
+
+/* ---------------- 表情包抽屉 ---------------- */
+function drawTray() {
+  $('trayGrid').innerHTML = stickers.length
+    ? stickers.map(u => `<button class="stk" data-url="${esc(u)}"><img src="${esc(u)}" alt="表情" loading="lazy"></button>`).join('')
+    : '<div style="grid-column:1/-1;font-size:12px;color:var(--ink-3);padding:8px 2px">还没有表情包。上传一张图片或 GIF，它会留在这里，随时点一下发出去。</div>';
+  $('trayGrid').querySelectorAll('.stk').forEach(b => {
+    b.onclick = () => {
+      sendMedia('sticker', b.dataset.url);
+      $('tray').classList.add('hidden');
+      $('stkBtn').classList.remove('on');
+    };
+  });
+}
+$('stkBtn').addEventListener('click', () => {
+  const open = $('tray').classList.contains('hidden');
+  $('tray').classList.toggle('hidden', !open);
+  $('stkBtn').classList.toggle('on', open);
+  if (open) { drawTray(); scrollBottom(true); }
+});
+$('trayX').addEventListener('click', () => {
+  $('tray').classList.add('hidden');
+  $('stkBtn').classList.remove('on');
+});
+
+/* ---------------- 邀请 ---------------- */
+$('infoBtn').addEventListener('click', async () => {
+  const link = location.origin + '/chat?room=' + encodeURIComponent(CODE);
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('邀请链接已复制，发给对方就行');
+  } catch (e) {
+    prompt('复制这个链接发给对方：', link);
+  }
+});
+
+/* ---------------- 粘贴 / 拖拽 发图 ---------------- */
+document.addEventListener('paste', e => {
+  if ($('room').classList.contains('hidden')) return;
+  const items = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith('image/'));
+  if (!items.length) return;
+  e.preventDefault();
+  items.slice(0, 4).forEach(it => { const f = it.getAsFile(); if (f) upload(f, false); });
+});
+document.addEventListener('dragover', e => { if (CODE) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  if (!CODE) return;
+  const fs = Array.from(e.dataTransfer?.files || []).filter(f => /^image\//.test(f.type));
+  if (!fs.length) return;
+  e.preventDefault();
+  fs.slice(0, 4).forEach(f => upload(f, false));
+});
+
+/* ---------------- 进页面自动填 ---------------- */
+if (qs.get('room') && $('nameIn').value) enterRoom();
+else if (qs.get('room')) $('nameIn').focus();
+else $('roomIn').focus();
+window.addEventListener('beforeunload', () => { if (es) try { es.close(); } catch (e) {} });
+</script>
+</body>
+</html>

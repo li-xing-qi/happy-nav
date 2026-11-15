@@ -1,0 +1,40 @@
+# ============================================================
+# 和鱼的快乐导航 · 一键部署
+#   启动：docker compose up -d
+#   查看：docker compose logs -f
+#   停止：docker compose down
+# 数据落在 ./data 与 ./workspace，删容器不丢
+# ============================================================
+
+services:
+  heyu-nav:
+    build: .
+    image: heyu-nav:latest
+    container_name: heyu-nav
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      TZ: Asia/Shanghai
+      PORT: 3000
+      HOST: 0.0.0.0
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-10}"
+      # 可选：AI 接入（留空则只跑非 AI 玩法）
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_MODEL: "${LLM_MODEL:-}"
+      LLM_STREAM: "${LLM_STREAM:-1}"
+      # 可选：语音
+      TTS_ENABLE: "${TTS_ENABLE:-1}"
+      TTS_VOICE: "${TTS_VOICE:-zh-CN-XiaoxiaoNeural}"
+    volumes:
+      # 运行时数据：房间消息、上传文件
+      - ./data:/app/data
+      # 工作区：人设、长期记忆、流水账、表情库、图片库
+      - ./workspace:/app/workspace
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

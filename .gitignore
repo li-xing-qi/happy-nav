@@ -1,0 +1,45 @@
+# ---------- 依赖与构建 ----------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- 环境与密钥（重要：绝不能提交）----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials*
+secrets*
+
+# ---------- 运行时数据（重要：会含聊天记录与上传文件）----------
+data/
+workspace/*
+!workspace/.gitkeep
+
+# ---------- 备份与临时文件 ----------
+*.bak
+*.bak-*
+*.broken-*
+*.tmp
+*.log
+logs/
+backup/
+.tmp/
+tmp/
+
+# ---------- 编辑器与系统 ----------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 其他 ----------
+*.zip
+*.tar.gz
+coverage/
+.cache/
