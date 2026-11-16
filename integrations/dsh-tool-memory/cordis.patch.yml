@@ -1,0 +1,8 @@
+# dsh-tool-memory 的 profile 层
+#
+# 形态要求：顶层 YAML 数组，纯 insert 块（dsh-app-boot 的 applyEntryPatches：
+# 只有 `insert:` 才会新增条目；`- id/name` 是「按 id 覆盖已有条目」，id 不存在会告警并跳过）。
+# 同一个插件文件绝不能插两次：双实例注册会崩（dsh-onebot-qq 手册里记过这事）。
+- insert:
+  - id: tool-memory
+    name: 'dsh-tool-memory'
