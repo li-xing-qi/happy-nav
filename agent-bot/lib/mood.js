@@ -52,25 +52,35 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const now = () => Date.now();
 
 function blank() {
-  return { affinity: BASE.affinity, energy: BASE.energy, updatedAt: now(), log: [] };
+  return { affinity: BASE.affinity, energy: BASE.energy, band: band(BASE.affinity), updatedAt: now(), log: [] };
 }
 
 function read() {
   try {
     const o = JSON.parse(fs.readFileSync(FILE(), 'utf8'));
     if (!o || typeof o !== 'object') return blank();
-    return {
+    const state = {
       affinity: clamp(Number(o.affinity) || BASE.affinity, MIN, MAX),
       energy: clamp(Number(o.energy) || BASE.energy, MIN, MAX),
       updatedAt: Number(o.updatedAt) || now(),
       log: Array.isArray(o.log) ? o.log.slice(-20) : [],
     };
+    /* 老存档没有 band 字段（细分档位是后加的）：读的时候补一次并写回，
+     * 免得页面一直显示「还没见过」。只在缺失时写，不会变成每次都写盘。 */
+    if (!o.band) {
+      state.band = band(state.affinity);
+      write(state);
+    } else {
+      state.band = String(o.band);
+    }
+    return state;
   } catch {
     return blank();
   }
 }
 
 function write(state) {
+  state.band = band(state.affinity);   // 让页面直接读这个字段，别在外面再抄一份阈值
   const file = FILE();
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -111,19 +121,28 @@ function feel(delta, why = '') {
   if (d > 0 && state.affinity >= 88) d = Math.max(1, Math.round(d * 0.6));
   if (d < 0 && state.affinity <= 12) d = Math.min(-1, Math.round(d * 0.6));
   state.affinity = clamp(state.affinity + d, MIN, MAX);
+  state.band = band(state.affinity);
   state.log.push({ ts: now(), d, why: String(why || '').replace(/\s+/g, ' ').slice(0, 24) });
   state.log = state.log.slice(-20);
   write(state);
   return { state, applied: d };
 }
 
-/** 粗档，只用于给她的提示，不给用户看分数 */
+/**
+ * 档位词：给页面显示、也给她当参考。**不露分数**——分数只在文件里。
+ * 分得细一点（10 档），这样「60 多」和「70 多」她自己说话能感觉出差别。
+ */
 function band(a) {
-  if (a >= 80) return '很亲近';
-  if (a >= 65) return '亲近';
-  if (a >= 40) return '平常';
-  if (a >= 25) return '有点疏';
-  return '冷';
+  if (a >= 92) return '黏糊糊';
+  if (a >= 84) return '很亲近';
+  if (a >= 74) return '挺黏人';
+  if (a >= 64) return '亲近';
+  if (a >= 54) return '还算熟';
+  if (a >= 44) return '平常';
+  if (a >= 34) return '客气';
+  if (a >= 24) return '有点疏';
+  if (a >= 12) return '冷淡';
+  return '冷透了';
 }
 
 /** 最近一次「为什么变」（1 小时内才算「刚发生」，帮她判断语气） */

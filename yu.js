@@ -57,6 +57,12 @@ function synthSpeech(text, voice) {
 
 module.exports = function createYu(ctx) {
   const { DATA, MAX_UPLOAD, json, send, readBody, readRaw, normCode } = ctx;
+  /* 心情存档：站点只读，不做任何判断（档位词由 agent-bot 写进文件）。
+   * 路径按「仓库布局 → 分离部署」的顺序猜，和记忆层保持同一套约定。 */
+  const WS_ROOT = process.env.WORKSPACE_DIR || process.env.MEM_DIR || process.env.QQ_WORKSPACE_ROOT
+    || (fs.existsSync('/root/qq-workspace') ? '/root/qq-workspace' : path.join(__dirname, 'workspace'));
+  const MOOD_FILE = process.env.MOOD_FILE || path.join(WS_ROOT, 'data', 'mood.json');
+
   const DIR = path.join(DATA, 'yu');
   const FILES = path.join(DATA, 'yu-files');
   const META = path.join(FILES, 'index.json');
@@ -414,6 +420,19 @@ module.exports = function createYu(ctx) {
         try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {}
       }
       return json(res, { ok: true, act: me.act });
+    }
+
+    /* 她现在的档位词（不露分数）。只读文件，读不到就返回空，页面显示「还没见过」。 */
+    if (p === '/api/yu/mood') {
+      let o = null;
+      try { o = JSON.parse(fs.readFileSync(MOOD_FILE, 'utf8')); } catch {}
+      const last = o && Array.isArray(o.log) && o.log.length ? o.log[o.log.length - 1] : null;
+      return json(res, {
+        ok: true,
+        band: (o && o.band) || '',
+        why: (last && last.why) || '',
+        at: (last && last.ts) || 0,
+      });
     }
 
     if (p === '/api/yu/state') {
