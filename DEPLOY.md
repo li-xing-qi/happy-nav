@@ -217,6 +217,8 @@ pm2 restart dsh
 
 不要把 3000 / 3080 / 6199 直接暴露在公网。SSH 也别用密码登录（把 `PasswordAuthentication` 关掉，只留密钥）。
 
+怎么把 HTTP 换成 HTTPS（四种做法、对比表、和 EasyTier 的端口关系），见 **[docs/HTTPS与访问方式.md](docs/HTTPS与访问方式.md)**。
+
 ### 6.5 验收
 
 ```bash

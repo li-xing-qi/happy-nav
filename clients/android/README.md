@@ -42,6 +42,8 @@
 - **后台会被杀。** 安卓对后台进程的态度就是这样，切走久了连接会断；回来时页面自己有轮询兜底，能补上。
 - **http 是明文。** 壳里开了 `usesCleartextTraffic` 才能访问 `http://` 地址，公共 WiFi 下别人能抓包。自己的东西，自己权衡；在意就上 HTTPS。
 
+想把地址换成 `https://`（顺带解锁语音、并且可以关掉 `usesCleartextTraffic`），做法与代价见 **[docs/HTTPS与访问方式.md](../../docs/HTTPS与访问方式.md)**。
+
 ## 自己构建
 
 不需要 Android Studio，也不需要 Gradle。三样东西 + 一条命令：

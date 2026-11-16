@@ -443,6 +443,8 @@ bash deploy.sh --stop  # 停止
 
 **想放公网？至少做这三件事**：反向代理加账号密码、`AUTH_TOKEN` 设一个随机串、限制 `/api/chat` 的调用频率（这一项本项目没做，需要你在代理层加）。
 
+**怎么把 HTTP 换成 HTTPS**（Cloudflare Tunnel / 域名 + Caddy / 组网 / 自签四种做法的代价对比，含端口冲突与安全清单），见 **[docs/HTTPS与访问方式.md](docs/HTTPS与访问方式.md)**。
+
 ---
 
 ## 常见问题
