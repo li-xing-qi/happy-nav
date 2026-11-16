@@ -176,10 +176,10 @@ NO_CARD=1 NO_GOMOKU=1 NO_LINGXI=1 node index.js   # 只开聊天室
 | 聊天室 `agent-bot/scenes/chat.js` | ✅ 工具 + `记住：` 兜底 | ✅ 工具 | ✅ 每轮注入 |
 | 五子棋 `scenes/gomoku.js` | ✅ 工具 | ✅ 工具 | ✅ `adapterPrompt` |
 | 万象牌 `scenes/card.js` | ✅ 工具 | ✅ 工具 | ✅ `adapterPrompt` |
-| 与鱼 `agent-bot/yufish.js` → dsh | ✅ `记住：` 兜底 | ✅ 旁路裁决（带预筛） | ✅ `renderFor('yu')` |
+| 与鱼 `agent-bot/yufish.js` → dsh | ✅ 工具（`integrations/dsh-tool-memory`） | ✅ 工具 | ✅ `renderFor('yu')` |
 | 站点 `/api/chat` | — | — | ✅ `renderFor('api-chat')` |
 
-> 与鱼回复由 dsh 生成，`yufish.js` 只能在转发前做旁路裁决。要让它也走原生工具，得给 dsh 加插件；目前预筛已把「每条消息 0.8 秒」压到只在疑似指令时出现。
+> 与鱼回复由 dsh 生成，写入靠 `integrations/dsh-tool-memory` 这个 dsh 插件把同一批工具交给它；不装插件时退化为「桥接旁路裁决」（每条疑似指令多一次模型调用）。桥接本身只负责注入，不再负责落库——两处都写会重复。
 
 **两道防线，缺一不可**（止血 ≠ 根治）：
 

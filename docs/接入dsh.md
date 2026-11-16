@@ -262,7 +262,66 @@ dsh 的文件操作被限制在一个「沙箱根目录」里。默认 `workspac
 
 ---
 
-## 10. 常见问题
+## 10. 装记忆工具插件（让它自己记约定）
+
+不装这个插件也能用，但「写记忆」会退化：桥接脚本只能在转发前**旁路裁决**——每条消息多一次模型调用，而且它的确认语和真正落盘是两条线，会出现嘴上说「记下了」其实什么都没写。
+
+装上 `integrations/dsh-tool-memory` 之后，与鱼和聊天室、五子棋、万象牌就是**同一套**语义：
+
+| 工具 | 干什么 |
+|---|---|
+| `save_rule` | 记一条约定（once / session / game 三档作用域） |
+| `remember_fact` | 记一条长期事实（写进 `MEMORY.md` 的「关于老板」） |
+| `list_rules` | 看现在哪些约定生效（带 id） |
+| `revoke_rule` | 按 id 精确撤销一条 |
+
+判断权在模型，**否决权在代码**：缺上下文、抱怨/拖延措辞、空正文、乱编 id 一律返回「未记录 + 原因」，模型当场就能改口。
+
+### 安装（三步）
+
+```bash
+# 1. 装进 profile（把路径换成你的仓库位置）
+dsh plugin --profile web add file:/path/to/happy-nav/integrations/dsh-tool-memory
+
+# 2. 让它成为 profile 的一层（在 ~/.dsh/profiles/web/package.json 里）
+#    "dsh": { "profile": { "bundles": [ ..., "dsh-tool-memory" ] } }
+
+# 3. 重启
+pm2 restart dsh
+```
+
+装完先干跑一次，看有没有报错：
+
+```bash
+dsh --profile web --dump-config | grep -A1 'id: tool-memory'
+# 期望：- id: tool-memory
+#         name: dsh-tool-memory
+```
+
+> ⚠️ **不要重复挂载同一个插件文件**。dsh 的 patch 里 `- id/name` 是「按 id 覆盖已有条目」，只有 `insert:` 才是新增；同一个入口插两次会双实例注册，直接崩。插件自带的 `cordis.patch.yml` 已经写成 `insert:` 形态，别再加第二份。
+
+### 三个环境变量
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `QQ_MEM_DIR` | 仓库根（找不到就 `/root/qq-workspace`） | 记忆层所在目录，必须能读到 `memory/bridge.js` |
+| `QQ_AGENT_BOT` | 仓库根下的 `agent-bot`（找不到就 `/root/agent-bot`） | `lib/remember.js` 所在目录 |
+| `QQ_MEM_SESSION` | `0000`（也认 `YU_ROOM`） | **必须和桥接的房间号一致**，否则写进去的 session 档规则注入端看不见，又变成幽灵规则 |
+
+### 验证
+
+在与鱼里说一句「约定：以后打牌都先清对面的护盾」，然后：
+
+```bash
+node memory/audit.js list
+# 应该能看到刚写进去的那条（含 id、作用域）
+```
+
+模型回复里说「记下了」但这里没有，就是**假确认** —— 检查 dsh 日志里插件有没有挂上。
+
+---
+
+## 11. 常见问题
 
 **1. 桥接一直连不上（日志停在「连接 dsh OneBot…」）**
 
