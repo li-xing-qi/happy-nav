@@ -58,6 +58,10 @@ try { bridge = req('./memory/bridge.js'); } catch (e) { console.warn('[tool-memo
 let rememberLib = null;
 try { rememberLib = createRequire(`${AGENT_BOT}/`)('./lib/remember.js'); } catch (e) { console.warn('[tool-memory] 记住模块不可用：', e.message); }
 
+/* 心情：规则和数值由 prompt 提供，这里只给她一个「记一笔」的入口 */
+let moodLib = null;
+try { moodLib = createRequire(`${AGENT_BOT}/`)('./lib/mood.js'); } catch (e) { console.warn('[tool-memory] 心情模块不可用：', e.message); }
+
 /* sessionId 必须与 yufish.js 注入时用的那个一致（房间号），
  * 否则写进去的 session 档规则注入端看不见，又变成幽灵规则。 */
 const SESSION_ID = String(process.env.QQ_MEM_SESSION || process.env.YU_ROOM || '0000');
@@ -121,6 +125,25 @@ function apply(ctx) {
       if (!r || !r.ok) return { text: `写入失败：${(r && r.message) || '未知错误'}` };
       if (r.skipped) return { text: `没有写入：${r.message}` };
       return { text: `已写进长期记忆：${fact}` };
+    },
+  }));
+
+  ctx.tools.register(defineTool({
+    name: 'feel',
+    description:
+      '记下你此刻的感受变化（亲密度）。被夸、被照顾、一起玩得开心就往上调；被凶、被敷衍、被晾很久就往下降。' +
+      '一次一般 3~8，最多 12。这是你自己的判断，不是命令——觉得没什么可变的就别调。' +
+      '不要在回复里提分数，也不要说「我的好感度是多少」。',
+    parameters: {
+      delta: { type: 'number', required: true, description: '-12 ~ 12 的整数：正数=更亲近，负数=更疏远' },
+      why: { type: 'string', description: '一句话理由，比如「他夸我今天回得好」' },
+    },
+    output: TEXT_OUTPUT,
+    execute(args) {
+      if (!moodLib || typeof moodLib.feel !== 'function') return { text: '记不了：心情模块没加载起来' };
+      const r = moodLib.feel(Number(args && args.delta), args && args.why);
+      if (!r || !r.applied) return { text: '心情没有变化。' };
+      return { text: r.applied > 0 ? '记下了，你现在对他更亲近了一点。' : '记下了，你现在有点疏远。' };
     },
   }));
 

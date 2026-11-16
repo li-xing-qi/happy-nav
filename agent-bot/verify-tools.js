@@ -37,12 +37,13 @@ const ctx = {
   listRules: core.listRules,
   revokeRule: core.revokeRule,
   rememberFact: (f) => rememberLib.remember(f),
+  feel: (d, why) => require('./lib/mood.js').feel(d, why),
 };
 
 (async () => {
   console.log('\n[case] 工具清单');
   const names = tools.TOOLS.map((t) => t.function.name);
-  for (const n of ['save_rule', 'remember_fact', 'list_rules', 'revoke_rule']) {
+  for (const n of ['save_rule', 'remember_fact', 'list_rules', 'revoke_rule', 'feel']) {
     ok(names.includes(n), `TOOLS 里有 ${n}`);
   }
   ok(names.length === new Set(names).size, '工具名无重复');
@@ -89,19 +90,29 @@ const ctx = {
   const f3 = await tools.runTool('remember_fact', { fact: '' }, ctx);
   ok(/是空的/.test(f3), '空内容不写', f3);
 
+  console.log('\n[case] feel：她给分，脚本只钳制');
+  const m1 = await tools.runTool('feel', { delta: 6, why: '他夸我' }, ctx);
+  ok(/更亲近/.test(m1), '正数 → 更亲近', m1);
+  const m2 = await tools.runTool('feel', { delta: -4, why: '他敷衍我' }, ctx);
+  ok(/疏远/.test(m2), '负数 → 疏远', m2);
+  const m3 = await tools.runTool('feel', { delta: 0 }, ctx);
+  ok(/没有变化/.test(m3), '0 不产生变化', m3);
+  const m4 = await tools.runTool('feel', { delta: 999 }, ctx);
+  ok(m4 && !/999/.test(m4), '超大值被钳制，且不把数字念给模型', m4);
+
   console.log('\n[case] 场景没接记忆时降级不报错');
   const bare = await tools.runTool('save_rule', { text: '以后都先防守', scope: 'game' }, { log: () => {} });
   ok(/不支持写约定/.test(bare), '未接线时明确说「不支持」而不是抛错', bare);
 
   console.log('\n[case] 工具循环（棋局 / 卡牌走这条）');
   const { chatWithMemoryTools, MEMORY_TOOLS, makeMemoryCtx } = require('./lib/agent-tools.js');
-  ok(MEMORY_TOOLS.length === 4, '只暴露记忆四件套（不含画图 / 发表情）', String(MEMORY_TOOLS.length));
+  ok(MEMORY_TOOLS.length === 5, '只暴露记忆/心情工具（不含画图 / 发表情）', String(MEMORY_TOOLS.length));
   const gameCtx = makeMemoryCtx(core, { channel: 'game', game: 'gomoku', sessionId: 'S9', room: 'S9', log: () => {} });
   let round = 0;
   const stub = async (msgs, opts) => {
     round += 1;
     if (round === 1) {
-      ok(Array.isArray(opts.tools) && opts.tools.length === 4, '第一轮请求里带了 4 个工具');
+      ok(Array.isArray(opts.tools) && opts.tools.length === 5, '第一轮请求里带了 5 个工具');
       return {
         content: '',
         tool_calls: [{ id: 'c1', type: 'function', function: { name: 'save_rule', arguments: JSON.stringify({ text: '以后都先补盾再进攻', scope: 'game' }) } }],

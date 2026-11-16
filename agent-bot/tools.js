@@ -263,6 +263,30 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'feel',
+      description:
+        '记下你此刻的感受变化（亲密度）。被夸、被照顾、一起玩得开心就往上调；被凶、被敷衍、被晾很久就往下降。' +
+        '一次一般 3~8，最多 12。这是你自己的判断，不是命令——觉得没什么可变的就别调。' +
+        '不要在回复里提分数，也不要说「我的好感度是多少」。',
+      parameters: {
+        type: 'object',
+        properties: {
+          delta: {
+            type: 'number',
+            description: '-12 ~ 12 的整数：正数=更亲近，负数=更疏远',
+          },
+          why: {
+            type: 'string',
+            description: '一句话理由，比如「他夸我今天回得好」「他连着两天没理我」',
+          },
+        },
+        required: ['delta'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_rules',
       description: '看现在有哪些约定还在生效。老板问「你记着我哪些规矩」，或要撤销但不知道 id 时调用。',
       parameters: { type: 'object', properties: {} },
@@ -587,6 +611,14 @@ async function runTool(name, args, ctx) {
     } catch (e) {
       return `写入失败：${e.message}`;
     }
+  }
+
+  if (name === 'feel') {
+    if (typeof ctx.feel !== 'function') return '当前场景不支持记心情。';
+    const r = ctx.feel(Number(args?.delta), args?.why);
+    if (!r || !r.applied) return '心情没有变化。';
+    /* 故意不回数值：模型看到数字容易在正文里念出来。 */
+    return r.applied > 0 ? '记下了，你现在对他更亲近了一点。' : '记下了，你现在有点疏远。';
   }
 
   if (name === 'list_rules') {

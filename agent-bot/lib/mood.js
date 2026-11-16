@@ -1,15 +1,18 @@
 // 好感度 / 心情
 //
-// 为什么要有它：她本来每句话都一个调子，聊久了会像客服。这里给她一个
-// 慢变量（好感度 0~100）和一个快变量（心情），只做**轻微**影响：
-//   · 好感高 → 更主动、更黏一点
-//   · 好感低 → 话短、不主动找话题，但不阴阳怪气、不报复
-//   · 五子棋里被要求「让我一步」时，好感很低才有一定概率不让
+// 定位：给她一个**慢变量**（亲密度 0~100）和一个心情标签，让她自己决定语气和配合度。
 //
-// 三条纪律（防止它变成影响日常对话的负担）：
-//   1. 默认 55 分，正常聊天时 promptLine() 返回空串 —— 大多数时候她不受影响
-//   2. 只有「特别好 / 特别差 / 刚发生事」才往 prompt 里加一行，最多两行
-//   3. 好感度按天缓慢回落到 55，不会因为一次吵架永久坏掉
+// 为什么不用固定脚本算分（这条是踩过之后改的）：
+//   最早是词表 + 固定加减分（被夸 +5、被凶 -7…）。问题是每个人对她的养法不一样，
+//   同一句话在不同关系里分量差很多，脚本一刀切会显得「千篇一律」。
+//   现在改成：**规则和当前数值直接告诉她，由她自己判断该不该变、变多少**，
+//   调用 feel 工具记下来。脚本只做三件模型做不了的事：
+//     1. 存盘（原子写，写失败静默）
+//     2. 边界（0~100，单次幅度上限，防止一次刷满或一次清零）
+//     3. 回落（每 8 小时往 55 靠一点，避免一次吵架永久生效）
+//
+// 纪律：数值不进正文。她可以因为亲密度低而话短、不答应小事，但不许阴阳怪气、
+// 不许报复、不许把分数念出来——这些写在 promptBlock 的规则里。
 //
 // 存盘：<workspace>/data/mood.json（可用 MOOD_FILE 覆盖）
 'use strict';
@@ -39,28 +42,17 @@ const FILE = () => process.env.MOOD_FILE || DEFAULT_FILE;
 const BASE = { affinity: 55, energy: 70 };
 const MIN = 0;
 const MAX = 100;
-/** 好感度回落到基准的速度：每 8 小时 1 点，最多一次补 3 点 */
+/** 单次 felt 的幅度上限：模型说 +30 也只按 +12 算，防止一次刷满 */
+const MAX_STEP = 12;
+/** 回落：每 8 小时 1 点，单次最多 3 点 */
 const DECAY_PER_MS = 1 / (8 * 3600 * 1000);
 const DECAY_MAX = 3;
-/** 同一类事件的最短间隔，避免「谢谢」刷分 */
-const COOLDOWN_MS = 30 * 60 * 1000;
-
-const KINDS = {
-  praise: { d: 5, label: '被你夸了' },
-  thanks: { d: 3, label: '被你谢了' },
-  scold: { d: -7, label: '被你凶了' },
-  chat: { d: 1, label: '一起聊天' },
-  win: { d: 2, label: '赢了棋' },
-  lose: { d: -2, label: '输了棋' },
-  help: { d: 3, label: '帮上忙了' },
-  ignore: { d: -1, label: '被晾在一边' },
-};
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const now = () => Date.now();
 
 function blank() {
-  return { affinity: BASE.affinity, energy: BASE.energy, updatedAt: now(), lastKindAt: {}, log: [] };
+  return { affinity: BASE.affinity, energy: BASE.energy, updatedAt: now(), log: [] };
 }
 
 function read() {
@@ -71,7 +63,6 @@ function read() {
       affinity: clamp(Number(o.affinity) || BASE.affinity, MIN, MAX),
       energy: clamp(Number(o.energy) || BASE.energy, MIN, MAX),
       updatedAt: Number(o.updatedAt) || now(),
-      lastKindAt: o.lastKindAt && typeof o.lastKindAt === 'object' ? o.lastKindAt : {},
       log: Array.isArray(o.log) ? o.log.slice(-20) : [],
     };
   } catch {
@@ -89,12 +80,10 @@ function write(state) {
   } catch { /* 心情写不进去也不能影响对话 */ }
 }
 
-/** 按时间把好感度往基准拉，避免一次吵架永久生效。 */
+/** 按时间把亲密度往基准拉。加 1e-6：dt 常比整点少几毫秒，不减会少算一步。 */
 function decay(state, ts = now()) {
   const dt = Math.max(0, ts - state.updatedAt);
   if (!dt) return state;
-  /* 加 1e-6：dt 常比整点少几毫秒（Date.now 抖动），不减这个的话
-   * 「整整 16 小时」会被算成 1 步而不是 2 步。 */
   const step = Math.min(DECAY_MAX, Math.floor(dt * DECAY_PER_MS + 1e-6));
   if (step > 0) {
     if (state.affinity > BASE.affinity) state.affinity = Math.max(BASE.affinity, state.affinity - step);
@@ -104,48 +93,31 @@ function decay(state, ts = now()) {
   return state;
 }
 
-/** 记录一次情绪事件。未知 kind 会被忽略，返回 null。 */
-function note(kind, detail = '') {
-  const spec = KINDS[kind];
-  if (!spec) return null;
+/**
+ * 她自己的判断：这件事让她心里上升/下降多少。
+ * @param {number} delta 建议幅度（-12 ~ +12，超出按上限算）
+ * @param {string} why 一句话理由（只留 24 字，用于排查，不进正文）
+ * @returns {{state:object, applied:number}} applied 是实际生效的分值
+ */
+function feel(delta, why = '') {
+  const d0 = Number(delta);
+  if (!Number.isFinite(d0) || Math.round(d0) === 0) {
+    const state = decay(read());
+    return { state, applied: 0 };
+  }
   const state = decay(read());
-  const ts = now();
-  // 同类事件冷却：一次「谢谢」不该顶十次
-  const last = Number(state.lastKindAt[kind] || 0);
-  if (ts - last < COOLDOWN_MS && kind !== 'win' && kind !== 'lose') return state;
-
-  let d = spec.d;
-  // 高处不飘、低处不崩：极端区间里增益/减益减半
-  if (d > 0 && state.affinity >= 85) d *= 0.5;
-  if (d < 0 && state.affinity <= 15) d *= 0.5;
-  state.affinity = clamp(Math.round((state.affinity + d) * 10) / 10, MIN, MAX);
-  state.lastKindAt[kind] = ts;
-  /* detail 只在排查时看，存一小截就够——不要把整段聊天原样落盘 */
-  state.log.push({ ts, kind, d, detail: String(detail || '').replace(/\s+/g, ' ').slice(0, 24) });
+  let d = clamp(Math.round(d0), -MAX_STEP, MAX_STEP);
+  /* 已经在极高/极低处时收着点：她可以更亲近，但别一句话从 90 到 100。 */
+  if (d > 0 && state.affinity >= 88) d = Math.max(1, Math.round(d * 0.6));
+  if (d < 0 && state.affinity <= 12) d = Math.min(-1, Math.round(d * 0.6));
+  state.affinity = clamp(state.affinity + d, MIN, MAX);
+  state.log.push({ ts: now(), d, why: String(why || '').replace(/\s+/g, ' ').slice(0, 24) });
   state.log = state.log.slice(-20);
   write(state);
-  return state;
+  return { state, applied: d };
 }
 
-/* ---------- 从一句话里认出情绪事件（不调模型，纯词表 + 冷却） ---------- */
-const PRAISE = /(可爱|好乖|乖|厉害|聪明|喜欢你|爱你|宝贝|辛苦了|谢谢|真好|棒|牛|贴心|懂事)/;
-const SCOLD = /(笨|蠢|滚|闭嘴|烦死|讨厌你|废物|没用|垃圾|别烦我)/;
-const ASK_HELP = /(帮我看|看一下|查一下|跑一下|弄一下)/;
-
-/**
- * 只做「明确信号」的识别，认不出来就当没发生。
- * @returns {object|null} 命中并记录时返回新状态
- */
-function noteFromText(text) {
-  const t = String(text == null ? '' : text).trim();
-  if (!t || t.length > 300) return null;
-  if (SCOLD.test(t)) return note('scold', t);
-  if (PRAISE.test(t)) return note('praise', t);
-  if (ASK_HELP.test(t)) return note('help', t);
-  return note('chat', t);
-}
-
-/** 好感度分档。数值只是给提示词用的粗档，不给用户看具体分。 */
+/** 粗档，只用于给她的提示，不给用户看分数 */
 function band(a) {
   if (a >= 80) return '很亲近';
   if (a >= 65) return '亲近';
@@ -154,53 +126,40 @@ function band(a) {
   return '冷';
 }
 
-/** 最近一次事件（2 小时内才算「刚发生」） */
-function recentEvent(state, ts = now()) {
+/** 最近一次「为什么变」（1 小时内才算「刚发生」，帮她判断语气） */
+function recentWhy(state, ts = now()) {
   const last = state.log[state.log.length - 1];
-  if (!last) return null;
-  if (ts - Number(last.ts || 0) > 2 * 3600 * 1000) return null;
-  const spec = KINDS[last.kind];
-  return spec ? spec.label : null;
+  if (!last) return '';
+  if (ts - Number(last.ts || 0) > 3600 * 1000) return '';
+  return String(last.why || '');
 }
 
-/** 当前状态的人类可读描述（给日志/调试用，不进 prompt 全文） */
+/**
+ * 给 system prompt 的一段：当前数值 + 规则，让她自己决定怎么说话、听不听指挥。
+ *
+ * 和上一版的区别：以前只在极端时才注入，现在是**每次都给**——因为判断权在她手上，
+ * 不给数值她就没法判断。为了不膨胀，固定 3 行、不写历史。
+ */
+function promptBlock(state = decay(read())) {
+  const a = Math.round(state.affinity);
+  const why = recentWhy(state);
+  const head = `【亲密度 ${a}/100（${band(a)}）${why ? `·刚因为「${why}」` : ''}】`;
+  const rules = '怎么变由你判断：被夸、被照顾、一起玩得开心 → 升；被凶、被敷衍、被晾很久 → 降。'
+    + '一次一般 ±3~8，别为一句客套大涨，也别为一句玩笑翻脸。觉得该变就调 feel 工具记下来。';
+  const tone = a >= 72
+    ? '你现在心情不错：可以更主动、更黏一点，但别腻到失真。'
+    : a <= 28
+      ? '你现在不太高兴：话可以短、可以不主动找话题，他不算过分的小要求（比如棋类让子）你可以不答应。'
+        + '但别阴阳怪气、别翻旧账、别威胁——只是没那么热情。'
+      : '语气自然就行，不用刻意表现情绪。';
+  return `${head}\n${rules}\n${tone}\n（这些数字是你自己的感觉，回复里不要念出来。）`;
+}
+
 function describe(state = decay(read())) {
-  return { affinity: state.affinity, energy: state.energy, band: band(state.affinity), recent: recentEvent(state) };
+  return { affinity: state.affinity, energy: state.energy, band: band(state.affinity), recent: recentWhy(state) };
 }
 
-/**
- * 给 system prompt 的一小段。**大多数时候返回空串**——这是「不影响日常对话」的关键。
- * 只有特别好、特别差、或刚发生情绪事件时才返回，最多两行。
- */
-function promptLine(state = decay(read())) {
-  const a = state.affinity;
-  const recent = recentEvent(state);
-  const notable = a >= 72 || a <= 32 || Boolean(recent);
-  if (!notable) return '';
-
-  const bits = [`【此刻的心情】亲密度 ${Math.round(a)}/100（${band(a)}）${recent ? `；${recent}` : ''}`];
-  if (a >= 80) bits.push('你现在对他很放松，可以更主动一点、偶尔撒个娇，但别腻到失真。');
-  else if (a >= 65) bits.push('你现在对他挺亲近，语气可以软一点。');
-  else if (a <= 25) bits.push('你现在有点不高兴。话短一点、别主动找话题，也不要阴阳怪气或翻旧账——就只是没那么热情。');
-  else if (a <= 32) bits.push('你现在情绪一般，回得简短些就行。');
-  return bits.join('\n');
-}
-
-/**
- * 被要求「让我一步 / 让我赢」时，要不要照做。
- * 好感很低时有一定概率不照做（这是唯一一处会让好感「影响实际行为」的地方，
- * 所以给的概率很克制：只有 ≤22 分才触发，且 45%）。
- * @param {Function} rng 注入随机源，测试用
- */
-function shouldYield(state = decay(read()), rng = Math.random) {
-  // 允许 shouldYield(rng) 这种更省事的调用
-  if (typeof state === 'function') { rng = state; state = decay(read()); }
-  if (!state || typeof state.affinity !== 'number') state = decay(read());
-  if (state.affinity > 22) return true;
-  return rng() >= 0.45;
-}
-
-/** 测试/维护：直接覆盖状态（不写 lastKindAt 冷却） */
+/** 测试/维护：直接覆盖状态 */
 function setState(patch = {}) {
   const state = Object.assign(decay(read()), patch);
   state.updatedAt = now();
@@ -209,6 +168,5 @@ function setState(patch = {}) {
 }
 
 module.exports = {
-  note, noteFromText, promptLine, describe, shouldYield, band,
-  setState, decay, read, FILE, KINDS, BASE,
+  feel, promptBlock, describe, band, setState, decay, read, FILE, BASE, MAX_STEP,
 };

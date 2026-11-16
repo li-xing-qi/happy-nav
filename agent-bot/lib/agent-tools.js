@@ -10,7 +10,7 @@
 const tools = require('../tools.js');
 
 /** 只给记忆工具：棋局里不该出现「画图 / 发表情」 */
-const MEMORY_TOOL_NAMES = ['save_rule', 'remember_fact', 'list_rules', 'revoke_rule'];
+const MEMORY_TOOL_NAMES = ['save_rule', 'remember_fact', 'list_rules', 'revoke_rule', 'feel'];
 const MEMORY_TOOLS = tools.TOOLS.filter((t) => t && t.function && MEMORY_TOOL_NAMES.includes(t.function.name));
 
 /**
@@ -61,6 +61,8 @@ function makeMemoryCtx(core, { channel, game, sessionId, room, log, remember }) 
     listRules: core.listRules,
     revokeRule: core.revokeRule,
     rememberFact: remember || ((fact) => require('./remember.js').remember(fact)),
+    /* 心情由她自己判断，这里只给落库入口 */
+    feel: (delta, why) => require('./mood.js').feel(delta, why),
   };
 }
 
