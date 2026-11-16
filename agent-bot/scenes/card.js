@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const core = require('../core.js');
 const ctx = require('../lib/chat-context.js');
 const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
+const mood = require('../lib/mood.js');
 
 const log = core.makeLogger('card');
 const { persona, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;   // llm 用自己的（默认参数不同）
@@ -339,6 +340,9 @@ async function maybeChat(s) {
           extra,
           extra ? '（上面是你记得他最近提过的事，聊到就自然接一句，别生硬复述）' : '',
           sit ? '讨论战术时可以引用上面的手牌和日志，但**你还没出牌**，不要说你已经打出了某张牌。' : '',
+          /* 心情：和聊天室/五子棋同一套。以前这里漏了——feel 工具给了，
+           * 提示词却没给数值，结果打牌时她的亲密度基本不动、语气也不受影响。 */
+          mood.promptBlock(),
           '老板立打法规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
         ].filter(Boolean).join('\n'),
       },

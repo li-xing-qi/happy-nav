@@ -94,6 +94,18 @@ function reset(patch = {}) {
   mood.feel(5, '他夸我');
   ok(mood.promptBlock().includes('刚因为'), '1 小时内的变化会带一句「刚因为…」');
 
+  console.log('\n[case] 场景覆盖：有工具就必须有心情提示（这条是补过的漏）');
+  /* 踩过：万象牌给了 feel 工具，却忘了往提示词里放数值，
+   * 结果打牌时她看不到心情、亲密度基本不动。用静态检查钉住这个不变量。 */
+  for (const name of ['chat', 'gomoku', 'card', 'lingxi']) {
+    const src = fs.readFileSync(path.join(__dirname, 'scenes', `${name}.js`), 'utf8');
+    const hasTools = /chatWithMemoryTools\(|llmWithTools\(/.test(src);
+    const hasMood = /mood\.promptBlock\(\)/.test(src);
+    ok(hasTools === hasMood, `${name}.js：工具与心情提示${hasTools ? '都有' : '都没有'}`, `工具=${hasTools} 提示=${hasMood}`);
+  }
+  const yufishSrc = fs.readFileSync(path.join(__dirname, 'yufish.js'), 'utf8');
+  ok(/mood\.promptBlock\(\)/.test(yufishSrc), 'yufish.js：与鱼通道也注入了心情');
+
   console.log('\n[case] 状态栏上报是「装饰」，不该拖累主链路');
   ok(presence.init({}) === false, '缺参数时不启用');
   ok(presence.init({ base: 'http://127.0.0.1:1', room: 't', pid: 'p' }) === true, '参数齐全时启用');
