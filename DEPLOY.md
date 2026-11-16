@@ -162,7 +162,7 @@ pm2 save
 node memory/selftest.js           # 期望 6/6 通过
 node memory/verify-semantic.js    # 期望 38/38 通过
 node agent-bot/verify-tools.js    # 期望 35/35 通过（工具通道）
-node agent-bot/verify-mood.js    # 期望 28/28 通过（好感度/心情）
+node agent-bot/verify-mood.js    # 期望 29/29 通过（好感度/心情）
 pm2 list                          # site / agent-bot 都是 online
 ```
 
@@ -255,7 +255,7 @@ curl -s localhost:3000/api/health          # ok:true
 node memory/selftest.js                    # 6/6
 node memory/verify-semantic.js             # 38/38
 node agent-bot/verify-tools.js             # 35/35（B 档起）
-node agent-bot/verify-mood.js              # 28/28（好感度/心情）
+node agent-bot/verify-mood.js              # 29/29（好感度/心情）
 pm2 list                                   # 该起的都 online，restarts 不持续增长
 free -h                                    # available 别长期低于 150MB
 ```
@@ -315,7 +315,7 @@ pm2 delete all && pm2 save   # 全部停掉
 - [ ] 仓库已 clone，`.env` 已从 `.env.example` 复制并按档位填写
 - [ ] `bash deploy.sh --check` 通过，站点 `curl /api/health` 返回 ok
 - [ ] （B 档）`agent-bot` 已 `npm install --omit=dev` 并**在站点之后**启动
-- [ ] （B 档）四个自检脚本全过：6/6、38/38、35/35、28/28
+- [ ] （B 档）四个自检脚本全过：6/6、38/38、35/35、29/29
 - [ ] （C 档）dsh 已登录，`6199` 在监听，插件出现在 `--dump-config` 里
 - [ ] （C 档）在与鱼说一句约定，`node memory/audit.js list` 能看到
 - [ ] 已告知用户：房间号不是密码；要不要放公网由他决定

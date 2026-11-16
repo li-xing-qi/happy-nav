@@ -83,6 +83,11 @@ a{color:inherit;text-decoration:none;}
 .mrow .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dot{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:#cbd5d7;}
 .dot.on{background:#3ec08a;box-shadow:0 0 0 3px rgba(62,192,138,.16);}
+.mood{border:1px solid var(--line);border-radius:11px;padding:9px 11px;background:var(--card);cursor:default;}
+.mood .top{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);}
+.mood .nm{font-weight:600;}
+.mood .hint{margin-top:5px;font-size:11px;color:var(--ink3);line-height:1.5;}
+.mdot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#cbd5d7;}
 .stat{display:flex;gap:8px;flex-wrap:wrap;}
 .stat span{font-size:11px;color:var(--ink2);background:var(--paper2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;}
 .side-foot{margin-top:auto;padding:14px 16px;display:flex;flex-direction:column;gap:9px;}
@@ -325,6 +330,13 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
     <div class="side-sec">
       <div class="side-h">这间房里</div>
       <div class="members" id="members"></div>
+    </div>
+    <div class="side-sec">
+      <div class="side-h">小鱼现在</div>
+      <div class="mood" id="moodRow" title="">
+        <div class="top"><span class="mdot" id="moodDot"></span><span class="nm" id="moodBand">还没见过</span></div>
+        <div class="hint" id="moodHint">她的心情变了她自己会说</div>
+      </div>
     </div>
     <div class="side-sec">
       <div class="side-h">房间里的小仓库</div>
@@ -573,7 +585,7 @@ function connect(){
   es=new EventSource('/api/yu/stream?code='+encodeURIComponent(CODE)+'&pid='+encodeURIComponent(PID)+'&since='+lastId);
   es.addEventListener('hello',function(e){var d=JSON.parse(e.data);PEER=d.peer;MEMBERS=d.members||MEMBERS;
     STICKERS=d.stickers||STICKERS;KAOMOJIS=d.kaomojis||KAOMOJIS;paintPeer();paintMembers();paintStats();if(trayOpen)drawTray();});
-  es.addEventListener('msgs',function(e){var d=JSON.parse(e.data);(d.msgs||[]).forEach(ingest);});
+  es.addEventListener('msgs',function(e){var d=JSON.parse(e.data);(d.msgs||[]).forEach(ingest);loadMood();});
   /* [BRIDGE] 撤回：DSH 发了中间态又撤回时会推这个事件。
      原来前端不认，中间态就永远留在页面上 → 看起来像重复。 */
   es.addEventListener('recall',function(e){
@@ -610,10 +622,34 @@ function connect(){
 }
 
 /* ---------------- 渲染 ---------------- */
+/* 她现在的档位词：只显示「亲近 / 还算熟」这种词，不显示分数（分数只在文件里）。
+ * 鼠标停上去能看到她最近为什么变——那句是她自己写的一小段理由。 */
+function moodColor(b){
+  if(/黏|很亲近/.test(b))return '#e2688a';
+  if(/亲近|挺黏/.test(b))return '#e59a4b';
+  if(/还算熟|平常/.test(b))return '#8aa0a6';
+  if(/客气|有点疏/.test(b))return '#6b8fb3';
+  if(/冷淡|冷透/.test(b))return '#7d8fa8';
+  return '#cbd5d7';
+}
+function paintMood(m){
+  var row=$('moodRow'),band=$('moodBand'),dot=$('moodDot'),hint=$('moodHint');
+  if(!row)return;
+  if(!m||!m.band){band.textContent='还没见过';hint.textContent='她的心情变了她自己会说';row.title='';dot.style.background='#cbd5d7';return;}
+  band.textContent=m.band;
+  hint.textContent=m.why?('刚因为「'+m.why+'」'):'她的心情变了她自己会说';
+  row.title=m.why||'';
+  dot.style.background=moodColor(m.band);
+}
+function loadMood(){
+  fetch('/api/yu/mood').then(function(r){return r.json();}).then(paintMood).catch(function(){});
+}
 function paintMe(){
   $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
   $('meName').textContent=PROFILE.name||'小鱼';
   $('meSub').textContent='房间 '+CODE+' · 在线';
+  loadMood();
+  if(!window.__moodTimer)window.__moodTimer=setInterval(loadMood,60000);
   $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
 }
 function paintMembers(){

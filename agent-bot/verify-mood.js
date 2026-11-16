@@ -38,8 +38,9 @@ function reset(patch = {}) {
   console.log('\n[case] 初始值与边界');
   reset();
   ok(mood.read().affinity === mood.BASE.affinity, '初始亲密度 = 55', String(mood.read().affinity));
-  ok(mood.band(55) === '平常', '分档：55 → 平常', mood.band(55));
-  ok(mood.band(90) === '很亲近' && mood.band(10) === '冷', '分档两端正确');
+  ok(mood.band(55) === '还算熟', '分档：55 → 还算熟', mood.band(55));
+  ok(mood.band(20) === '冷淡' && mood.band(66) === '亲近' && mood.band(96) === '黏糊糊', '细分档位对得上（10 档）');
+  ok(mood.band(90) === '很亲近' && mood.band(5) === '冷透了', '分档两端正确');
 
   console.log('\n[case] feel：她自己给分，脚本只钳制');
   reset();
