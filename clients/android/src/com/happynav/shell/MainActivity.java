@@ -272,7 +272,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         gear = buildGear();
-        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(38), dp(38));
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(44), dp(44));
         glp.gravity = Gravity.BOTTOM | Gravity.END;
         glp.setMargins(0, 0, dp(8), dp(8));
         root.addView(gear, glp);
@@ -288,7 +288,7 @@ public class MainActivity extends Activity {
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         t.setTextColor(Color.parseColor("#243230"));
         t.setGravity(Gravity.CENTER);
-        t.setAlpha(0.38f);
+        t.setAlpha(0.45f);
         t.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showMenu(); }
         });
@@ -333,6 +333,13 @@ public class MainActivity extends Activity {
         if (uri == null) return false;
         String scheme = uri.getScheme();
         if (scheme == null) return false;
+        /* 页面里要能叫出「改地址」：错误页的按钮就是 happynav://settings */
+        if ("happynav".equals(scheme)) {
+            String host = uri.getHost();
+            if ("settings".equals(host)) showSetup(prefs().getString(KEY_URL, ""));
+            else if ("reload".equals(host) && web != null) web.reload();
+            return true;
+        }
         if (!scheme.equals("http") && !scheme.equals("https")) {
             try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) { }
             return true;
@@ -359,8 +366,12 @@ public class MainActivity extends Activity {
                 + (target == null ? "" : target) + "</p>"
                 + "<a href='" + target + "' style='display:inline-block;padding:10px 22px;border-radius:999px;"
                 + "background:#4FA3A5;color:#fff;text-decoration:none'>重新连接</a>"
+                + "<div style='margin-top:10px'>"
+                + "<a href='happynav://settings' style='display:inline-block;padding:9px 20px;border-radius:999px;"
+                + "border:1px solid #C9D6D3;color:#243230;text-decoration:none;font-size:14px'>地址填错了？改地址</a>"
+                + "</div>"
                 + "<p style='color:#A9B6B4;font-size:12px;margin-top:20px'>"
-                + "服务器开着吗？地址对吗？右下角 ⚙ 可以改地址</p>"
+                + "服务器开着吗？右下角 ⚙ 也能改</p>"
                 + "</div></body>";
         web.loadDataWithBaseURL(target, html, "text/html", "utf-8", null);
     }

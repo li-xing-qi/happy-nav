@@ -10,10 +10,18 @@
 
 ## 装
 
-1. 从 [Releases](../../../releases) 下载 `happy-nav-1.0.apk`
+1. 从 [Releases](../../../releases) 下载 `happy-nav-1.1.apk`
 2. 手机上点开安装（第一次要允许「未知来源」）
 3. 首次启动填地址，例如 `http://192.168.1.10:3000` 或 `https://yu.example.com`
 4. 地址只存在本机，重装才需要再填一次
+
+## 填错了地址怎么改
+
+三条路，按顺序试：
+
+1. **右下角 ⚙** → 「修改地址」。这个齿轮是原生按钮，盖在网页上面，页面白屏也点得到。
+2. **连不上时的那个页面**（不是浏览器默认的白屏）里有个「地址填错了？改地址」按钮。
+3. 实在找不到：系统设置 → 应用 → 与鱼 → 存储 → **清除数据**，下次启动就回到首次设置。地址只存在本机，清掉不心疼（聊天记录在服务器上，不在手机里）。
 
 ## 能做什么
 
@@ -58,7 +66,7 @@ PLATFORM=$HOME/android-build/plat/android-34/android.jar \
 bash build-apk.sh
 ```
 
-产物：`build/happy-nav-1.0.apk`（已签名，21KB）。
+产物：`build/happy-nav-1.1.apk`（已签名，21KB）。
 
 脚本做的事就六步：`aapt2 compile` → `aapt2 link` → `javac` → `d8` → 塞 `classes.dex` + `zipalign` → `apksigner sign`。没有隐藏步骤，也没有下载依赖。
 
