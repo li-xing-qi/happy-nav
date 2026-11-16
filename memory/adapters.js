@@ -221,10 +221,37 @@ function conservativeParse(text, ctx) {
 }
 
 /**
+ * 廉价召回：这句话里有没有「可能在立规矩 / 撤销」的信号。
+ *
+ * 为什么要这一步：旁路裁决每条消息都要一次模型调用（实测 0.7~0.9 秒），
+ * 而绝大多数消息只是闲聊。这里只做**召回**，不做判断 —— 命中才值得问模型；
+ * 不命中的直接交给保守兜底（它只认显式立约词），结果是「不记」，不花钱。
+ *
+ * 代价（已知且刻意接受）：一句完全不用这些词的约定（比如只说「格挡优先」）
+ * 不会被模型看到，也就不会记。真要立规矩时带上「约定 / 以后 / 每次 / 别」即可。
+ */
+const COMMAND_HINTS = [
+  '约定', '规矩', '规则', '以后', '之后', '每次', '都这样', '默认', '一律',
+  '改成', '换成', '别', '不要', '不许', '不准', '不能再', '不许再',
+  '记住', '这条', '那句', '刚才说', '撤销', '取消', '不算', '作废',
+  '听我的', '按我说的', '从今', '开局', '下一步', '这一手', '这次',
+];
+function looksLikeCommand(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t || t.length > 200) return false;   // 长段文字不是指令
+  return COMMAND_HINTS.some((w) => t.includes(w));
+}
+
+/**
  * 语义裁决（异步）。模型可用时以模型为准；不可用/超时/低置信度 → 保守兜底。
+ * 没有指令信号的句子直接跳过模型（省一次调用），只走保守兜底。
  * @returns {Promise<{action:string, rule?:string, scope?:string, revokeId?:string, source:string}>}
  */
 async function judgeAdapterCommand(text, ctx = {}) {
+  if (!looksLikeCommand(text)) {
+    const c = conservativeParse(text, ctx);
+    return c && c.action === 'add' ? c : null;
+  }
   let active = [];
   try { active = store.readAdapters().filter((r) => r && r.status === 'active'); } catch {}
   const verdict = await llm.judge(text, ctx, active);
@@ -289,6 +316,49 @@ function archiveGhosts() {
 }
 
 /**
+ * 工具 / 直写入口：模型已经裁决过「这是不是约定」，这里只做守卫 + 落盘。
+ *
+ * 为什么判断权交出去了、守卫还得留着：
+ *   模型的意图判断比词表准，但它对「能不能写」没有否决权 —— 抱怨句、缺上下文的
+ *   通道、空正文、超长正文都必须在这里被拦掉。判断权给模型，否决权留在代码。
+ *
+ * @param {{text:string, scope?:string}} input 模型给的参数
+ * @param {object} ctx {channel, game, sessionId, room}
+ * @returns {{ok:boolean, reason?:string, id?:string, text?:string,
+ *            scope?:string, confirm?:string}}
+ */
+function addRuleFromModel(input, ctx) {
+  const i = input && typeof input === 'object' ? input : {};
+  const context = ctx && typeof ctx === 'object' ? ctx : {};
+  const text = String(i.text == null ? '' : i.text).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (text.length < 2) return { ok: false, reason: '规则正文是空的' };
+  // 止血：缺有效 ctx 直接丢弃，不落库
+  if (!hasEffectiveCtx(context)) {
+    return { ok: false, reason: '当前通道没有有效上下文（缺房间或对局），按规矩不落库' };
+  }
+  if (DISCOURSE_WORDS.some((w) => text.includes(w))) {
+    return { ok: false, reason: '这句是放弃 / 拖延 / 敷衍，不构成约定，没有记录' };
+  }
+  const scope = Object.values(C.SCOPE).includes(String(i.scope))
+    ? String(i.scope)
+    : C.SCOPE.SESSION;   // 拿不准就 session，绝不默认长期化
+  const rule = store.addAdapter({
+    text,
+    scope,
+    game: context.game == null ? null : String(context.game),
+    sessionId: scope === C.SCOPE.GAME ? null : context.sessionId == null ? null : String(context.sessionId),
+    source: context.channel == null ? null : String(context.channel),
+    replacePrevious: scope === C.SCOPE.GAME,
+  });
+  if (!rule) return { ok: false, reason: '写入失败（存储层拒绝）' };
+  invalidateCache();
+  const confirm = scope === C.SCOPE.GAME
+    ? '记下了，以后都这样'
+    : scope === C.SCOPE.SESSION ? '这局听你的' : '这步听你的';
+  return { ok: true, id: String(rule.id), text: rule.text || text, scope, confirm };
+}
+
+/**
  * 落地一条已裁决的命令。parsed 由 judgeAdapterCommand 提供（模型或保守兜底）。
  * 返回给小鱼的确认语；不是指令 / 被止血拒绝时返回空串 —— 绝不回虚假确认语。
  */
@@ -309,25 +379,8 @@ async function applyAdapterCommand(text, ctx) {
   }
 
   if (parsed.action !== 'add') return '';
-
-  // 止血：缺有效 ctx 直接丢弃，不落库、不回确认语
-  if (!hasEffectiveCtx(context)) return '';
-  const ruleText = String(parsed.rule || '').trim();
-  if (!ruleText || ruleText.length < 2) return '';
-
-  const rule = store.addAdapter({
-    text: ruleText,
-    scope: parsed.scope,
-    game: context.game == null ? null : String(context.game),
-    sessionId: parsed.scope === C.SCOPE.GAME ? null : context.sessionId == null ? null : String(context.sessionId),
-    source: parsed.source || (context.channel == null ? null : String(context.channel)),
-    replacePrevious: parsed.scope === C.SCOPE.GAME,
-  });
-  invalidateCache();
-  if (!rule) return '';
-  if (parsed.scope === C.SCOPE.GAME) return '记下了，以后都这样';
-  if (parsed.scope === C.SCOPE.SESSION) return '这局听你的';
-  return '这步听你的';
+  const r = addRuleFromModel({ text: parsed.rule, scope: parsed.scope }, context);
+  return r.ok ? r.confirm : '';
 }
 
 /** 离线同步入口（仅测试 / 无模型环境用）：强制走保守兜底，不调模型。 */
@@ -335,20 +388,8 @@ function applyAdapterCommandSync(text, ctx) {
   const context = ctx && typeof ctx === 'object' ? ctx : {};
   const parsed = conservativeParse(text, context);
   if (!parsed || parsed.action !== 'add') return '';
-  if (!hasEffectiveCtx(context)) return '';
-  const rule = store.addAdapter({
-    text: String(parsed.rule || '').trim(),
-    scope: parsed.scope,
-    game: context.game == null ? null : String(context.game),
-    sessionId: parsed.scope === C.SCOPE.GAME ? null : context.sessionId == null ? null : String(context.sessionId),
-    source: parsed.source,
-    replacePrevious: parsed.scope === C.SCOPE.GAME,
-  });
-  if (rule) invalidateCache();
-  if (!rule) return '';
-  if (parsed.scope === C.SCOPE.GAME) return '记下了，以后都这样';
-  if (parsed.scope === C.SCOPE.SESSION) return '这局听你的';
-  return '这步听你的';
+  const r = addRuleFromModel({ text: parsed.rule, scope: parsed.scope }, context);
+  return r.ok ? r.confirm : '';
 }
 
 /** 局终：该 session 的适配器置 ended，并触发 L1 会话归档。 */
@@ -368,7 +409,9 @@ module.exports = {
   activeAdapterRecords,
   applyAdapterCommand,
   applyAdapterCommandSync,
+  addRuleFromModel,
   judgeAdapterCommand,
+  looksLikeCommand,
   conservativeParse,
   listActive,
   revokeById,

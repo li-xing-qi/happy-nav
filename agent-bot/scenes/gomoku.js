@@ -4,6 +4,7 @@ const path = require('node:path');
 const core = require('../core.js');
 const shared = require('../lib/shared-state.js');
 const ctx = require('../lib/chat-context.js');
+const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
 
 const log = core.makeLogger('gomoku');
 const { persona, token, llm, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;
@@ -500,7 +501,7 @@ async function handleChat(v) {
   // （logChat / gameChat 的写入已上移到节流判断之前）
 
   try {
-    const reply = await llm([
+    const reply = await chatWithMemoryTools(core.llmRaw, [
       {
         role: 'system',
         content: [
@@ -514,10 +515,11 @@ async function handleChat(v) {
           ctx.chatBlock(10),
           '别说自己是程序。棋盘讨论可以引用坐标，但不要长篇分析。',
           '老板提起对局、阵法名、他在别处说过的话，都用上面「老板最近说过的话」回答，别再说「看不见」「没记录」。',
+          '老板在棋盘上立规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
         ].filter(Boolean).join('\n'),
       },
       ...gameChat,
-    ], { maxTokens: 100, temperature: 0.85 });
+    ], makeMemoryCtx(core, { channel: 'game', game: 'gomoku', sessionId: CODE, room: CODE, log }), { maxTokens: 100, temperature: 0.85 });
     if (reply) {
       gameChat.push({ role: 'assistant', content: reply.slice(0, 200) });
       await act({ act: 'chat', text: reply.slice(0, 300) });

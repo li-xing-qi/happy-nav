@@ -160,6 +160,27 @@ NO_CARD=1 NO_GOMOKU=1 NO_LINGXI=1 node index.js   # 只开聊天室
 | 撤销哪一条（必须给 id，不猜、不批量） | **模型 + 用户确认** |
 | 原子写入、只归档不删除、去重、预算裁剪、降级 | 脚本 |
 
+**两个写入通道**（同一套守卫，不同的触发方式）：
+
+| 通道 | 谁发起 | 额外模型调用 |
+|---|---|---|
+| **工具通道**（默认） | 回复模型自己调 `save_rule` / `remember_fact` / `list_rules` / `revoke_rule` | **不要**，判断和回复在同一次调用里 |
+| **旁路裁决** | `handleCommand()`：转发消息前单独问一次模型 | 要（已有廉价召回预筛，闲聊不触发） |
+
+工具通道把「确认」和「真的写了」合成一件事：工具返回「未记录：这句是放弃 / 拖延，不构成约定」时，模型当场改口，不会嘴上说「记下了」实际什么都没写。
+
+**各通道能力**（`✅` 已接通，`—` 该通道不存在此能力）：
+
+| 通道 | 写长期事实 | 写约定 | 约定生效 |
+|---|---|---|---|
+| 聊天室 `agent-bot/scenes/chat.js` | ✅ 工具 + `记住：` 兜底 | ✅ 工具 | ✅ 每轮注入 |
+| 五子棋 `scenes/gomoku.js` | ✅ 工具 | ✅ 工具 | ✅ `adapterPrompt` |
+| 万象牌 `scenes/card.js` | ✅ 工具 | ✅ 工具 | ✅ `adapterPrompt` |
+| 与鱼 `agent-bot/yufish.js` → dsh | ✅ `记住：` 兜底 | ✅ 旁路裁决（带预筛） | ✅ `renderFor('yu')` |
+| 站点 `/api/chat` | — | — | ✅ `renderFor('api-chat')` |
+
+> 与鱼回复由 dsh 生成，`yufish.js` 只能在转发前做旁路裁决。要让它也走原生工具，得给 dsh 加插件；目前预筛已把「每条消息 0.8 秒」压到只在疑似指令时出现。
+
 **两道防线，缺一不可**（止血 ≠ 根治）：
 
 - **止血**：缺有效 ctx（`game` / `sessionId`）的通道一律**不落库**。为什么不「改 scope / 降级 once / 补齐 sid」——注入端只对 session 档校验 sid，改成 once 或 game 反而会让错误规则立刻进 prompt 生效；game 档更糟，会永久生效。任何让规则变可见的止血动作都会把未修的语义误判暴露到决策链。
@@ -175,7 +196,8 @@ node memory/audit.js all                   # 含已归档
 node memory/audit.js revoke <id>           # 按 id 精确撤销
 node memory/audit.js archive-ghosts        # 归档存量幽灵规则
 node memory/audit.js llm                   # 查看裁决器状态
-node memory/verify-semantic.js            # 跑 34 项语义验收
+node memory/verify-semantic.js            # 跑 38 项语义验收
+node agent-bot/verify-tools.js            # 跑 30 项工具通道验收
 ```
 
 > 「这条不算了」不再批量清空当前作用域。未点名时会列出候选让你指定，一条都不动——以前它会把你真正在用的长期偏好一起归档，还回一句「好，那条不算了」。
@@ -281,7 +303,8 @@ npm run check                # 语法自检（五个服务端文件）
 bash scripts/check-deps.sh   # 环境体检：缺什么、有什么可选组件
 cd agent-bot && npm install && node index.js   # 启动 AI 陪玩
 node memory/compact.js --dry-run              # 预览记忆浓缩（不写盘）
-node memory/verify-semantic.js                # 语义门槛 34 项验收
+node memory/verify-semantic.js                # 语义门槛 38 项验收
+node agent-bot/verify-tools.js                # 工具通道 30 项验收
 node memory/audit.js list                     # 查看当前生效的约定
 bash scripts/smoke-test.sh   # 冒烟：页面与接口是否都活着
 bash deploy.sh --check # 只检查环境，不启动
