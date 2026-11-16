@@ -88,6 +88,24 @@ async function handleMemoryCommand(text, ctx = {}) {
   try { return await memory.handleCommand(text, ctx); } catch { return ''; }
 }
 
+/** 工具通道：把模型裁决好的一条约定直接落库（不再问第二次模型） */
+function writeRule(input, ctx = {}) {
+  if (FOUR_LAYER_OFF || !memory) return { ok: false, reason: '记忆未启用' };
+  try { return memory.writeRule(input, ctx); } catch (e) { return { ok: false, reason: e.message }; }
+}
+
+/** 工具通道：列出生效中的约定（含 id，供精确撤销） */
+function listRules(ctx = {}) {
+  if (FOUR_LAYER_OFF || !memory) return [];
+  try { return memory.listAdapters(ctx); } catch { return []; }
+}
+
+/** 工具通道：按 id 精确撤销一条约定 */
+function revokeRule(id) {
+  if (FOUR_LAYER_OFF || !memory) return [];
+  try { return memory.revokeAdapter(id); } catch { return []; }
+}
+
 /** 往 L1 临时记忆记一条局内数据（每步落子 / 每张出牌） */
 function noteStep(sessionId, kind, data, ctx = {}) {
   if (FOUR_LAYER_OFF || !memory) return false;
@@ -116,6 +134,23 @@ async function llm(messages, { maxTokens = 200, temperature = 0.85 } = {}) {
   if (!r.ok) throw new Error(`API ${r.status}: ${(await r.text()).slice(0, 160)}`);
   const j = await r.json();
   return (j.choices?.[0]?.message?.content || '').trim();
+}
+
+/**
+ * 同一次调用，但把整条 message 原样返回（含 tool_calls）。
+ * 工具循环要读 tool_calls，用上面的 llm() 会被 .content 抹平。
+ */
+async function llmRaw(messages, { maxTokens = 200, temperature = 0.85, tools } = {}) {
+  const payload = { model: MODEL, messages, max_tokens: maxTokens, temperature, stream: false };
+  if (Array.isArray(tools) && tools.length) payload.tools = tools;
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: cfg.llm.headers(),
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error(`API ${r.status}: ${(await r.text()).slice(0, 160)}`);
+  const j = await r.json();
+  return (j.choices?.[0] && j.choices[0].message) || {};
 }
 
 /* ---------- 流水账（夜间摘要的原料） ---------- */
@@ -154,7 +189,8 @@ function nowCN() {
 }
 
 module.exports = {
-  makeLogger, token, persona, llm, logChat, agoTag, nowCN,
-  adapterPrompt, handleMemoryCommand, noteStep, commitOnceAdapters, endMemorySession,
+  makeLogger, token, persona, llm, llmRaw, logChat, agoTag, nowCN,
+  adapterPrompt, handleMemoryCommand, writeRule, listRules, revokeRule,
+  noteStep, commitOnceAdapters, endMemorySession,
   PERSONA_DIR, CHATLOG, MODEL,
 };

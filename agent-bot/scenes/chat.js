@@ -581,6 +581,16 @@ async function reply(msgs) {
         }
         return arr.length;
       },
+      /* ---------- 记忆工具 ----------
+       * 判断权交给模型（它看得见整段对话），这里只提供落库入口。
+       * 房间号当 sessionId：同一房间内的 session 档约定能互相看见。
+       */
+      memCtx: { channel: 'chat', game: '', sessionId: String(conf.room || 'chat'), room: conf.room },
+      writeRule: core.writeRule,
+      listRules: core.listRules,
+      revokeRule: core.revokeRule,
+      // 模型已经裁决过「该记」，别再问一遍模型，直接落盘（skipJudge）
+      rememberFact: async (fact) => memoryWrite.remember(fact),
     }, { maxTokens: 220, temperature: 0.85 });
 
     if (!out) {
@@ -653,13 +663,20 @@ async function reply(msgs) {
 }
 
 /* ---------- 显式记忆：说「记住 XX」就真的写进 MEMORY.md ---------- */
+/* 显式「记住 X」的兜底网：模型忘调 remember_fact 时，这一层保证不漏。
+ *
+ * 2026-11-16 修：原来只把**整段第一条**消息的「老板：」前缀剥一次，再拿正则
+ * 从整段开头匹配。一批里连着来两条（「老板：在吗\n老板：记住：下周考离散」）时，
+ * 剥完是「在吗\n老板：记住…」，锚定在 ^ 的正则对不上 → 静默漏记。
+ * 现在按行拆开逐条匹配，一批里几条「记住」都能落地，也不会把后一条吞进 fact。
+ */
 function detectRemember(text) {
   const t = String(text || '').trim();
+  if (!t) return null;
   const RE = /^(记住|记一下|记着|帮我记|存一下|别忘了)\s*[：:，,]?\s*(.+)$/;
-  // 先按原句试（「记住：下周考离散」这种，「记住」本身就是前缀，别被剥掉）
-  // 再试剥掉说话人前缀的版本（「老板：记住 下周考离散」）
-  const stripped = t.replace(/^[^：:]{1,8}[：:]/, '').trim();
-  for (const body of [t, stripped]) {
+  for (const line of t.split(/\r?\n/)) {
+    // 每行各自剥一次说话人前缀：「老板：记住 下周考离散」→「记住 下周考离散」
+    const body = line.trim().replace(/^[^：:]{1,8}[：:]\s*/, '').trim();
     const m = body.match(RE);
     if (!m) continue;
     const fact = m[2].trim();
@@ -673,8 +690,14 @@ function detectRemember(text) {
 
 const memoryWrite = require('../lib/remember.js');
 
-async function remember(fact) {
-  const r = await memoryWrite.rememberAsync(fact);
+/* 显式「记住 X」的落盘（兜底网）。
+ *
+ * 不再走 rememberAsync：那条路会再问一次模型（judgeFact），而这里能进来的
+ * 只有「一句话以『记住：』开头」这种确定性祈使句，判断已经由句式完成了。
+ * 省下的是每条消息 0.7~0.9 秒。
+ */
+function remember(fact) {
+  const r = memoryWrite.remember(fact);
   if (r.ok) {
     log(r.skipped ? '记忆已有类似条目，跳过:' : '已写入长期记忆:', fact, '|', r.message);
     return true;
@@ -1019,4 +1042,5 @@ async function start() {
   }
 }
 
-module.exports = { start };
+/* detectRemember 一起导出：批量消息漏记是踩过的坑，留个可回归的入口 */
+module.exports = { start, detectRemember };

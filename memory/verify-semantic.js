@@ -23,11 +23,13 @@ const path = require('node:path');
 const MOCK_PORT = 31991 + (process.pid % 200);
 let mockVerdict = null;      // 测试里动态设置模型返回
 let mockFactVerdict = null;
+let mockHits = 0;            // 实际打进来的请求数（用来验「预筛省掉了调用」）
 
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
+    mockHits += 1;
     let content = '';
     try {
       const b = JSON.parse(body);
@@ -191,7 +193,20 @@ async function main() {
   }
   console.log('');
 
-  /* ========== 7. 降级：模型不可用时保守兜底且不阉割功能 ========== */
+  /* ========== 7. 预筛：闲聊不花模型调用 ========== */
+  console.log('[case] 预筛：没有指令信号就不问模型（每条省 0.7~0.9 秒）');
+  await reset();
+  mockVerdict = { action: 'none', rule: '', scope: 'session', confidence: 0.95 };
+  const hitsBefore = mockHits;
+  const chat1 = await bridge.handleCommand('今天好累啊，不想动', GOOD_CTX);
+  check('闲聊不回确认语', chat1 === '', `confirm=${JSON.stringify(chat1)}`);
+  check('闲聊没有触发模型调用', mockHits === hitsBefore, `多打了 ${mockHits - hitsBefore} 次`);
+  const chat2 = await bridge.handleCommand('这局打不过，以后再说吧', GOOD_CTX);
+  check('带「以后」的放弃句仍会问模型（召回没过早拦截）', mockHits === hitsBefore + 1, `多打了 ${mockHits - hitsBefore} 次`);
+  check('放弃句仍然不落库', store.readAdapters().filter((r) => r.status === 'active').length === 0, `confirm=${JSON.stringify(chat2)}`);
+  console.log('');
+
+  /* ========== 8. 降级：模型不可用时保守兜底且不阉割功能 ========== */
   console.log('[case] 模型不可用 → 保守兜底（错的不记、对的仍记）');
   server.close();
   await new Promise((r) => setTimeout(r, 100));

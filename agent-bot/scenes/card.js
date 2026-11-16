@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const core = require('../core.js');
 const ctx = require('../lib/chat-context.js');
+const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
 
 const log = core.makeLogger('card');
 const { persona, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;   // llm 用自己的（默认参数不同）
@@ -326,7 +327,7 @@ async function maybeChat(s) {
     // 关键：聊天时必须能看到当前局面（手牌/血量/护盾/日志），
     // 否则老板说「配合我先刷效果别打伤害」，这边根本不知道自己有什么牌（踩过）
     const sit = situationBlock(s);
-    const reply = await llm([
+    const reply = await chatWithMemoryTools(core.llmRaw, [
       {
         role: 'system',
         content: [
@@ -338,10 +339,11 @@ async function maybeChat(s) {
           extra,
           extra ? '（上面是你记得他最近提过的事，聊到就自然接一句，别生硬复述）' : '',
           sit ? '讨论战术时可以引用上面的手牌和日志，但**你还没出牌**，不要说你已经打出了某张牌。' : '',
+          '老板立打法规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
         ].filter(Boolean).join('\n'),
       },
       ...roomTurns.filter((t) => t.role === 'user' || t.role === 'assistant'),
-    ], { maxTokens: 100, temperature: 0.85 });
+    ], makeMemoryCtx(core, { channel: 'game', game: 'card', sessionId: ROOM, room: ROOM, log }), { maxTokens: 100, temperature: 0.85 });
     if (reply) {
       roomTurns.push({ role: 'assistant', content: reply.slice(0, 300) });
       await act({ t: 'say', text: reply.slice(0, 300) });

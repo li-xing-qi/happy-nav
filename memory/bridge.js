@@ -117,6 +117,30 @@ async function handleCommand(text, ctx = {}) {
   }
 }
 
+/**
+ * 工具 / 直写通道：模型已经决定「这是约定」，这里只做守卫 + 落盘。
+ *
+ * 与 handleCommand 的区别：handleCommand 自己再问一次模型（旁路裁决，
+ * 每条消息一次额外调用）；writeRule 不再调模型，由调用方的工具循环直接把
+ * 参数送进来。守卫（缺 ctx / 放弃类措辞 / 空正文 / scope 白名单）一条不少。
+ *
+ * @param {{text:string, scope?:string}} input
+ * @param {object} ctx {channel, game, sessionId, room}
+ * @returns {{ok:boolean, reason?:string, id?:string, text?:string,
+ *            scope?:string, confirm?:string}} 永不抛错
+ */
+function writeRule(input, ctx = {}) {
+  const a = mod('adapters');
+  if (!a || typeof a.addRuleFromModel !== 'function') {
+    return { ok: false, reason: '记忆模块不可用' };
+  }
+  try {
+    return a.addRuleFromModel(input, ctx);
+  } catch (e) {
+    return { ok: false, reason: `写入异常：${e.message}` };
+  }
+}
+
 /** 可见 / 审计：列出当前生效的约定（含 id）。 */
 function listAdapters(ctx = {}) {
   const a = mod('adapters');
@@ -219,6 +243,7 @@ module.exports = {
   renderFor,
   adapterPrompt,
   handleCommand,
+  writeRule,
   listAdapters,
   revokeAdapter,
   archiveGhostAdapters,

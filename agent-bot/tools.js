@@ -10,6 +10,9 @@ const MEME_DIR = cfg.memesDir;
 const CHATLOG = cfg.chatlog;
 const PICS = cfg.picsDir;
 
+/* 约定作用域的中文说法：模型和人看同一套词，别让它自己编「短期/永久」。 */
+const SCOPE_CN = { once: '只这一步', session: '本局内', game: '以后一直' };
+
 /* ---------- 只读查询白名单 ----------
  *
  * 聊天室的鱼没有 QQ 侧 DSH 的 bash 工具，回答「内存多少」「磁盘还剩多少」
@@ -214,6 +217,68 @@ const TOOLS = [
           },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_rule',
+      description:
+        '把老板立的一条「约定」记下来，以后自动遵守。' +
+        '只在老板**明确立规矩**时调用：「约定：…」「以后都…」「每次…」「默认…」「这局先…」「别…」「改成…」。' +
+        '**不要**为抱怨、放弃、拖延、反话、感叹调用 —— 例如「这局打不过，以后再说吧」不是约定，不要调用。' +
+        '规则正文要重写成一句独立的祈使句，不要带「记住」「约定」这些字样。',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: '规则正文，一句话，例如「出牌优先打带格挡效果的牌」' },
+          scope: {
+            type: 'string',
+            enum: ['once', 'session', 'game'],
+            description: 'once=只影响下一步；session=本局 / 本房间内有效（拿不准就用它）；game=以后一直有效',
+          },
+        },
+        required: ['text', 'scope'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remember_fact',
+      description:
+        '把老板的一条长期事实写进长期记忆（他本人、家人、习惯、日程、偏好、常提的人和事）。' +
+        '他说「记住…」或明确告知一件以后还用得上的事时调用。' +
+        '**不要**为闲聊、感叹、临时安排、反问调用，也不要把他随口一句抱怨当成事实。',
+      parameters: {
+        type: 'object',
+        properties: {
+          fact: { type: 'string', description: '一条独立可读的事实，一句话，不带「记住」这类触发词' },
+        },
+        required: ['fact'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_rules',
+      description: '看现在有哪些约定还在生效。老板问「你记着我哪些规矩」，或要撤销但不知道 id 时调用。',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'revoke_rule',
+      description: '按 id 撤销一条约定。id 必须先由 list_rules 拿到，不许猜，也不许一句话批量撤好几条。',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: '约定 id，从 list_rules 的返回里取' },
+        },
+        required: ['id'],
       },
     },
   },
@@ -494,6 +559,52 @@ async function runTool(name, args, ctx) {
     } catch (e) {
       return `发送失败：${e.message}`;
     }
+  }
+
+  /* ---------- 记忆工具 ----------
+   * 判断权在模型（它看得见整段对话），否决权在这里：
+   * 缺上下文、放弃类措辞、空正文、假 id 一律返回「未记录 + 原因」，
+   * 让模型当场改口，而不是嘴上说「记下了」实际什么都没写。
+   */
+  if (name === 'save_rule') {
+    if (typeof ctx.writeRule !== 'function') return '当前场景不支持写约定。';
+    const r = ctx.writeRule({ text: args?.text, scope: args?.scope }, ctx.memCtx || {});
+    if (!r || !r.ok) return `未记录：${(r && r.reason) || '写入被拒绝'}`;
+    if (log) log('写约定:', r.id, r.scope, r.text);
+    return `已记下 [${r.id}]（${SCOPE_CN[r.scope] || r.scope}）：${r.text}。以后按这个来。`;
+  }
+
+  if (name === 'remember_fact') {
+    const fact = String(args?.fact || '').trim();
+    if (fact.length < 2) return '要记的内容是空的，没有写。';
+    if (typeof ctx.rememberFact !== 'function') return '当前场景不支持写长期记忆。';
+    try {
+      const r = await ctx.rememberFact(fact);
+      if (!r || !r.ok) return `写入失败：${(r && r.message) || '未知错误'}`;
+      if (r.skipped) return `没有写入：${r.message}`;
+      if (log) log('写长期事实:', fact);
+      return `已写进长期记忆：${fact}`;
+    } catch (e) {
+      return `写入失败：${e.message}`;
+    }
+  }
+
+  if (name === 'list_rules') {
+    if (typeof ctx.listRules !== 'function') return '当前场景不支持查约定。';
+    const list = ctx.listRules(ctx.memCtx || {}) || [];
+    if (!list.length) return '现在没有任何生效的约定。';
+    return `当前生效 ${list.length} 条约定：\n` +
+      list.map((r) => `  [${r.id}]（${SCOPE_CN[r.scope] || r.scope}）${r.text}`).join('\n');
+  }
+
+  if (name === 'revoke_rule') {
+    const id = String(args?.id || '').trim();
+    if (!id) return '要给约定 id，先用 list_rules 查。';
+    if (typeof ctx.revokeRule !== 'function') return '当前场景不支持撤销约定。';
+    const hit = ctx.revokeRule(id) || [];
+    if (!hit.length) return `没有找到生效中的 id=${id}，先用 list_rules 看看。`;
+    if (log) log('撤销约定:', id);
+    return `已撤销：${hit.map((r) => r.text).join('；')}`;
   }
 
   return `不认识的工具：${name}`;
