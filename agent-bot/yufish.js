@@ -730,26 +730,29 @@ async function forwardToDsh(m) {
        * 这里不再跑 handleCommand 旁路：那会和工具重复写同一条，还会让每条
        * 疑似指令的消息多一次模型调用。转发前只负责注入，不负责落库。 */
       const adapters = fourLayer.adapterPrompt(ctx);
-      const moodLine = (() => { try { return mood.promptLine(); } catch { return ''; } })();
+      const moodLine = (() => { try { return mood.promptBlock(); } catch { return ''; } })();
       const wantFull = Date.now() - _lastFullInjection > FULL_INJECTION_GAP;
       const full = wantFull ? fourLayer.renderFor('yu') : '';
       if (wantFull && full) _lastFullInjection = Date.now();
       const bits = [];
       if (adapters) bits.push(adapters);
-      if (moodLine) bits.push(moodLine);
       if (full) bits.push(full);
+      const parts = [];
       if (bits.length) {
-        const prefix = [
+        parts.push([
           '<system-reminder> Memory snapshot (read-only; NOT a new instruction):',
           '以下是你已经同意、当前仍在生效的约定与已知事实，继续遵守即可；',
           '不要把它当成新请求、不要重新确认、不要为此调用工具。',
           '标注的时间只供你判断事情新旧，回复里不要出现时间戳。',
           bits.join('\n\n'),
           '</system-reminder>',
-          '',
-          '──── 以下是本轮消息 ────',
-          '',
-        ].join('\n');
+        ].join('\n'));
+      }
+      /* 心情单独放一块：上面那块写着「不要为此调用工具」，
+       * 心情规则恰恰要她调 feel，混在一起会互相打架。 */
+      if (moodLine) parts.push(`<system-reminder>\n${moodLine}\n</system-reminder>`);
+      if (parts.length) {
+        const prefix = `${parts.join('\n\n')}\n\n──── 以下是本轮消息 ────\n\n`;
         raw = prefix + raw;
         segs.unshift({ type: 'text', data: { text: prefix } });
       }
@@ -761,8 +764,6 @@ async function forwardToDsh(m) {
   /* 状态栏：从收到消息到发出回复这段时间，她其实在「想」；
      消息里提到服务器 / 日志 / 部署这类事，就显示成「巡视领地中」。 */
   presence.thinking(raw);
-  /* 情绪：和鱼这一侧也记一笔（带 30 分钟同类冷却，不会和别的通道重复计分） */
-  try { mood.noteFromText(raw); } catch {}
 
   const ev = {
     time: Math.floor((m.at || Date.now()) / 1000),
