@@ -5,6 +5,7 @@ const core = require('../core.js');
 const shared = require('../lib/shared-state.js');
 const ctx = require('../lib/chat-context.js');
 const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
+const mood = require('../lib/mood.js');
 
 const log = core.makeLogger('gomoku');
 const { persona, token, llm, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;
@@ -500,6 +501,9 @@ async function handleChat(v) {
   // 写游戏昵称会导致不被标记重要、摘要时被当路人发言丢掉（踩过）
   // （logChat / gameChat 的写入已上移到节流判断之前）
 
+  const said = fresh.map((m) => String(m.text || '')).join('\n');
+  try { mood.noteFromText(said); } catch {}
+
   try {
     const reply = await chatWithMemoryTools(core.llmRaw, [
       {
@@ -516,6 +520,12 @@ async function handleChat(v) {
           '别说自己是程序。棋盘讨论可以引用坐标，但不要长篇分析。',
           '老板提起对局、阵法名、他在别处说过的话，都用上面「老板最近说过的话」回答，别再说「看不见」「没记录」。',
           '老板在棋盘上立规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
+          mood.promptLine(),
+          /* 情绪影响行为的唯一一处：好感很低时，被要求放水可以不答应。
+           * 概率在 mood.shouldYield 里控制（≤22 分才触发、45%），不是必然翻脸。 */
+          (LET_WIN.test(said) && !mood.shouldYield())
+            ? '他让你放水，但你现在心情不好，不想让。可以拒绝，语气别难听，也别编「规则不允许」这种借口。'
+            : '',
         ].filter(Boolean).join('\n'),
       },
       ...gameChat,
@@ -532,6 +542,10 @@ async function handleChat(v) {
 }
 
 /* ---------- 把局面翻译成人话 ---------- */
+/* 「让我一步 / 让我赢」这类请求：只有低好感时才允许不答应 */
+const LET_WIN = /(让我|放水|让一下|让一步|让让我|让个|故意输|输给我|手下留情)/;
+let lastGameNoted = '';
+
 function situation(v) {
   const bits = [];
   const host = v.hostSeat;
@@ -539,6 +553,15 @@ function situation(v) {
   bits.push(`【局面】房间 ${v.code}，规则：${ruleCN}${v.ruleLocked ? '（已锁定）' : '（未定）'}`);
   bits.push(`我是座位 ${mySeat}${host === mySeat ? '（房主）' : '（房员）'}，执${v.blackSeat === mySeat ? '黑' : v.blackSeat === -1 ? '（待定）' : '白'}`);
   if (v.winner !== -1 && v.winner !== undefined) {
+    /* 局终记一次情绪事件。situation() 每轮刷新都会被调用，用 key 去重，
+     * 否则同一局会被记十几次。 */
+    const key = `${v.code}:${v.moves}:${v.winner}`;
+    if (key !== lastGameNoted) {
+      lastGameNoted = key;
+      if (v.winner !== 'draw') {
+        try { mood.note(v.winner === mySeat ? 'win' : 'lose'); } catch {}
+      }
+    }
     bits.push(v.winner === 'draw' ? '结果：平局' : `结果：${v.winner === mySeat ? '我赢了' : '老板赢了'}`);
   } else {
     bits.push(`轮到${v.turn === mySeat ? '我' : '老板'}落子，已下 ${v.moves} 手`);

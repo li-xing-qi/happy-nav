@@ -73,6 +73,12 @@ const FOUR_LAYER_OFF = process.env.FOUR_LAYER === '0';
 let _lastFullInjection = 0;
 const FULL_INJECTION_GAP = Number(process.env.MEM_INJECT_GAP_MS || 10 * 60 * 1000);
 
+/* 状态栏：把「她在干嘛」上报到与鱼房间（思考中 / 说话中 / 巡视领地中）。
+   失败一律静默——状态是装饰，不能影响消息收发。 */
+const presence = require('./lib/presence.js');
+/* 好感度/心情：只取一小段提示词（大多数时候是空串），和记忆快照一起注入 */
+const mood = require('./lib/mood.js');
+
 /* 去重与撤回用的小表（进程内，够用） */
 const DUP_WINDOW_MS = 8000;
 const recentTexts = new Map();    // text → { at, id }
@@ -434,6 +440,7 @@ async function handleAction(obj) {
 
 /* ---------- 发消息到与鱼 ---------- */
 async function yuSendText(text) {
+  presence.speaking();   // 状态栏：开始说话
   const r = await yuReq('POST', '/api/yu/send', {
     code: CONF.room,
     pid: CONF.botPid,
@@ -719,14 +726,17 @@ async function forwardToDsh(m) {
         room: CONF.room,
         includeAllGames: true,
       };
-      const confirm = await fourLayer.handleCommand(raw, ctx);
+      /* 约定 / 撤销的**写入**交给 dsh 侧的记忆工具（integrations/dsh-tool-memory）。
+       * 这里不再跑 handleCommand 旁路：那会和工具重复写同一条，还会让每条
+       * 疑似指令的消息多一次模型调用。转发前只负责注入，不负责落库。 */
       const adapters = fourLayer.adapterPrompt(ctx);
+      const moodLine = (() => { try { return mood.promptLine(); } catch { return ''; } })();
       const wantFull = Date.now() - _lastFullInjection > FULL_INJECTION_GAP;
       const full = wantFull ? fourLayer.renderFor('yu') : '';
       if (wantFull && full) _lastFullInjection = Date.now();
       const bits = [];
-      if (confirm) bits.push(`【刚才那条已记下】${confirm}`);
       if (adapters) bits.push(adapters);
+      if (moodLine) bits.push(moodLine);
       if (full) bits.push(full);
       if (bits.length) {
         const prefix = [
@@ -747,6 +757,12 @@ async function forwardToDsh(m) {
       try { console.warn('[yufish] 记忆注入降级：', e.message); } catch {}
     }
   }
+
+  /* 状态栏：从收到消息到发出回复这段时间，她其实在「想」；
+     消息里提到服务器 / 日志 / 部署这类事，就显示成「巡视领地中」。 */
+  presence.thinking(raw);
+  /* 情绪：和鱼这一侧也记一笔（带 30 分钟同类冷却，不会和别的通道重复计分） */
+  try { mood.noteFromText(raw); } catch {}
 
   const ev = {
     time: Math.floor((m.at || Date.now()) / 1000),
@@ -773,6 +789,8 @@ async function main() {
   log(`  与鱼: ${CONF.yuBase} 房间 ${CONF.room}`);
   log(`  DSH : ${CONF.obUrl}`);
   await join();
+  /* 状态栏：进房后先报个「在线」，之后由 speaking / thinking 接管 */
+  if (presence.init({ base: CONF.yuBase, room: CONF.room, pid: CONF.botPid })) presence.idle();
   connectOb();
   setInterval(() => { poll().catch(() => {}); }, CONF.pollMs);
 }

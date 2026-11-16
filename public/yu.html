@@ -624,8 +624,11 @@ function paintMembers(){
   }).join('')||'<div class="mrow"><span class="nm" style="color:var(--ink3)">只有你一个人</span></div>';
 }
 function paintPeer(){
-  $('peerDot').className='dot '+(PEER&&PEER.online?'on':'');
-  $('peerTxt').textContent=PEER?(PEER.name+(PEER.online?' · 在线':' · 暂时离开')):'等待对方游进来…';
+  /* act 由对方自己上报（说话中 / 巡视领地中 / 打盹中…），45 秒内有效。
+     没有 act 就退回原来的「在线 / 暂时离开」。 */
+  var act=PEER&&PEER.act?PEER.act:'';
+  $('peerDot').className='dot '+(PEER&&(PEER.online||act)?'on':'');
+  $('peerTxt').textContent=PEER?(PEER.name+' · '+(act||(PEER.online?'在线':'暂时离开'))):'等待对方游进来…';
 }
 function paintStats(){
   $('stStk').textContent='自定义表情 '+STICKERS.length;

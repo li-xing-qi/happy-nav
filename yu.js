@@ -114,14 +114,19 @@ module.exports = function createYu(ctx) {
   }
 
   function cleanStr(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, '').slice(0, n || 200); }
+  /** 当前动作只在 45 秒内有效，避免「思考中」卡死在那里 */
+  function actOf(u) {
+    if (!u || !u.act) return '';
+    return Date.now() - Number(u.actAt || 0) < 45000 ? String(u.act) : '';
+  }
   function peerOf(r, me) {
     const p = r.users.find(u => u.pid !== me.pid);
     if (!p) return null;
-    return { name: p.name, avatar: p.avatar || '🐟', bubble: p.bubble || '', online: Date.now() - p.lastSeen < 15000, seat: p.seat };
+    return { name: p.name, avatar: p.avatar || '🐟', bubble: p.bubble || '', online: Date.now() - p.lastSeen < 15000, seat: p.seat, act: actOf(p) };
   }
   function publicUser(u) {
     return { name: u.name, avatar: u.avatar || '🐟', bubble: u.bubble || '', fontSize: u.fontSize || 0,
-      seat: u.seat, online: Date.now() - u.lastSeen < 15000 };
+      seat: u.seat, online: Date.now() - u.lastSeen < 15000, act: actOf(u) };
   }
   function broadcast(r, ev, data) {
     const payload = 'event: ' + ev + '\ndata: ' + JSON.stringify(data) + '\n\n';
@@ -389,6 +394,26 @@ module.exports = function createYu(ctx) {
       broadcast(r, 'kaomojis', { kaomojis: r.kaomojis });
       push(r, { type: 'sys', text: `${me.name} 往颜文字库里添了一个 ${text}` });
       return json(res, { ok: true, kaomojis: r.kaomojis });
+    }
+
+    /* 状态栏：她自己上报「正在干嘛」（说话中 / 巡视领地中 / 打盹中）。
+       只改 act 字段，不落任何消息，失败也不影响聊天。 */
+    if (p === '/api/yu/act') {
+      const b = await readBody(req);
+      const code = normCode(b.code);
+      const pid = cleanStr(b.pid, 40);
+      if (!CODE_RE.test(code)) return json(res, { error: '房间号不合法' });
+      const r = loadRoom(code);
+      const me = r.users.find(x => x.pid === pid);
+      if (!me) return json(res, { error: '先加入房间' });
+      me.act = cleanStr(b.act, 12);
+      me.actAt = Date.now();
+      me.lastSeen = Date.now();
+      /* 逐个下发：peerOf 是「相对于收信人」算的，不能共用一个包 */
+      for (const s of r.subs) {
+        try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {}
+      }
+      return json(res, { ok: true, act: me.act });
     }
 
     if (p === '/api/yu/state') {

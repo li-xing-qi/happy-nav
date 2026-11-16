@@ -7,6 +7,7 @@ const core = require('../core.js');
 const hist = require('../lib/chat-history.js');
 const memes = require('../lib/meme-index.js');
 const shared = require('../lib/shared-state.js');
+const mood = require('../lib/mood.js');
 
 const log = core.makeLogger('chat');
 const { token } = core;   // llm 用自己的版本（走 ds-proxy，签名也不同）
@@ -457,6 +458,10 @@ async function reply(msgs) {
   const flat = typeof content === 'string' ? content : content[0].text;
   hist.push('user', flat);
 
+  /* 好感度/心情：从这句话里认情绪事件（纯词表 + 冷却，不额外调模型）。
+   * 认不出来就当普通聊天，绝不阻塞回复。 */
+  try { mood.noteFromText(flat); } catch {}
+
   // 硬规则：说「记住/记一下」就直接落盘，不等夜里摘要。
   // 之前这里的模型只把 remember.py 命令「念」出来、并没有执行，
   // 结果看着像记住了其实没写（踩过）。
@@ -488,6 +493,9 @@ async function reply(msgs) {
     persona(),
     '---',
     `现在是 ${dateStr}（北京时间）。算「明天/后天/这周」一律以这个时间为准，不许自己猜。`,
+    /* 好感度/心情：绝大多数时候返回空串，只有特别好/特别差/刚发生事才出现一两行。
+     * 放在靠前的位置但很轻，避免把「日常对话」压成情绪表演。 */
+    mood.promptLine(),
     // 跨通道：五子棋/卡牌那边刚发生的事，聊天室的你也能知道
     // 窗口给足 24 小时，避免「刚打完就说没记忆」（踩过）
     shared.digest(1440),
