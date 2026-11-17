@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const render = require('./lib/render.js');
+/* feel 的 kind 枚举直接用 mood.js 的路径表：两处手写迟早会漂（那边加了新路径，这边还认旧的） */
+const { FEEL_KINDS } = require('./lib/mood.js');
 
 const cfg = require('./config.js');
 
@@ -265,9 +267,11 @@ const TOOLS = [
     function: {
       name: 'feel',
       description:
-        '记下你此刻的感受变化（亲密度）。被夸、被照顾、一起玩得开心就往上调；被凶、被敷衍、被晾很久就往下降。' +
-        '一次一般 3~8，最多 12。这是你自己的判断，不是命令——觉得没什么可变的就别调。' +
-        '不要在回复里提分数，也不要说「我的好感度是多少」。',
+        '记下你此刻的感受（亲密度 + 心情）。日常陪着聊也算：他陪你说话、讲自己的日常、叫你昵称、'
+        + '说想你、夸你、照顾你、找你商量事，这些都往上调；只回嗯哦、久不来不解释、凶你、'
+        + '玩笑开过头、只在要东西时找你，往下降。日常小事 1~3，明显心动 4~8，一次最多 12。'
+        + '不用等大事，也别一次给太满。顺手标一下是哪一类（kind），方便你之后想起来他今天都做了什么。'
+        + '不要在回复里提分数。',
       parameters: {
         type: 'object',
         properties: {
@@ -278,6 +282,17 @@ const TOOLS = [
           why: {
             type: 'string',
             description: '一句话理由，比如「他夸我今天回得好」「他连着两天没理我」',
+          },
+          mood: {
+            type: 'string',
+            enum: ['开心', '黏人', '撒娇', '有点醋', '低落', '累了', '得意', '平静'],
+            description: '你现在的心情（6 小时内有效）。不传就沿用上一个心情',
+          },
+          kind: {
+            type: 'string',
+            enum: FEEL_KINDS,
+            description: '这次是哪一类：被陪着、他报备、叫昵称、说想你、撩你、找你商量事、一起玩、记得你说过的事；'
+              + '或反过来的敷衍、失联、凶、越界、工具化',
           },
         },
         required: ['delta'],
@@ -615,8 +630,9 @@ async function runTool(name, args, ctx) {
 
   if (name === 'feel') {
     if (typeof ctx.feel !== 'function') return '当前场景不支持记心情。';
-    const r = ctx.feel(Number(args?.delta), args?.why);
-    if (!r || !r.applied) return '心情没有变化。';
+    /* mood / kind 是可选参数，透传给 mood.feel；老的两参 feel 实现（只接 delta/why）也兼容 */
+    const r = ctx.feel(Number(args?.delta), args?.why, { mood: args?.mood, kind: args?.kind });
+    if (!r || !r.applied) return r && r.mood ? `心情记成「${r.mood}」了，亲密度没变。` : '心情没有变化。';
     /* 故意不回数值：模型看到数字容易在正文里念出来。 */
     return r.applied > 0 ? '记下了，你现在对他更亲近了一点。' : '记下了，你现在有点疏远。';
   }

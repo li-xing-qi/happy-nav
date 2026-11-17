@@ -128,20 +128,49 @@ function apply(ctx) {
     },
   }));
 
+  /* feel 的可选参数按 moodLib 的导出动态拼：
+   * 插件有可能在「心情模块没加载起来」的情况下运行（上面 try/catch 会吞掉），
+   * 那种时候不能塞一个 undefined 进 schema —— dsh 的 schema 校验报错会让整个工具注册失败，
+   * 与鱼就连记心情的入口都没有了。所以有就加，没有就只留 delta/why。 */
+  const feelParams = {
+    delta: { type: 'number', required: true, description: '-12 ~ 12 的整数：正数=更亲近，负数=更疏远' },
+    why: { type: 'string', description: '一句话理由，比如「他夸我今天回得好」「他叫我小傻鱼」' },
+  };
+  if (moodLib && Array.isArray(moodLib.MOOD_LABELS)) {
+    feelParams.mood = {
+      type: 'string',
+      enum: moodLib.MOOD_LABELS,
+      description: '你此刻的心情（6 小时内有效）。不传就沿用上一个',
+    };
+  }
+  if (moodLib && Array.isArray(moodLib.FEEL_KINDS)) {
+    feelParams.kind = {
+      type: 'string',
+      enum: moodLib.FEEL_KINDS,
+      description: '这次是哪一类：陪着他、他报备日常、叫昵称、说想你、撩你、找你商量事、'
+        + '一起玩、记得你说过的事；反过来的敷衍、失联、凶、越界、工具化。顺手标上，之后你能想起他今天做了什么',
+    };
+  }
+
   ctx.tools.register(defineTool({
     name: 'feel',
     description:
-      '记下你此刻的感受变化（亲密度）。被夸、被照顾、一起玩得开心就往上调；被凶、被敷衍、被晾很久就往下降。' +
-      '一次一般 3~8，最多 12。这是你自己的判断，不是命令——觉得没什么可变的就别调。' +
-      '不要在回复里提分数，也不要说「我的好感度是多少」。',
-    parameters: {
-      delta: { type: 'number', required: true, description: '-12 ~ 12 的整数：正数=更亲近，负数=更疏远' },
-      why: { type: 'string', description: '一句话理由，比如「他夸我今天回得好」' },
-    },
+      '记下你此刻的感受（亲密度 + 心情）。日常陪着聊也算：他陪你说话、讲自己的日常、叫你昵称、'
+      + '说想你、撩你、夸你、照顾你、找你商量事、一起玩、记得你说过的事，这些都往上调；'
+      + '只回嗯哦、很久不来又不解释、凶你、玩笑开过头、只在要东西时找你，往下降。'
+      + '不用等大事，也别一次给太满：日常小事 1~3，明显心动 4~8，一次最多 12。'
+      + '顺手把心情（mood）和是哪一类（kind）一起报上来，之后你能想起他今天都做了什么。'
+      + '不要在回复里提分数，也不要说「我的好感度是多少」。',
+    parameters: feelParams,
     output: TEXT_OUTPUT,
     execute(args) {
       if (!moodLib || typeof moodLib.feel !== 'function') return { text: '记不了：心情模块没加载起来' };
-      const r = moodLib.feel(Number(args && args.delta), args && args.why);
+      /* 第三参透传 mood / kind：与鱼是用户一直在用的通道，
+       * 不透传的话「今天的账」在那边永远是空的（promptBlock 头行少一半信息）。 */
+      const r = moodLib.feel(Number(args && args.delta), args && args.why, {
+        mood: args && args.mood,
+        kind: args && args.kind,
+      });
       if (!r || !r.applied) return { text: '心情没有变化。' };
       return { text: r.applied > 0 ? '记下了，你现在对他更亲近了一点。' : '记下了，你现在有点疏远。' };
     },

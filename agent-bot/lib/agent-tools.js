@@ -29,9 +29,16 @@ async function chatWithMemoryTools(rawLlm, messages, ctx, opts = {}) {
   const convo = Array.isArray(messages) ? messages.slice() : [];
   const rounds = Math.max(1, Math.min(Number(opts.maxRounds) || 3, 5));
   const log = (ctx && ctx.log) || (() => {});
+  /* 工具轮的 token 预算必须单独给够。
+   * 踩过：五子棋/万象牌传 maxTokens=100（正文要短），这个 100 又被用在了工具轮上，
+   * 模型刚写完 tool_calls 就没额度写正文，于是学会了「干脆别调工具」——
+   * 线上日志里 feel 调用 0 次就是这么来的。收尾那一轮仍然用原始 maxTokens，
+   * 这样「回复短」的目标不变，只是工具轮不再被掐死。 */
+  const toolBudget = Math.max(Number(opts.maxTokens) || 0, 400);
+  const toolOpts = Object.assign({}, opts, { maxTokens: toolBudget });
 
   for (let i = 0; i < rounds; i += 1) {
-    const msg = await rawLlm(convo, Object.assign({}, opts, { tools: MEMORY_TOOLS }));
+    const msg = await rawLlm(convo, Object.assign({}, toolOpts, { tools: MEMORY_TOOLS }));
     const calls = (msg && Array.isArray(msg.tool_calls)) ? msg.tool_calls : [];
     if (!calls.length) return String((msg && msg.content) || '').trim();
 
@@ -61,8 +68,10 @@ function makeMemoryCtx(core, { channel, game, sessionId, room, log, remember }) 
     listRules: core.listRules,
     revokeRule: core.revokeRule,
     rememberFact: remember || ((fact) => require('./remember.js').remember(fact)),
-    /* 心情由她自己判断，这里只给落库入口 */
-    feel: (delta, why) => require('./mood.js').feel(delta, why),
+    /* 心情由她自己判断，这里只给落库入口。
+     * 第三参 opts({mood, kind}) 要原样透传：心情标签和变化方向都是她自己报的，
+     * 在这一层丢掉的话，棋牌那边的「短时心情」就永远记不上。 */
+    feel: (delta, why, opts) => require('./mood.js').feel(delta, why, opts),
   };
 }
 

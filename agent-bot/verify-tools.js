@@ -5,6 +5,10 @@
  * memory/adapters.addRuleFromModel → store。判断权在模型，这里只验
  * 「否决权还在代码里」：缺上下文、放弃类措辞、非法 scope、假 id 都必须被拦。
  *
+ * 另外钉住**工具定义的形状**：线上出过一次 list_rules 少写 type:'function'，
+ * 服务端反序列化阶段直接 422（tools[11]: missing field type），三条通道一起不回话。
+ * 这种故障没有任何弹窗，用户只会觉得「她不理我」，所以必须用断言守住。
+ *
  * 跑：node agent-bot/verify-tools.js
  */
 'use strict';
@@ -37,8 +41,34 @@ const ctx = {
   listRules: core.listRules,
   revokeRule: core.revokeRule,
   rememberFact: (f) => rememberLib.remember(f),
+  /* 故意保持两参调用：这就是线上 dsh 插件 / 老代码的写法，
+   * mood.feel 的第三参（mood/kind）必须可选，改坏了这里会先炸。 */
   feel: (d, why) => require('./lib/mood.js').feel(d, why),
 };
+
+/**
+ * 校验工具定义的结构，返回不合规的条数。
+ * 服务端要的是 OpenAI 那套形状：{ type:'function', function:{ name, parameters } }，
+ * 少一个字段就在反序列化阶段整体 422——不是这个工具有问题，是**整批请求**被拒。
+ * 所以失败时一定要把 index 和 name 打出来，不然 13 个工具里找不出是哪个。
+ */
+function checkToolShape(list, label) {
+  let bad = 0;
+  (Array.isArray(list) ? list : []).forEach((t, i) => {
+    const fn = t && t.function;
+    const okShape = t && typeof t === 'object'
+      && t.type === 'function'
+      && fn && typeof fn === 'object'
+      && typeof fn.name === 'string' && fn.name.trim().length > 0
+      && fn.parameters && typeof fn.parameters === 'object' && !Array.isArray(fn.parameters);
+    if (!okShape) {
+      bad += 1;
+      const name = fn && fn.name;
+      console.log(`  ✗ ${label}[${i}] 形状不合规 → name=${JSON.stringify(name)} type=${JSON.stringify(t && t.type)}`);
+    }
+  });
+  return bad;
+}
 
 (async () => {
   console.log('\n[case] 工具清单');
@@ -47,6 +77,24 @@ const ctx = {
     ok(names.includes(n), `TOOLS 里有 ${n}`);
   }
   ok(names.length === new Set(names).size, '工具名无重复');
+
+  console.log('\n[case] 工具定义形状（线上「她不回话」事故的回归点）');
+  /* 事故复盘：线上 tools.js 的 list_rules 少了 type:'function'，
+   * 只要请求带 tools 就 422（tools[11]: missing field type），模型一次都没被调用。
+   * 表现是「她不回我」，不是报错，所以只能靠断言守。 */
+  const badMain = checkToolShape(tools.TOOLS, 'TOOLS');
+  ok(badMain === 0, `TOOLS 全部合规（${tools.TOOLS.length} 个：type / function.name / parameters 齐全）`, `${badMain} 个不合规`);
+  /* 往返检查：如果有人塞进 undefined 或函数，序列化时字段会静默丢掉，
+   * 发出去的 JSON 就少了 type/parameters，服务端同样 422。 */
+  const roundTrip = JSON.parse(JSON.stringify(tools.TOOLS));
+  ok(JSON.stringify(roundTrip) === JSON.stringify(tools.TOOLS), 'JSON 序列化往返后结构不变（没有 undefined/函数）');
+  ok(names.length === new Set(names).size, '工具名唯一（重名时服务端行为不可预期）', `${names.length}/${new Set(names).size}`);
+
+  /* 棋牌场景只传这 5 个：tools[3] 报错的现场就是从这儿来的，单独再核一遍 */
+  const memTools = require('./lib/agent-tools.js').MEMORY_TOOLS;
+  ok(memTools.length === 5, 'MEMORY_TOOLS 是 5 个（棋牌链路的全部工具）', String(memTools.length));
+  const badMem = checkToolShape(memTools, 'MEMORY_TOOLS');
+  ok(badMem === 0, 'MEMORY_TOOLS 形状同样合规（五子棋 / 万象牌）', `${badMem} 个不合规`);
 
   console.log('\n[case] save_rule 正常落库');
   const r1 = await tools.runTool('save_rule', { text: '出牌优先打带格挡效果的牌', scope: 'game' }, ctx);
@@ -99,6 +147,15 @@ const ctx = {
   ok(/没有变化/.test(m3), '0 不产生变化', m3);
   const m4 = await tools.runTool('feel', { delta: 999 }, ctx);
   ok(m4 && !/999/.test(m4), '超大值被钳制，且不把数字念给模型', m4);
+  /* 心情标签在两处各写了一份（工具 schema 的 enum / mood.js 的枚举表）。
+   * 两份漂移的后果是「模型报了心情，代码不认」，所以钉住它们必须一致。 */
+  const feelDef = tools.TOOLS.find((t) => t.function.name === 'feel');
+  const moodEnum = feelDef && feelDef.function.parameters.properties.mood.enum;
+  const labels = require('./lib/mood.js').MOOD_LABELS;
+  ok(Array.isArray(moodEnum) && moodEnum.join('|') === labels.join('|'), 'feel 的 mood 枚举与 mood.js 的标签表一致', String(moodEnum));
+  const kindEnum = feelDef && feelDef.function.parameters.properties.kind.enum;
+  const kinds = require('./lib/mood.js').FEEL_KINDS;
+  ok(Array.isArray(kindEnum) && kindEnum.join('|') === kinds.join('|'), 'feel 的 kind 枚举与 mood.js 的路径表一致', String(kindEnum));
 
   console.log('\n[case] 场景没接记忆时降级不报错');
   const bare = await tools.runTool('save_rule', { text: '以后都先防守', scope: 'game' }, { log: () => {} });

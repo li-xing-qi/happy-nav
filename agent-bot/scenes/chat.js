@@ -489,10 +489,12 @@ async function reply(msgs) {
   const sys = [
     persona(),
     '---',
-    `现在是 ${dateStr}（北京时间）。算「明天/后天/这周」一律以这个时间为准，不许自己猜。`,
-    /* 好感度/心情：固定三行（当前值 + 规则 + 语气建议）。
-     * 判断权在她自己手里——这里只给数值和规则，不替她决定。 */
+    /* 好感度/心情：紧跟在 persona 后面，别往下放。
+     * 踩过：以前排在几百行 system prompt 的第 3 段，被后面的工具说明彻底淹没，
+     * 线上日志里 feel 一次都没被调过。位置本身就是提醒强度的一部分。 */
     mood.promptBlock(),
+    '这一轮如果你心里有变化，先调 feel 把它记下来再说话；日常陪着聊也算，不用等大事。',
+    `现在是 ${dateStr}（北京时间）。算「明天/后天/这周」一律以这个时间为准，不许自己猜。`,
     // 跨通道：五子棋/卡牌那边刚发生的事，聊天室的你也能知道
     // 窗口给足 24 小时，避免「刚打完就说没记忆」（踩过）
     shared.digest(1440),
@@ -591,8 +593,9 @@ async function reply(msgs) {
        * 房间号当 sessionId：同一房间内的 session 档约定能互相看见。
        */
       memCtx: { channel: 'chat', game: '', sessionId: String(conf.room || 'chat'), room: conf.room },
-      /* 心情工具：她自己决定变多少，这里只落库 */
-      feel: (delta, why) => mood.feel(delta, why),
+      /* 心情工具：她自己决定变多少，这里只落库。
+       * opts({mood, kind}) 必须透传，否则聊天室里报的心情标签会被吞掉。 */
+      feel: (delta, why, opts) => mood.feel(delta, why, opts),
       writeRule: core.writeRule,
       listRules: core.listRules,
       revokeRule: core.revokeRule,

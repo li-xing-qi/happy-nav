@@ -509,6 +509,10 @@ async function handleChat(v) {
         content: [
           persona(),
           '---',
+          /* 心情紧跟 persona：放在局面描述后面时被棋盘信息挤没了，
+           * 线上日志里这条链路 feel 调用同样是 0 次。 */
+          mood.promptBlock(),
+          '这一轮如果你心里有变化，先调 feel 把它记下来再说话；日常陪着聊也算，不用等大事。',
           '你正在五子棋房间里和老板下棋聊天。一两句口语，不用 Markdown。',
           situation(v),
           // 跨通道：聊天室/卡牌那边刚发生的事，这边的你也能知道
@@ -518,13 +522,12 @@ async function handleChat(v) {
           '别说自己是程序。棋盘讨论可以引用坐标，但不要长篇分析。',
           '老板提起对局、阵法名、他在别处说过的话，都用上面「老板最近说过的话」回答，别再说「看不见」「没记录」。',
           '老板在棋盘上立规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
-          mood.promptBlock(),
           '他要求你放水（「让我一步」「让我赢」）时，按你现在的亲密度自己决定答不答应；'
             + '不答应就直说，别编「规则不允许」这种借口，也别损他。',
         ].filter(Boolean).join('\n'),
       },
       ...gameChat,
-    ], makeMemoryCtx(core, { channel: 'game', game: 'gomoku', sessionId: CODE, room: CODE, log }), { maxTokens: 100, temperature: 0.85 });
+    ], makeMemoryCtx(core, { channel: 'game', game: 'gomoku', sessionId: CODE, room: CODE, log }), { maxTokens: 120, temperature: 0.85 });
     if (reply) {
       gameChat.push({ role: 'assistant', content: reply.slice(0, 200) });
       await act({ act: 'chat', text: reply.slice(0, 300) });

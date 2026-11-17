@@ -334,20 +334,22 @@ async function maybeChat(s) {
         content: [
           persona(),
           '---',
+          /* 心情紧跟 persona：和聊天室/五子棋同一套。
+           * 以前这里漏了——feel 工具给了，提示词却没给数值，结果打牌时亲密度基本不动；
+           * 后来补上了，但排在手牌/日志后面还是被淹没，所以现在提到最前面。 */
+          mood.promptBlock(),
+          '这一轮如果你心里有变化，先调 feel 把它记下来再说话；日常陪着聊也算，不用等大事。',
           '你正在和老板一起打双人合作卡牌，他在队友频道刚跟你说话。用一两句口语回他，别写小作文，不用 Markdown。',
           sit,
           playBlock(),
           extra,
           extra ? '（上面是你记得他最近提过的事，聊到就自然接一句，别生硬复述）' : '',
           sit ? '讨论战术时可以引用上面的手牌和日志，但**你还没出牌**，不要说你已经打出了某张牌。' : '',
-          /* 心情：和聊天室/五子棋同一套。以前这里漏了——feel 工具给了，
-           * 提示词却没给数值，结果打牌时她的亲密度基本不动、语气也不受影响。 */
-          mood.promptBlock(),
           '老板立打法规矩（「以后都…」「这局先…」「别…」）就调 save_rule 记下来；他让你记住某件事就调 remember_fact。不为抱怨、感慨、认输调用。',
         ].filter(Boolean).join('\n'),
       },
       ...roomTurns.filter((t) => t.role === 'user' || t.role === 'assistant'),
-    ], makeMemoryCtx(core, { channel: 'game', game: 'card', sessionId: ROOM, room: ROOM, log }), { maxTokens: 100, temperature: 0.85 });
+    ], makeMemoryCtx(core, { channel: 'game', game: 'card', sessionId: ROOM, room: ROOM, log }), { maxTokens: 120, temperature: 0.85 });
     if (reply) {
       roomTurns.push({ role: 'assistant', content: reply.slice(0, 300) });
       await act({ t: 'say', text: reply.slice(0, 300) });
