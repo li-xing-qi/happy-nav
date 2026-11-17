@@ -6,11 +6,16 @@ const render = require('./lib/render.js');
 /* feel 的 kind 枚举直接用 mood.js 的路径表：两处手写迟早会漂（那边加了新路径，这边还认旧的） */
 const { FEEL_KINDS } = require('./lib/mood.js');
 
-const cfg = require('./config.js');
+/* 部署形态有两种：仓库布局带 config.js；线上分离部署（agent-bot 和站点分开放）没有。
+ * 踩过：把仓库版直接传到分离部署的服务器，require('./config.js') 当场崩，
+ * 工具模块加载不出来，所有带工具的请求全失败。所以这里必须双兜底：
+ * config.js 有就用它，没有就走环境变量 + 线上约定路径（和 mood.js 的 guessWorkspace 同一套约定）。 */
+let cfg = null;
+try { cfg = require('./config.js'); } catch { /* 分离部署没有 config.js */ }
 
-const MEME_DIR = cfg.memesDir;
-const CHATLOG = cfg.chatlog;
-const PICS = cfg.picsDir;
+const MEME_DIR = (cfg && cfg.memesDir) || process.env.MEME_DIR || '/root/qq-workspace/memes';
+const CHATLOG = (cfg && cfg.chatlog) || process.env.CHATLOG || '/root/qq-workspace/chatlog.jsonl';
+const PICS = (cfg && cfg.picsDir) || process.env.PICS_DIR || '/root/qq-workspace/pics';
 
 /* 约定作用域的中文说法：模型和人看同一套词，别让它自己编「短期/永久」。 */
 const SCOPE_CN = { once: '只这一步', session: '本局内', game: '以后一直' };
