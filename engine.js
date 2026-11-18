@@ -45,6 +45,15 @@ const OFFLINE_MS   = Math.max(5000, Number(process.env.OFFLINE_MS || 60000));
 const SETUP_IDLE_MS = Math.max(20000, Number(process.env.SETUP_IDLE_MS || 90000));
 const NUDGE_MIN_MS = Math.max(5000, Number(process.env.NUDGE_MIN_MS || 15000));   // 对方多久没动静，才允许你替他选
 
+/* 状态栏的 act 有效期：45 秒（和 server.js 的 memberActOf、yu.js 的 actOf、
+ * agent-bot/lib/presence.js 的 ACT_TTL_MS 同一套语义）。
+ * 超过就返回空串，页面自动退回「在线」——不能让她永远停在「出牌中」。 */
+const ACT_TTL_MS = 45000;
+function actLabelOf(p) {
+  if (!p || !p.act) return '';
+  return Date.now() - Number(p.actAt || 0) < ACT_TTL_MS ? String(p.act) : '';
+}
+
 let applyDepth = 0;           // 联动链深度
 let fxDepth = 0;              // 日志缩进
 
@@ -77,6 +86,7 @@ class Room {
     const p = {
       pid, seat: this.players.length, name, online: true,
       lastSeen: Date.now(), offlineSince: 0, turnStartAt: 0, lastActAt: Date.now(),
+      act: '', actAt: 0,          // 状态栏：她正在干嘛（思考中 / 出牌中 / 说话中），由 /api/act 写
       hp: 50, maxHp: 50, energy: 3, maxEnergy: 3, block: 0, strength: 0, poison: 0,
       gu: 0, guHealUsed: 0, guTemper: 0,        // 蛊术：不随回合衰减、每场战斗清零
       masterDeck: BASE_DECK.map(mkEntry),
@@ -1860,6 +1870,8 @@ class Room {
         gold: other.gold, dead: other.dead, ready: other.ready, handCount: other.hand.length,
         gu: other.gu || 0,
         online: other.online !== false, idleLeft: idleLeft(other),
+        /* 状态栏：队友在干嘛（45 秒有效，过期给空串，页面退回「在线」） */
+        act: actLabelOf(other),
         drawCount: other.draw.length, discardCount: other.discard.length, deckCount: other.masterDeck.length,
         setups: other.setupCards.map(s => ({ name: s.name })),
         talents: other.talents.map(t => ({ name: TALENTS[t] ? TALENTS[t].name : t })),

@@ -8,6 +8,19 @@ const hist = require('../lib/chat-history.js');
 const memes = require('../lib/meme-index.js');
 const shared = require('../lib/shared-state.js');
 const mood = require('../lib/mood.js');
+/* 状态栏（presence）：本场景用 'room' 通道，act 会写进**聊天室房间**那条成员记录，
+ * 页面 header 里就显示成「小肥鱼 · 思考中」。
+ *
+ * 为什么必须 attach('room') 而不是直接调 presence.thinking()：
+ *   agent-bot 一个进程跑 chat/card/gomoku，presence 只有一份实例；
+ *   如果三个场景都调无参版本，它们会共用（并互相覆盖）同一份 base/room/pid，
+ *   「落子中」就会写到聊天室的房间上去。attach 把通道名闭包在把手里面。
+ *
+ * 服务端只有 45 秒有效期（server.js 的 memberActOf），本地 armIdle 50 秒 + 30 秒看门狗兜底，
+ * 所以不会出现「一直卡在思考中」。
+ */
+const presence = require('../lib/presence.js').attach('room');
+const feelJudge = require('../lib/feel-judge.js');
 
 const log = core.makeLogger('chat');
 const { token } = core;   // llm 用自己的版本（走 ds-proxy，签名也不同）
@@ -34,6 +47,10 @@ let conf = {
   proactive: { enabled: true, idleMinutes: 6, maxPerHour: 3 },
 };
 if (CONF) { try { Object.assign(conf, JSON.parse(fs.readFileSync(CONF, 'utf8'))); } catch {} }
+
+/* 状态栏的身份：conf 定稿之后才能 init（conf.json 可能覆盖了 room/pid）。
+ * 参数不全时 init 返回 false，之后所有上报自己 no-op —— 状态是装饰，不能影响聊天。 */
+presence.init({ base: conf.base, room: conf.room, pid: conf.pid });
 
 
 /* 人设与记忆：用 core 的共享缓存 */
@@ -323,6 +340,9 @@ async function say(text, memeWillFollow = false) {
     }
   }
   lastBotAt = Date.now();
+  /* 状态栏：真的在发消息了才报「说话中」。
+   * 放在发送之前（而不是之后）——她要先说，页面才跟着变。 */
+  presence.speaking();
   // ★ 不再存「小鱼：xxx」。模型会照抄历史格式，看见自己前面永远带名字，
   // 回答时就会输出「小鱼：小鱼：…」（这个坑之前修过一次，加时间戳后又复发了）。
   // assistant 这个 role 本身就代表「我说的话」，不需要名字前缀。
@@ -457,6 +477,9 @@ async function reply(msgs) {
   const content = buildUserContent(msgs);
   const flat = typeof content === 'string' ? content : content[0].text;
   hist.push('user', flat);
+  /* 状态栏：从收到消息到回出去这段时间她其实在「想」。
+   * 提到服务器 / 日志这类事会自动显示成「巡视领地中」（presence 内部判断）。 */
+  presence.thinking(flat);
 
 
   // 硬规则：说「记住/记一下」就直接落盘，不等夜里摘要。
@@ -656,6 +679,17 @@ async function reply(msgs) {
       await say(out, !!pick);
     }
     logChat('assistant', out);
+    /* ★ 事后判官：回复已经发出去了，再回头判「这一来一回她心里动了吗」。
+     * 为什么放这儿：① 不能拖慢用户看到回复，所以只在 say 之后
+     *              ② 不再指望她回复时顺手调 feel——线上 243 条回复 0 次调用（见 feel-judge.js 文件头）
+     * 失败静默：judge 自己不会 reject，这里再挂个 catch 是双保险。 */
+    feelJudge.judge(core.llmRaw, {
+      userText: flat,
+      replyText: out,
+      channel: 'chat',
+      sessionId: String(conf.room || 'chat'),
+      log,
+    }).catch(() => {});
     // 说「记住 XX」→ 先落盘，再回一句「记好了」（不是只念命令）
     let wrote = false;
     if (remembered) wrote = await remember(remembered);

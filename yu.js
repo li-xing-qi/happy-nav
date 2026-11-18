@@ -120,6 +120,13 @@ module.exports = function createYu(ctx) {
   }
 
   function cleanStr(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, '').slice(0, n || 200); }
+  /* 「在线」判定窗口。原来是 15 秒 —— 她每隔十几秒才动一次（说话中 / 发呆中来回切），
+   * 15 秒的窗口会把「暂时离开」和「在线」交替刷出来，用户看到的就是「状态一直在跳」。
+   * 现在放宽到 45 秒，和 act 的有效期（actOf 里的 45000）对齐：
+   *   动过 → 45 秒内都算在线；超过 45 秒没动静才算走了。
+   * 注意：线上这个文件在 /root/wanxiang/yu.js（不在 agent-bot 目录里），
+   * 改仓库版后部署时要单独同步这一处。 */
+  const ONLINE_MS = 45000;
   /** 当前动作只在 45 秒内有效，避免「思考中」卡死在那里 */
   function actOf(u) {
     if (!u || !u.act) return '';
@@ -128,11 +135,11 @@ module.exports = function createYu(ctx) {
   function peerOf(r, me) {
     const p = r.users.find(u => u.pid !== me.pid);
     if (!p) return null;
-    return { name: p.name, avatar: p.avatar || '🐟', bubble: p.bubble || '', online: Date.now() - p.lastSeen < 15000, seat: p.seat, act: actOf(p) };
+    return { name: p.name, avatar: p.avatar || '🐟', bubble: p.bubble || '', online: Date.now() - p.lastSeen < ONLINE_MS, seat: p.seat, act: actOf(p) };
   }
   function publicUser(u) {
     return { name: u.name, avatar: u.avatar || '🐟', bubble: u.bubble || '', fontSize: u.fontSize || 0,
-      seat: u.seat, online: Date.now() - u.lastSeen < 15000, act: actOf(u) };
+      seat: u.seat, online: Date.now() - u.lastSeen < ONLINE_MS, act: actOf(u) };
   }
   function broadcast(r, ev, data) {
     const payload = 'event: ' + ev + '\ndata: ' + JSON.stringify(data) + '\n\n';
@@ -430,7 +437,9 @@ module.exports = function createYu(ctx) {
       return json(res, {
         ok: true,
         band: (o && o.band) || '',
-        why: (last && last.why) || '',
+        /* 去掉 "[判]" 这类来源标记：日志里要留（区分她主动调的 / 判官判的），
+         * 但页面显示的是「刚因为「他叫我小傻鱼」」，带前缀就露馅了。 */
+        why: String((last && last.why) || '').replace(/^\[[^\]]{1,4}\]\s*/, ''),
         at: (last && last.ts) || 0,
       });
     }
@@ -523,7 +532,7 @@ module.exports = function createYu(ctx) {
       req.on('close', () => {
         clearInterval(tick); clearInterval(ping);
         r.subs.delete(sub);
-        me.lastSeen = Math.min(me.lastSeen, Date.now() - 20000);
+        me.lastSeen = Math.min(me.lastSeen, Date.now() - ONLINE_MS);
       });
       return;
     }
@@ -535,7 +544,7 @@ module.exports = function createYu(ctx) {
   setInterval(() => {
     const now = Date.now();
     for (const r of rooms.values()) {
-      const sig = r.users.map(u => u.name + (now - u.lastSeen < 15000 ? '1' : '0')).join('|');
+      const sig = r.users.map(u => u.name + (now - u.lastSeen < ONLINE_MS ? '1' : '0')).join('|');
       if (sig !== r.peerSig) {
         r.peerSig = sig;
         for (const s of r.subs) { try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {} }

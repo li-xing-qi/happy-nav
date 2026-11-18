@@ -272,23 +272,26 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         gear = buildGear();
-        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(44), dp(44));
-        glp.gravity = Gravity.BOTTOM | Gravity.END;
-        glp.setMargins(0, 0, dp(8), dp(8));
+        /* ⚙ 挪到右上角：原来在右下角，正好压在聊天输入框的发送按钮 / 语音按钮上，
+         * 打字时经常误触（家人反馈「点了没发出去」）。右上角是标题区，不挡操作。
+         * 尺寸 44 → 40、透明度 0.45 → 0.3：更小更淡，只当「角落里的一个功能」。 */
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(40), dp(40));
+        glp.gravity = Gravity.TOP | Gravity.END;
+        glp.setMargins(0, dp(8), dp(8), 0);
         root.addView(gear, glp);
 
         setContentView(root);
         web.loadUrl(url);
     }
 
-    /** 右下角那个小齿轮：刷新 / 改地址 / 清缓存 / 关于。半透明，不挡内容。 */
+    /** 右上角那个小齿轮：刷新 / 改地址 / 清缓存 / 关于。半透明，不挡内容。 */
     private View buildGear() {
         TextView t = new TextView(this);
         t.setText("⚙");
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
         t.setTextColor(Color.parseColor("#243230"));
         t.setGravity(Gravity.CENTER);
-        t.setAlpha(0.45f);
+        t.setAlpha(0.3f);
         t.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showMenu(); }
         });
@@ -371,7 +374,7 @@ public class MainActivity extends Activity {
                 + "border:1px solid #C9D6D3;color:#243230;text-decoration:none;font-size:14px'>地址填错了？改地址</a>"
                 + "</div>"
                 + "<p style='color:#A9B6B4;font-size:12px;margin-top:20px'>"
-                + "服务器开着吗？右下角 ⚙ 也能改</p>"
+                + "服务器开着吗？右上角 ⚙ 也能改</p>"
                 + "</div></body>";
         web.loadDataWithBaseURL(target, html, "text/html", "utf-8", null);
     }

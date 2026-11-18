@@ -78,6 +78,119 @@ const FULL_INJECTION_GAP = Number(process.env.MEM_INJECT_GAP_MS || 10 * 60 * 100
 const presence = require('./lib/presence.js');
 /* 好感度/心情：只取一小段提示词（大多数时候是空串），和记忆快照一起注入 */
 const mood = require('./lib/mood.js');
+/* 事后判官：回复发完之后回头判「这一来一回她心里动了吗」。
+ * 与鱼这条通道原来的 feel 调用是 0 次（一天 0 次，见 feel-judge.js 文件头），
+ * 所以这里也必须接上——不然与鱼里聊一整天，好感度一动不动。 */
+const feelJudge = require('./lib/feel-judge.js');
+
+/* ---------- 判官所需的「本轮」缓冲 ----------
+ * 与鱼的回复是多段 segs 发出去的（DSH 一条 send_msg 一个段落），所以不能「收到一段就判」；
+ * 但也不能像原来那样只用一个 (turnUser, turnReply) 变量对 —— QA 实测出两个真 bug：
+ *
+ *   ① 用户连发两条（间隔 300ms）：A 的 600ms 定时器在 t=600 拿着「B 的 userText + 空回复」
+ *      触发，早退时把两边一起清掉 → A、B **两轮都没判**（0 次）。
+ *   ② A 的回复晚于 B 的消息到达：判官拿到「B 说的话 + A 的回复」→ 分数记到错的人头上。
+ *
+ * 现在改成一个很小的队列：每条用户消息一个条目 { id, userText, replyText }；
+ * 回复到了就挂到**最早那条还没有回复的**条目上（DSH 是串行处理的，回复顺序 = 消息顺序）；
+ * 定时器到点时，只判「两边都齐」的最早一条。这样两个 bug 一起没了：
+ *   ① 没有回复的条目留在队列里等，不会被清掉；
+ *   ② 每条用户消息都配上自己的回复，不会串台。
+ */
+const TURNS_MAX = 10;      // 上限：超了丢最老的，宁可漏判也不堆内存
+const TURNS = [];          // [{ id, userText, replyText, at }]
+let turnSeq = 0;
+let turnTimer = null;
+
+/* 判官用的那次极小请求。与鱼这条链路原本不直接调模型（都交给 DSH 算），
+ * 所以自带一个最小实现，不依赖 core.js —— 部署时 yufish.js 可能单独放。
+ * 失败直接抛，由 feel-judge 内部兜住（判官坏了不能影响对话）。 */
+async function llmRaw(messages, opts = {}) {
+  const { maxTokens = 120, temperature = 0.2 } = opts;
+  const r = await fetch(cfg.llm.url, {
+    method: 'POST',
+    headers: cfg.llm.headers(),
+    body: JSON.stringify({
+      model: cfg.llm.model, messages, max_tokens: maxTokens, temperature, stream: false,
+    }),
+  });
+  if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 120)}`);
+  const j = await r.json();
+  return (j.choices && j.choices[0] && j.choices[0].message) || {};
+}
+
+/** 重置「她说完了」的空闲定时器（每来一段就往后推 600ms） */
+function armJudge(ms = 600) {
+  if (turnTimer) clearTimeout(turnTimer);
+  turnTimer = setTimeout(() => {
+    turnTimer = null;
+    fireJudge();
+  }, ms);
+  if (turnTimer.unref) turnTimer.unref();   // 不能把进程吊着不退出
+}
+
+/** 收到一条用户消息：开一个新条目（换轮时把旧定时器一起清掉，别让它拿着新消息触发） */
+function beginTurn(userText) {
+  turnSeq += 1;
+  const at = Date.now();
+  /* 死轮阈值 20 秒：必须大于正常回复延迟（本项目 5~15 秒，取 5 秒会把日常的「边等边补一句」判成死轮、回复错记到下一条头上），又不能太大（取 45 秒时只要用户间隔 <45 秒就每轮顺移一格、要等一次长静默才复位；20 秒静默在活跃聊天里常见得多） */
+  for (let i = TURNS.length - 1; i >= 0; i -= 1) {
+    if (!TURNS[i].replyText && at - TURNS[i].at > 20000) TURNS.splice(i, 1);
+  }
+  TURNS.push({ id: turnSeq, userText: String(userText || ''), replyText: '', at });
+  while (TURNS.length > TURNS_MAX) TURNS.shift();
+  if (turnTimer) { clearTimeout(turnTimer); turnTimer = null; } fireJudge();   // 换轮先把已配好对的判掉：定时器被清了，不主动 flush 就永远轮不到它
+}
+
+/** 她说出去一段话：挂到最早那条还没回复的条目上 */
+function addReply(text) {
+  const s = String(text || '');
+  if (!s) return;
+  /* find 找第一条还没回复的：DSH 串行，先说的先回。
+   * 都已有回复（理论上不会）就并到最后一条，至少别把这段话丢了。 */
+  const t = TURNS.find((x) => !x.replyText) || TURNS[TURNS.length - 1];
+  if (!t) return;
+  t.replyText = t.replyText ? `${t.replyText}\n${s}` : s;
+  armJudge(600);
+}
+
+/**
+ * 她说完了（600ms 没有新段落）：把「两边都齐」的最早一条判掉。
+ * 只判一条是刻意的——连发两条都回了的情况下，剩下的会在下一次 arm 到点时再判，
+ * 避免同一拍里连开好几个判官请求（2C2G 上没必要）。
+ */
+function fireJudge() {
+  const i = TURNS.findIndex((x) => x.userText && x.replyText);
+  if (i < 0) return;                       // 只发表情包 / 还没回话，等下一拍
+  const [t] = TURNS.splice(i, 1);
+  feelJudge.judge(llmRaw, {
+    userText: t.userText,
+    replyText: t.replyText,
+    channel: 'yu',
+    sessionId: String(CONF.room || 'yu'),
+    log,
+  }).catch(() => {});
+  /* 队列里还有配好对的，接着判（下一拍，别在同一帧里连发） */
+  if (TURNS.some((x) => x.userText && x.replyText)) armJudge(0);
+}
+
+/**
+ * 她这一轮只回了图片 / 语音：也算「回过了」。
+ *
+ * 为什么必须记一笔：队列按「最早一条没回复的」配对，前提是每轮都有文字回复。
+ * 只要有一轮只发表情包/语音（或 DSH 报错没发文字），那条就会一直占着队头，
+ * 后面每轮都错位一格、永不自愈（QA 实测：A←回A、B←回C、C←回D…）。
+ * 这里把队头那条没有文字回复的条目直接消掉：不判它（没话可判），但也不再占位。
+ *
+ * 只消「最早一条」：如果这一轮的文字回复已经配过了，find 会跳过它。
+ * （唯一漏网的情况是媒体比文字晚到很久，那最多漏判一次，不会错位。）
+ */
+function markMediaReply() {
+  const i = TURNS.findIndex((x) => !x.replyText);
+  if (i < 0) return;
+  TURNS.splice(i, 1);
+  armJudge(600);   // 这一轮到此为止，让前面已配好对的条目有机会被判
+}
 
 /* 去重与撤回用的小表（进程内，够用） */
 const DUP_WINDOW_MS = 8000;
@@ -450,6 +563,9 @@ async function yuSendText(text) {
   if (r && r.error) throw new Error(r.error);
   // ★ 记进流水账（小鱼侧），和 agent-bot 的 logChat('assistant', ...) 一致
   logChat('assistant', String(text).slice(0, 2000), CONF.botName);
+  /* 判官：把这一段挂到「最早那条还没回复」的用户消息上，并重置 600ms 空闲定时器。
+   * 只在真的发成功之后挂——发失败了不算她说的话。 */
+  addReply(text);
   return r;
 }
 
@@ -466,6 +582,7 @@ async function yuSendImage(urlOrPath) {
       code: CONF.room, pid: CONF.botPid, type: 'img', url: up.url,
     });
     if (r && r.error) throw new Error(r.error);
+    markMediaReply();     // 只发图也算「这一轮回过了」，别在队列里留空洞
     return r;
   }
 
@@ -505,6 +622,7 @@ async function yuSendImage(urlOrPath) {
     url,
   });
   if (r && r.error) throw new Error(r.error);
+  markMediaReply();     // 只发图也算「这一轮回过了」，别在队列里留空洞
   return r;
 }
 
@@ -557,6 +675,7 @@ async function yuSendVoice(localOrUrl) {
     dur: 0,
   });
   if (r && r.error) throw new Error(r.error);
+  markMediaReply();     // 只发语音也算「这一轮回过了」，别在队列里留空洞
   return r;
 }
 
@@ -709,6 +828,12 @@ async function forwardToDsh(m) {
   } else {
     return;
   }
+
+  /* 判官要「他说的话」的原文：在记忆注入之前取（注入那几百字快照对判分没意义，
+   * 还会把判官那 400 字预算吃光），然后开一个新条目。
+   * beginTurn 会把上一拍的 600ms 定时器清掉 —— 否则它会拿着这条新消息的空回复触发，
+   * 既判不出东西，又会把上一条没被判的消息搅乱（QA 实测过的那个 0 次 bug）。 */
+  beginTurn(raw);
 
   /* 四层记忆注入（只在文字消息上做，图片/语音段保持原样）
    * 节流：完整快照每 FULL_INJECTION_GAP 才注入一次；适配器块每次都给，

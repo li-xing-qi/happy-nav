@@ -67,6 +67,10 @@
   .rsub{font-size:11px;color:var(--ink-3);margin-top:2px;display:flex;align-items:center;gap:5px;}
   .dot{width:6px;height:6px;border-radius:50%;background:#cfcfcf;flex:0 0 auto;}
   .dot.on{background:#3ec06a;box-shadow:0 0 0 3px rgba(62,192,106,.16);}
+  /* 她现在的状态（档位 + 心情 + 今天的账）。只显示词，不显示分数 */
+  .rmood{font-size:11px;color:var(--ink-3);margin-top:3px;display:flex;align-items:center;gap:5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .rmood .mdot{width:6px;height:6px;border-radius:50%;background:#cfcfcf;flex:0 0 auto;}
   .hbtn{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:#fff;
     display:flex;align-items:center;justify-content:center;font-size:14px;}
 
@@ -183,6 +187,7 @@
     <div class="rmeta">
       <div class="rname">房间 <b id="codeTxt">—</b></div>
       <div class="rsub"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方进入…</span></div>
+      <div class="rmood hidden" id="moodRow" title=""><span class="mdot" id="moodDot"></span><span id="moodTxt"></span></div>
     </div>
     <button class="hbtn" id="infoBtn" title="邀请对方">🔗</button>
   </header>
@@ -417,9 +422,42 @@ function updatePeer(peer, members) {
   const on = !!(peer && peer.online);
   peerOnline = on;
   $('peerDot').classList.toggle('on', on);
+  /* 她在干嘛（act）优先于「在线」：机器人每 1.5 秒心跳一次，只显示在线等于恒亮的灯。
+     act 由她自己上报（45 秒有效），过期就自动退回「在线 / 离线中」。
+     注意：act 是空串时不要留一个孤零零的「 · 」。 */
+  const act = peer && peer.act ? String(peer.act) : '';
   $('peerTxt').textContent = peer
-    ? (peer.name + (on ? ' 在线' : ' 离线中'))
+    ? (peer.name + ' · ' + (act || (on ? '在线' : '离线中')))
     : (members && members.length ? '等待对方进入…' : '等待对方进入…');
+}
+
+/* ---------------- 她现在的状态 ----------------
+ * 以前只有与鱼侧栏能看到档位，聊天室里完全看不见，所以用户的原话是「感受不到」。
+ * 这里显示：档位词 + 心情 + 今天的账，**不显示分数**（分数只留在文件里）。
+ * 60 秒刷新一次：这几个值变化很慢，刷太快只是白耗请求。
+ */
+function moodColor(b){
+  if (/黏|很亲近/.test(b)) return '#e2688a';
+  if (/亲近|挺黏/.test(b)) return '#e59a4b';
+  if (/还算熟|平常/.test(b)) return '#8aa0a6';
+  if (/客气|有点疏/.test(b)) return '#6b8fb3';
+  if (/冷淡|冷透/.test(b)) return '#7d8fa8';
+  return '#cbd5d7';
+}
+function paintMood(m){
+  const row = $('moodRow');
+  if (!row) return;
+  if (!m || !m.ok || !m.band) { row.classList.add('hidden'); return; }   // 读不到就整行藏起来
+  const md = m.mood || '';
+  $('moodTxt').textContent = m.band
+    + (md ? ' · 心情 ' + md : '')
+    + (m.today ? ' · 今天他' + m.today : '');
+  $('moodDot').style.background = moodColor(m.band);
+  row.title = m.today || '';
+  row.classList.remove('hidden');
+}
+function loadMood(){
+  fetch('/api/mood').then(r => r.json()).then(paintMood).catch(() => {});
 }
 
 /* ---------------- 渲染消息 ---------------- */
@@ -615,6 +653,10 @@ document.addEventListener('drop', e => {
 });
 
 /* ---------------- 进页面自动填 ---------------- */
+/* 她的状态：进页面就读一次，之后每分钟刷一次（不跟着轮询走，省请求） */
+loadMood();
+setInterval(loadMood, 60000);
+
 if (qs.get('room') && $('nameIn').value) enterRoom();
 else if (qs.get('room')) $('nameIn').focus();
 else $('roomIn').focus();

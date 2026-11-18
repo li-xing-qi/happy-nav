@@ -4,6 +4,12 @@ const core = require('../core.js');
 const ctx = require('../lib/chat-context.js');
 const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
 const mood = require('../lib/mood.js');
+/* 状态栏（presence）：本场景用 'card' 通道，act 写进**牌局房间**的成员记录，
+ * 队友频道顶上就显示成「小肥鱼 · 出牌中」。
+ * 为什么用 attach：一个进程里三个场景共用 presence 模块，不绑通道会互相覆盖（详见 scenes/chat.js）。
+ */
+const presence = require('../lib/presence.js').attach('card');
+const feelJudge = require('../lib/feel-judge.js');
 
 const log = core.makeLogger('card');
 const { persona, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;   // llm 用自己的（默认参数不同）
@@ -15,6 +21,9 @@ const ROOM = cfg.rooms.card;
 const PID = cfg.bots.card.pid;
 const NAME = cfg.bots.card.name;
 const TICK = Number(process.env.TICK_MS || 700);
+
+/* 状态栏的身份（BASE/ROOM/PID 定稿之后才能 init） */
+presence.init({ base: BASE, room: ROOM, pid: PID });
 const API = cfg.llm.url;
 const MODEL = cfg.llm.model;
 const PERSONA_DIR = cfg.personaDir;
@@ -321,6 +330,8 @@ async function maybeChat(s) {
   if (Date.now() - lastReplyAt < 4000) return;
   lastReplyAt = Date.now();
   const said = chats.map((x) => `${x.name}: ${x.text}`).join('\n');
+  /* 状态栏：队友频道说话了 → 她开始琢磨怎么回 */
+  presence.thinking(said);
   roomTurns.push({ role: 'user', content: said });
   if (roomTurns.length > 10) roomTurns.splice(0, roomTurns.length - 10);
   try {
@@ -352,9 +363,19 @@ async function maybeChat(s) {
     ], makeMemoryCtx(core, { channel: 'game', game: 'card', sessionId: ROOM, room: ROOM, log }), { maxTokens: 120, temperature: 0.85 });
     if (reply) {
       roomTurns.push({ role: 'assistant', content: reply.slice(0, 300) });
+      presence.speaking();   // 状态栏：开始说话
       await act({ t: 'say', text: reply.slice(0, 300) });
       logChat('assistant', NAME, reply);
       log('聊天回复:', reply.slice(0, 50).replace(/\n/g, ' '));
+      /* ★ 事后判官：话已经发进队友频道了，再回头判这一轮她心里动没动。
+       * 聊天室 / 五子棋 / 卡牌 / 与鱼四个通道各接一次，判官本体在 lib/feel-judge.js。 */
+      feelJudge.judge(core.llmRaw, {
+        userText: said,
+        replyText: reply,
+        channel: 'card',
+        sessionId: ROOM,
+        log,
+      }).catch(() => {});
     }
   } catch (err) {
     log('聊天失败:', err.message);
@@ -417,6 +438,8 @@ async function tick() {
     failStreak = 0;
     noteAction(a, s);
     log('动作', JSON.stringify(a), 'ok');
+    /* 状态栏：出牌 / 结束回合这类战斗动作才报，整备和商店不报（那不是「打牌」） */
+    if (a && a.t === 'play') presence.act('出牌中');
   }
 }
 

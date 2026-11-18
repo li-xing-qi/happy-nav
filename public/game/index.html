@@ -20,6 +20,10 @@
     --r:12px;
   }
   html{-webkit-text-size-adjust:100%;}
+  /* 通用隐藏类：和 chat.html / gomoku.html 保持一致。
+     这页原来只给 .ov / .rot-modal / .cd-ov 单独写了 .hidden，
+     队友频道那条「她的状态」在接口失败时要靠这个类整行藏起来，否则会留一条 20px 空白带。 */
+  .hidden{display:none !important;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     background:radial-gradient(900px 420px at 50% -10%,#1d2637 0%,rgba(12,16,22,0) 70%),
@@ -339,6 +343,12 @@
   .chat-head .clr{font-size:12px;color:var(--c-sub);background:none;border:1px solid var(--line);
     border-radius:8px;padding:5px 10px;min-height:32px;flex-shrink:0;cursor:pointer;}
   .chat-head .chat-close{display:none;}
+  /* 她现在的状态（档位 + 心情 + 今天的账）。只显示词，不显示分数。
+     放在频道标签上方一条细行：和她的对话就在旁边，看得见才好「感受到」。 */
+  .moodline{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:5px 12px 0;
+    font-size:11px;color:var(--c-sub);background:var(--panel);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .moodline .mdot{width:6px;height:6px;border-radius:50%;background:#cfcfcf;flex:0 0 auto;}
   /* 频道切换 */
   .chat-tabs{flex:0 0 auto;display:flex;gap:6px;padding:9px 10px 0;background:var(--panel);}
   .ctab{flex:1;font-size:12.5px;padding:7px 6px;border-radius:9px 9px 0 0;border:1px solid transparent;
@@ -966,6 +976,7 @@ html[data-wxbg="ink"] .topbar{background:linear-gradient(180deg,#15181d,#0e1013)
       <button class="clr" id="chatClear">清空</button>
       <button class="clr chat-close" id="chatClose">✕</button>
     </header>
+    <div class="moodline hidden" id="moodRow" title=""><span class="mdot" id="moodDot"></span><span id="moodTxt"></span></div>
     <div class="chat-tabs">
       <button class="ctab on" data-tab="team">👥 队友<span class="unread hide" id="teamUnread">0</span></button>
       <button class="ctab" data-tab="ai">🤖 AI 助手</button>
@@ -1561,7 +1572,10 @@ function updateHead(){
   if(chatTab === 'ai'){ $('chatModel').textContent = aiModelText; $('chatDot').classList.remove('off'); return; }
   if(SEAT < 0){ $('chatModel').textContent = '未加入房间'; $('chatDot').classList.add('off'); return; }
   if(!S || !S.ally){ $('chatModel').textContent = '等待队友加入…'; $('chatDot').classList.add('off'); return; }
-  $('chatModel').textContent = S.ally.name + (S.ally.online === false ? ' · 掉线' : ' · 在线');
+  /* 队友在干嘛（act）优先于「在线」：机器人每 0.7 秒轮询一次，「在线」等于恒亮的灯。
+     act 45 秒有效，过期自动退回「在线 / 掉线」；空串时不留孤零零的「 · 」。 */
+  var allyAct = S.ally.act ? String(S.ally.act) : '';
+  $('chatModel').textContent = S.ally.name + ' · ' + (allyAct || (S.ally.online === false ? '掉线' : '在线'));
   $('chatDot').classList.toggle('off', S.ally.online === false);
 }
 
@@ -2573,6 +2587,34 @@ function showDetail(d){
   }
   apply(cur);
 })();
+
+/* ---------------- 她现在的状态 ----------------
+ * 档位词 + 心情 + 今天的账，**不显示分数**。
+ * 60 秒刷一次：这几个值变化很慢，跟着轮询刷只是白耗请求。
+ */
+function moodColor(b){
+  if(/黏|很亲近/.test(b))return '#e2688a';
+  if(/亲近|挺黏/.test(b))return '#e59a4b';
+  if(/还算熟|平常/.test(b))return '#8aa0a6';
+  if(/客气|有点疏/.test(b))return '#6b8fb3';
+  if(/冷淡|冷透/.test(b))return '#7d8fa8';
+  return '#cbd5d7';
+}
+function paintMood(m){
+  var row = $('moodRow');
+  if(!row) return;
+  if(!m || !m.ok || !m.band){ row.classList.add('hidden'); return; }   // 读不到就整行藏起来
+  var md = m.mood || '';
+  $('moodTxt').textContent = m.band + (md ? ' · 心情 ' + md : '') + (m.today ? ' · 今天他' + m.today : '');
+  $('moodDot').style.background = moodColor(m.band);
+  row.title = m.today || '';
+  row.classList.remove('hidden');
+}
+function loadMood(){
+  fetch('/api/mood').then(function(r){return r.json();}).then(paintMood).catch(function(){});
+}
+loadMood();
+setInterval(loadMood, 60000);
 </script>
 </body>
 </html>

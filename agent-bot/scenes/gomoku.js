@@ -6,6 +6,14 @@ const shared = require('../lib/shared-state.js');
 const ctx = require('../lib/chat-context.js');
 const { chatWithMemoryTools, makeMemoryCtx } = require('../lib/agent-tools.js');
 const mood = require('../lib/mood.js');
+/* 状态栏（presence）：本场景用 'go' 通道，act 写进**棋局房间**的成员记录，
+ * 页面 header 就显示成「小肥鱼 · 落子中」。
+ * 为什么用 attach：一个进程里三个场景共用 presence 模块，不绑通道会互相覆盖（详见 scenes/chat.js）。
+ * 端点注意：五子棋不是 /api/go/act —— 那个路径是对局动作（move/chat/setRule），
+ *          状态走 /api/go/presence，两套语义不能混。
+ */
+const presence = require('../lib/presence.js').attach('go');
+const feelJudge = require('../lib/feel-judge.js');
 
 const log = core.makeLogger('gomoku');
 const { persona, token, llm, adapterPrompt, noteStep, commitOnceAdapters, endMemorySession } = core;
@@ -22,6 +30,9 @@ const MODEL = cfg.llm.model;
 const PERSONA_DIR = cfg.personaDir;
 const CHATLOG = cfg.chatlog;
 const N = 15;
+
+/* 状态栏的身份（BASE/CODE/PID 定稿之后才能 init） */
+presence.init({ base: BASE, room: CODE, pid: PID });
 
 
 /* 凭据：用 core 的 */
@@ -475,6 +486,9 @@ async function handleChat(v) {
   // 之前节流 return 在前面，导致 3 秒内的消息被吞掉，
   // 老板说的「下在 5,5」根本进不了决策路径（踩过）。
   for (const m of fresh) logChat('user', m.text, '老板');
+  /* 状态栏：收到消息 → 她开始琢磨怎么回。
+   * 提到服务器 / 日志这类词会自动显示成「巡视领地中」（presence 内部判断）。 */
+  presence.thinking(fresh.map((m) => m.text).join(' '));
   gameChat.push({ role: 'user', content: fresh.map((m) => `${m.name}：${m.text}`).join('\n') });
   if (gameChat.length > 8) gameChat.splice(0, gameChat.length - 8);
 
@@ -530,9 +544,19 @@ async function handleChat(v) {
     ], makeMemoryCtx(core, { channel: 'game', game: 'gomoku', sessionId: CODE, room: CODE, log }), { maxTokens: 120, temperature: 0.85 });
     if (reply) {
       gameChat.push({ role: 'assistant', content: reply.slice(0, 200) });
+      presence.speaking();   // 状态栏：开始说话
       await act({ act: 'chat', text: reply.slice(0, 300) });
       logChat('assistant', reply);
       log('聊天:', reply.slice(0, 40).replace(/\n/g, ' '));
+      /* ★ 事后判官：话已经发进房间了，再回头判这一轮她心里动没动。
+       * 不放在回复前是为了不拖慢用户看到回复（和聊天室同一条纪律）。 */
+      feelJudge.judge(core.llmRaw, {
+        userText: fresh.map((m) => m.text).join('\n'),
+        replyText: reply,
+        channel: 'gomoku',
+        sessionId: CODE,
+        log,
+      }).catch(() => {});
     }
   } catch (e) {
     log('聊天失败:', e.message);
@@ -862,6 +886,8 @@ async function playMove(v) {
   }
   failStreak = 0;
   log('落子', coord(mv.x, mv.y));
+  /* 状态栏：这一手落下去了。act 自带空闲回收（50 秒），不用手动清 */
+  presence.act('落子中');
 
   // 落子时那句台词，走房内聊天发出去。
   // 防重复要严：之前只比对「完全相同」，结果模型换汤不换药地刷屏：

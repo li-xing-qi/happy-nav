@@ -20,6 +20,10 @@ const TMP = process.env.VERIFY_TMP || fs.mkdtempSync(path.join(os.tmpdir(), 'ver
 fs.mkdirSync(TMP, { recursive: true });
 process.env.MOOD_FILE = path.join(TMP, 'mood.json');
 process.env.MEMORY_LLM = 'off';
+/* 这一套测的是「钳制 / 回落 / 心情 / 今天的账」这些机制，不是每日闸门本身。
+ * 闸门默认 15，会把这些用例里的连续加分手动截断（期望值全得改），
+ * 所以机制部分把上限放开到 100；闸门单独一节测（那一节会删掉这个变量用默认值）。 */
+process.env.MOOD_DAILY_CAP = '100';
 
 const mood = require('./lib/mood.js');
 const presence = require('./lib/presence.js');
@@ -210,12 +214,21 @@ function reset(patch = {}) {
   reset({ affinity: 90 });
   ok(/心情不错/.test(mood.promptBlock()), '高分时给「可以更主动」这类建议');
 
-  console.log('\n[case] 记录本身要轻');
+  console.log('\n[case] 记录要轻，但「今天的账」不能被截断（S2）');
   reset();
-  for (let i = 0; i < 30; i += 1) mood.feel(1, `第 ${i} 次`);
+  /* 原来只留 20 条：一天 243 条回复时，第 21 笔起「今天的账」就恒定在 20，
+   * 判官拿这个次数做贬值判断，等于依据是错的（永远「20 次」）。现在留 300 条。 */
+  for (let i = 0; i < 30; i += 1) mood.feel(1, `第 ${i} 次`, { kind: '昵称' });
   const st = mood.read();
-  ok(st.log.length === 20, '只保留最近 20 条', String(st.log.length));
+  ok(st.log.length === 30, '30 次记录全都留着（不再砍到 20）', String(st.log.length));
+  ok(/叫了你 30 次昵称/.test(mood.todayDigest(st)), '今天的账数到 30 次，不是 20 次', mood.todayDigest(st));
   ok(st.log[st.log.length - 1].why.length <= 24, '理由只留 24 字（不把聊天原文落盘）', String(st.log[st.log.length - 1].why.length));
+  /* 上限本身：造 400 条档，读回来应该被裁到 LOG_KEEP（防止文件无限长） */
+  fs.writeFileSync(process.env.MOOD_FILE, JSON.stringify({
+    affinity: 60, updatedAt: Date.now(), band: '还算熟',
+    log: Array.from({ length: 400 }, (_, i) => ({ ts: Date.now() - i * 1000, d: 1, why: 'x', kind: '陪着' })),
+  }));
+  ok(mood.read().log.length === mood.LOG_KEEP, `读档按上限裁到 ${mood.LOG_KEEP} 条`, String(mood.read().log.length));
   reset();
   mood.feel(5, '他夸我');
   ok(mood.promptBlock().includes('刚因为'), '1 小时内的变化会带一句「刚因为…」');
@@ -248,6 +261,29 @@ function reset(patch = {}) {
   }
   const yufishSrc = fs.readFileSync(path.join(__dirname, 'yufish.js'), 'utf8');
   ok(/mood\.promptBlock\(\)/.test(yufishSrc), 'yufish.js：与鱼通道也注入了心情');
+
+  console.log('\n[case] 每日闸门：一天最多涨 15 点（代码侧，不靠提示词）');
+  /* 提示词里的「一天 8~15」是软约束：判官不听话时一天能刷 40+，一周满级，
+   * 之后全是平的 —— 和「一点变化都没有」是同一种不好使。所以闸门必须落在代码里。 */
+  delete process.env.MOOD_DAILY_CAP;          // 回到默认 15
+  reset();
+  for (let i = 0; i < 30; i += 1) mood.feel(3, '他很会说', { kind: '暧昧' });
+  const capped = mood.read();
+  ok(capped.affinity === 70, '30 次 +3 只涨到 70（55+15），不会一天满级', String(capped.affinity));
+  ok(capped.gainDay.gain === 15, '今日增量记账正好 15', JSON.stringify(capped.gainDay));
+  const negHit = mood.feel(-5, '他敷衍我', { kind: '敷衍' });
+  ok(negHit.applied === -5 && negHit.state.affinity === 65, '负向不受闸门影响（70 吃 -5 还是 -5）', `${negHit.applied}/${negHit.state.affinity}`);
+  /* 老档缺字段 / 跨天 / 脏值：一律按「今天 0」处理，绝不能变成 NaN
+   * （NaN 会让闸门永远算 0，分数再也不动） */
+  fs.writeFileSync(process.env.MOOD_FILE, JSON.stringify({ affinity: 60, updatedAt: Date.now(), band: '还算熟', log: [] }));
+  ok(mood.read().gainDay.gain === 0, '老档缺 gainDay → 按今天 0 补齐', JSON.stringify(mood.read().gainDay));
+  fs.writeFileSync(process.env.MOOD_FILE, JSON.stringify({ affinity: 60, updatedAt: Date.now(), band: '还算熟', gainDay: { day: '2000-01-01', gain: 15 }, log: [] }));
+  ok(mood.read().gainDay.gain === 0, '跨天自动清零（昨天刷满不影响今天）', JSON.stringify(mood.read().gainDay));
+  fs.writeFileSync(process.env.MOOD_FILE, JSON.stringify({ affinity: 60, updatedAt: Date.now(), band: '还算熟', gainDay: { day: mood.dayKey(), gain: '不是数字' }, log: [] }));
+  const nanState = mood.read();
+  ok(Number.isFinite(nanState.gainDay.gain) && nanState.gainDay.gain === 0, 'gain 是脏值 → 归 0，不是 NaN', JSON.stringify(nanState.gainDay));
+  ok(mood.dailyCap() === mood.DAILY_CAP, '默认上限 15', String(mood.dailyCap()));
+  process.env.MOOD_DAILY_CAP = '100';         // 后面还要连续加分，恢复放开
 
   console.log('\n[case] 状态栏上报是「装饰」，不该拖累主链路');
   ok(presence.init({}) === false, '缺参数时不启用');

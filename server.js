@@ -237,6 +237,86 @@ const SHARED_FILE = process.env.SHARED_STATE || path.join(WORKSPACE, 'shared-sta
  * 不注入的话，站点用了 WORKSPACE_DIR 时，记忆会写到另一个目录去。 */
 if (!process.env.QQ_WORKSPACE_ROOT) process.env.QQ_WORKSPACE_ROOT = WORKSPACE;
 
+/* ============================================================
+   她的状态（只读）：聊天室 / 五子棋 / 万象牌页面顶部那一行小字用的。
+   返回档位词 + 心情 + 「今天的账」，**不露分数**（分数只留在文件里）。
+
+   为什么不 require agent-bot 的 lib/mood.js：
+     站点和 agent-bot 是分开部署的（现网 /root/qq-workspace 与 /root/agent-bot 各一份），
+     目录结构不稳定。站点进程去 require 那边，等于把两个部署绑死 ——
+     那边一改目录就白屏。所以这里纯读文件 + 自己算，读不到就 {ok:false}，绝不 500。
+
+   路径优先级：MOOD_FILE 环境变量 → /root/qq-workspace/data/mood.json → 仓库 workspace/data/mood.json
+   （和 mood.js 的 guessWorkspace()、yu.js 的 MOOD_FILE 保持同一套习惯）
+   ============================================================ */
+const MOOD_JSON = (() => {
+  if (process.env.MOOD_FILE) return process.env.MOOD_FILE;
+  const split = '/root/qq-workspace/data/mood.json';   // 分离部署的约定位置
+  try { if (fs.statSync(split).isFile()) return split; } catch (e) {}
+  return path.join(WORKSPACE, 'data', 'mood.json');
+})();
+
+/* 心情 6 小时过期（与 mood.js 的 MOOD_TTL 一致）：早上撒的娇不该晚上还挂着 */
+const MOOD_TTL_MS = 6 * 3600 * 1000;
+const MOOD_CALM = '平静';
+const MOOD_LABELS = ['开心', '黏人', '撒娇', '有点醋', '低落', '累了', '得意', '平静'];
+
+/* 「今天的账」的说法。和 agent-bot/lib/mood.js 的 DIGEST_CASES 一字不差地保持一致；
+ * 跨部署没法共享模块，所以这份重复是刻意的 —— 不一致只会导致措辞不同，不影响统计。 */
+const MOOD_DIGEST = {
+  陪着: (n) => `陪你聊了 ${n} 次`,
+  报备: (n) => `跟你讲了自己的事 ${n} 次`,
+  昵称: (n) => `叫了你 ${n} 次昵称`,
+  想你: (n) => `说了 ${n} 次想你`,
+  暧昧: (n) => `撩了你 ${n} 次`,
+  被需要: (n) => `找你说了 ${n} 次事`,
+  一起玩: (n) => `一起玩了 ${n} 次`,
+  记得: (n) => `提起过 ${n} 次你以前说过的事`,
+  敷衍: (n) => `敷衍了你 ${n} 次`,
+  失联: (n) => `晾了你 ${n} 次`,
+  凶: (n) => `凶了你 ${n} 次`,
+  越界: (n) => `玩笑开过头 ${n} 次`,
+  工具化: (n) => `有事才找你 ${n} 次`,
+};
+
+/** 最近 24 小时各路径发生了几次，取最多的 4 类；没有就返回空串 */
+function moodToday(log, now) {
+  const counts = new Map();
+  for (const e of (Array.isArray(log) ? log : [])) {
+    const kind = String((e && e.kind) || '').trim();
+    if (!kind) continue;                       // 老记录没有 kind，不产生条目
+    const t = Number(e && e.ts) || 0;
+    if (!t || now - t > 24 * 3600 * 1000) continue;
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
+  if (!counts.size) return '';
+  return [...counts.entries()]
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, 4)
+    .map(([k, n]) => (MOOD_DIGEST[k] ? MOOD_DIGEST[k](n) : `${k} ${n} 次`))
+    .join('、');
+}
+
+/** 读 mood.json 拼一份只读快照。任何异常都退化成 {ok:false}（页面显示「还没见过」） */
+function moodSnapshot() {
+  let o = null;
+  try { o = JSON.parse(fs.readFileSync(MOOD_JSON, 'utf8')); } catch (e) { return { ok: false }; }
+  if (!o || typeof o !== 'object') return { ok: false };
+  const now = Date.now();
+  const log = Array.isArray(o.log) ? o.log : [];
+  const last = log.length ? log[log.length - 1] : null;
+  const rawLabel = o.mood && typeof o.mood === 'object' ? String(o.mood.label || '') : '';
+  const moodAt = o.mood && typeof o.mood === 'object' ? Number(o.mood.at) || 0 : 0;
+  const fresh = MOOD_LABELS.includes(rawLabel) && moodAt && now - moodAt <= MOOD_TTL_MS;
+  return {
+    ok: true,
+    band: String(o.band || ''),
+    mood: fresh ? rawLabel : MOOD_CALM,
+    today: moodToday(log, now),
+    at: Number((last && last.ts) || o.updatedAt) || 0,
+  };
+}
+
 let fourLayer = null;
 try { fourLayer = require(path.join(__dirname, 'memory', 'bridge.js')); } catch {}
 const FOUR_LAYER_OFF = process.env.FOUR_LAYER === '0';
@@ -514,11 +594,22 @@ function saveChat(room) {
   }, 1200));
 }
 
+/* 状态栏的 act 有效期：45 秒。
+ * 和 yu.js 的 actOf()、agent-bot/lib/presence.js 的 ACT_TTL_MS、engine.js 的 actLabelOf 同一套语义。
+ * 超过就返回空串，页面自动退回「在线」——不能让她永远停在「思考中」。 */
+const MEMBER_ACT_MS = 45000;
+function memberActOf(u) {
+  if (!u || !u.act) return '';
+  return Date.now() - Number(u.actAt || 0) < MEMBER_ACT_MS ? String(u.act) : '';
+}
+
 function peerOf(room, me) {
   const p = room.users.find(u => u.pid !== me.pid);
   if (!p) return null;
   const online = Date.now() - p.lastSeen < 15000;
-  return { name: p.name, online, seat: p.seat };
+  /* act 是「她在干嘛」（思考中 / 说话中 / 落子中），和 online 是两件事：
+   * online 只说明心跳还在（机器人 1.2 秒一跳，永远为真），act 才有信息量。 */
+  return { name: p.name, online, seat: p.seat, act: memberActOf(p) };
 }
 
 function pushMsg(room, msg) {
@@ -536,7 +627,9 @@ function chatTick() {
   const now = Date.now();
   for (const room of chatRooms.values()) {
     const p0 = room.users[0], p1 = room.users[1];
-    const sig = [p0 ? (p0.name + (now - p0.lastSeen < 15000 ? '1' : '0')) : '-', p1 ? (p1.name + (now - p1.lastSeen < 15000 ? '1' : '0')) : '-'].join('|');
+    /* 签名里带上 act：只比 online 的话，「思考中 → 说话中」这种变化永远不会广播，
+     * 页面就停在第一个状态上（看起来像卡住）。 */
+    const sig = [p0 ? (p0.name + (now - p0.lastSeen < 15000 ? '1' : '0') + memberActOf(p0)) : '-', p1 ? (p1.name + (now - p1.lastSeen < 15000 ? '1' : '0') + memberActOf(p1)) : '-'].join('|');
     if (sig !== room.peerSig) {
       room.peerSig = sig;
       for (const s of room.subs) {
@@ -710,7 +803,7 @@ function goNewRound(room) {
 function goView(room) {
   const last = room.moves.length ? room.moves[room.moves.length - 1] : null;
   const now = Date.now();
-  const players = room.users.map(u => ({ seat: u.seat, name: u.name, online: (now - u.lastSeen < 15000), host: u.seat === room.hostSeat }));
+  const players = room.users.map(u => ({ seat: u.seat, name: u.name, online: (now - u.lastSeen < 15000), host: u.seat === room.hostSeat, act: memberActOf(u) }));
   return { ok: true, code: room.code, board: room.board, turn: room.turn, winner: room.winner,
     winLine: room.winLine, lastX: last ? last.x : -1, lastY: last ? last.y : -1, rev: room.rev,
     moves: room.moves.length, log: room.moves, players,
@@ -728,7 +821,8 @@ function goTick() {
   const now = Date.now();
   for (const room of goRooms.values()) {
     const p0 = room.users[0], p1 = room.users[1];
-    const sig = [p0 ? (p0.name + (now - p0.lastSeen < 15000 ? '1' : '0')) : '-', p1 ? (p1.name + (now - p1.lastSeen < 15000 ? '1' : '0')) : '-'].join('|');
+    /* 同上：签名里带 act，落子/说话的切换才会推给页面 */
+    const sig = [p0 ? (p0.name + (now - p0.lastSeen < 15000 ? '1' : '0') + memberActOf(p0)) : '-', p1 ? (p1.name + (now - p1.lastSeen < 15000 ? '1' : '0') + memberActOf(p1)) : '-'].join('|');
     if (sig !== room.peerSig) {
       room.peerSig = sig;
       for (const s of room.subs) { const peer = peerOf(room, s.user); s.res.write('event: peer\ndata: ' + JSON.stringify({ peer }) + '\n\n'); }
@@ -787,6 +881,11 @@ const server = http.createServer(safe(async (req, res) => {
 
   /* ---------- 「心有灵犀」联机 API（patch2 新增） ---------- */
   if (p.startsWith('/api/lx/')) return LX.api(req, res, u, p);
+
+  /* ---------- 她的状态（只读）：页面顶部那一行小字用 ----------
+   * 只显示档位词 + 心情 + 今天的账，不返回分数。
+   * 读不到文件也返回 200 + {ok:false}，页面自己退回「还没见过」。 */
+  if (p === '/api/mood') return json(res, moodSnapshot());
 
   /* ---------- 上传的图片 / GIF ---------- */
   if (p.startsWith('/m/')) {
@@ -951,6 +1050,23 @@ const server = http.createServer(safe(async (req, res) => {
       msgs: room.msgs.filter(m => m.id > since), stickers: room.stickers
     });
   }
+  /* 状态栏上报（聊天室）：只改自己那条成员记录的 act。
+   * 为什么需要它：页面上原来只有「在线」，而机器人每 1.5 秒心跳一次，
+   * 那一栏等于恒亮的灯（用户说的「一直在线中」）。
+   * 极轻：不落盘、不广播消息、不动 rev；匹配不到成员就 {ok:false}，绝不新建成员。
+   * act 是什么由上报方决定（agent-bot 的 presence 发「思考中 / 说话中 / 发呆中」）；
+   * 传空串就是清除。 */
+  if (p === '/api/room/act') {
+    if (req.method !== 'POST') return json(res, { ok: false });
+    const b = await readBody(req);
+    const room = loadChat(normCode(b.code));
+    const me = room.users.find(x => x.pid === String(b.pid || ''));
+    if (!me) return json(res, { ok: false });
+    me.act = String(b.act == null ? '' : b.act).slice(0, 12);
+    me.actAt = Date.now();
+    me.lastSeen = Date.now();          // 上报本身就是一次心跳，别再让页面闪「离线」
+    return json(res, { ok: true, act: me.act });
+  }
   if (p === '/api/room/leave') {
     const b = await readBody(req);
     const room = loadChat(normCode(b.code));
@@ -1096,6 +1212,21 @@ const server = http.createServer(safe(async (req, res) => {
     else if (!room.ruleLocked) reason = '规则未确定';
     else canMove = true;
     return json(res, { ok: true, view: goView(room), peer: peerOf(room, me), members: room.users.map(x => x.name), canMove, reason });
+  }
+  /* 状态栏上报（五子棋）：只改自己那条成员记录的 act。
+   * 为什么不复用 /api/go/act：那个是**对局动作**端点（act = 'chat' / 'move' / 'setRule' …），
+   * 把「落子中」塞进去会走到「未知操作」分支，以后加动作名还会和状态词打架。
+   * 极轻：不落盘、不广播；匹配不到成员就 {ok:false}。 */
+  if (p === '/api/go/presence') {
+    if (req.method !== 'POST') return json(res, { ok: false });
+    const b = await readBody(req);
+    const room = loadGo(normCode(b.code));
+    const me = room.users.find(x => x.pid === String(b.pid || ''));
+    if (!me) return json(res, { ok: false });
+    me.act = String(b.act == null ? '' : b.act).slice(0, 12);
+    me.actAt = Date.now();
+    me.lastSeen = Date.now();
+    return json(res, { ok: true, act: me.act });
   }
   if (p === '/api/go/act') {
     const b = await readBody(req);
@@ -1313,6 +1444,22 @@ const server = http.createServer(safe(async (req, res) => {
     const pl = room.join(pid, String(b.name || '玩家').slice(0, 8));
     if (!pl) return json(res, { error: '房间已满（2 人）' });
     return json(res, { ok: true, seat: pl.seat, room: room.id });
+  }
+  /* 状态栏上报（万象牌）：只改自己那条玩家记录的 act。
+   * 极轻：不落盘（engine 的存档里没有 act）、不广播动作、不动 phase；
+   * 匹配不到座位就 {ok:false}，绝不新建玩家。 */
+  if (p === '/api/act') {
+    if (req.method !== 'POST') return json(res, { ok: false });
+    const b = await readBody(req);
+    const room = getRoom(b.room);
+    const pid = String(b.pid || '');
+    const seat = room.seatOf(pid);
+    if (seat < 0) return json(res, { ok: false });
+    const pl = room.players[seat];
+    pl.act = String(b.act == null ? '' : b.act).slice(0, 12);
+    pl.actAt = Date.now();
+    room.markSeen(pid);                 // 上报本身就是心跳
+    return json(res, { ok: true, act: pl.act });
   }
   if (p === '/api/state') {
     const room = getRoom(u.searchParams.get('room'));

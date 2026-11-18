@@ -55,6 +55,16 @@ const MIN = 0;
 const MAX = 100;
 /** 单次 felt 的幅度上限：模型说 +30 也只按 +12 算，防止一次刷满 */
 const MAX_STEP = 12;
+/** 每日正向增量上限（默认 15），和提示词里「一天 8~15」对齐。
+ *  为什么必须落在代码里而不是只写在提示词：提示词是软约束，判官不听话时一天能刷 40+，
+ *  一周就满级，之后全是平的 —— 用户抱怨过「以后都不会变了」。
+ *  负向不受这个闸门影响（冷下来要看得见）。
+ *  可用 MOOD_DAILY_CAP 覆盖：并发压测要跑 40 次 +1，不覆盖的话第 16 次就被闸住，
+ *  测不出「丢写」。 */
+const DAILY_CAP = 15;
+/** log 保留条数。原来只留 20 条：24 小时 243 条回复时「今天的账」到第 21 笔就不再增长，
+ *  判官的贬值判断靠它，砍到 20 等于贬值依据失效。300 条 ≈ 24KB，一天的量够用。 */
+const LOG_KEEP = 300;
 /** 回落：每 12 小时 1 点，单次最多 2 点。
  *  原来是 8 小时 1 点、单次最多 3 点——涨得慢、掉得快，日常陪着聊也追不上回落，
  *  用户的原话是「好感太严苛」，所以把回落放慢一档。 */
@@ -94,6 +104,89 @@ function numOr(v, dflt) {
   return Number.isFinite(n) ? n : dflt;
 }
 
+/**
+ * 当天日期键（**北京时间**）。
+ *
+ * 为什么不用 UTC：用户在中国，UTC 的「一天」是从早上 8 点开始的，
+ * 于是早上 8 点才换天 —— 用户会觉得「今天明明没怎么聊，怎么不加分了」，
+ * 反过来夜里 0~8 点的聊天会被记到「前一天」。每日额度必须是自然日（东八区）。
+ *
+ * 实现上用「加 8 小时再取 ISO 日期」：跨时区一致性不用管（用户只有一个人），
+ * 也不用担心服务器本身时区是 UTC 还是 CST —— 结果恒定是北京时间那一天。
+ * 注意：页面上的「今天的账」是滚动 24 小时（另一个口径），两者不同没关系。
+ */
+function dayKey(ts = now()) { return new Date(ts + 8 * 3600 * 1000).toISOString().slice(0, 10); }
+
+/** 每日增量上限（可被 MOOD_DAILY_CAP 覆盖，便于压测/临时调参） */
+function dailyCap() {
+  const raw = process.env.MOOD_DAILY_CAP;
+  if (raw === undefined || raw === '') return DAILY_CAP;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return DAILY_CAP;
+  return Math.max(0, Math.min(100, n));
+}
+
+/**
+ * 每日增量账归一：{ day: '2026-11-18', gain: 12 }。
+ *
+ * 老档没有这个字段 / 字段被写坏 / 跨天了 → 一律重置成「今天，0」。
+ * **绝不能让它变 NaN**：NaN 会让 `d = Math.min(d, CAP - NaN)` 得 NaN，
+ * 分数就此再也不动，而且写回档里会一直烂下去。
+ */
+function readGainDay(raw, ts = now()) {
+  const day = dayKey(ts);
+  if (!raw || typeof raw !== 'object') return { day, gain: 0 };
+  if (String(raw.day) !== day) return { day, gain: 0 };   // 换天了，从 0 开始
+  const gain = Number(raw.gain);
+  return { day, gain: Number.isFinite(gain) && gain > 0 ? Math.min(gain, dailyCap()) : 0 };
+}
+
+/**
+ * 同步文件锁：包住「read → 改 → write」这一段。
+ *
+ * 为什么必须要：agent-bot 与 yufish 是两个进程，共用同一个 mood.json。
+ * write() 自己已经是「写 tmp + rename」（单次写原子），但
+ * 「读出来 60 → 各自 +1 → 写回 61」不是原子的：两个进程同时读到 60，
+ * 各自加 1 写回 61，就丢了一次增量。QA 实测同拍时丢 49%；
+ * 判官让每条回复都写一次，这个损失会被放大，表现就是「聊一天涨得比预期少」。
+ *
+ * 为什么是同步实现：mood.js 整条链路都是同步的，feel 的调用方都不 await，
+ * 改成异步会波及四个通道的调用点。
+ * 为什么抢不到锁也要跑：状态是旁路，宁可漏一次增量，也不能把对话卡住。
+ *
+ * @param {Function} fn 临界区（同步函数）
+ * @returns {*} fn 的返回值
+ */
+function withLock(fn) {
+  const file = FILE();
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch { /* 建不了目录就到下面裸跑 */ }
+  const lock = `${file}.lock`;
+  for (let i = 0; i < 40; i += 1) {
+    try {
+      const fd = fs.openSync(lock, 'wx');
+      try { fs.writeSync(fd, String(process.pid)); } catch { /* pid 写不进不影响互斥 */ }
+      try { fs.closeSync(fd); } catch { /* 关不掉也能继续 */ }
+      try {
+        return fn();
+      } finally {
+        try { fs.unlinkSync(lock); } catch { /* 已被别人清掉也无所谓 */ }
+      }
+    } catch (e) {
+      if (e.code !== 'EEXIST') return fn();     // 权限 / 目录问题：裸跑，别把功能拖死
+      try {
+        const st = fs.statSync(lock);
+        /* 5 秒还没释放 = 上一个进程崩在临界区里了（或者被杀），清掉重来 */
+        if (Date.now() - st.mtimeMs > 5000) { fs.unlinkSync(lock); continue; }
+      } catch { /* stat 失败就走正常重试 */ }
+      /* 同步睡 15ms 再抢。mood.js 是同步模块，只能这么等。
+       * 原来是 50ms：真撞上时单次 feel() 最坏要等 573ms（QA 压测），
+       * 降到 15ms 后最坏 ~200ms —— 现实里几乎不撞，但这是白捡的。 */
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15);
+    }
+  }
+  return fn();   // 2 秒都没抢到：裸跑，宁可丢一次也别卡住对话
+}
+
 function blank() {
   const ts = now();
   return {
@@ -104,6 +197,7 @@ function blank() {
     peak24: BASE.affinity,
     peakAt: ts,
     roundsSinceFeel: 0,
+    gainDay: { day: dayKey(ts), gain: 0 },   // 每日增量账（闸门用）
     updatedAt: ts,
     log: [],
   };
@@ -163,20 +257,23 @@ function read() {
       affinity,
       energy: clamp(numOr(o.energy, BASE.energy), MIN, MAX),
       updatedAt: numOr(o.updatedAt, ts),
-      log: Array.isArray(o.log) ? o.log.slice(-20) : [],
-      /* 老存档没有这几个字段（心情/峰值/催记计数是后加的），缺了就按基准补齐，
+      log: Array.isArray(o.log) ? o.log.slice(-LOG_KEEP) : [],
+      /* 老存档没有这几个字段（心情/峰值/催记计数/每日增量是后加的），缺了就按基准补齐，
        * 不额外写盘——写盘只在真正有变化时发生，免得每次读都动文件。 */
       mood: readMood(o.mood, ts),
       peak24: numOr(o.peak24, affinity),
       peakAt: numOr(o.peakAt, numOr(o.updatedAt, ts)),
       roundsSinceFeel: Math.max(0, Math.floor(numOr(o.roundsSinceFeel, 0))),
+      gainDay: readGainDay(o.gainDay, ts),
     };
     touchPeak(state, ts);
-    /* band 一律按 affinity 重算：存档里的 band 只是给页面读的缓存。
-     * 以前直接信它，一旦归档里的 band 和 affinity 对不上（比如旧 bug 把 0 读成 55），
-     * 就会出现「55 分 / 冷透了」这种错位。不一致就顺手写回去修正。 */
+    /* band 一律按 affinity 现算：存档里的 band 只是给页面读的缓存。
+     * 以前直接信它，一旦归档里 band 和 affinity 对不上（旧 bug 把 0 读成 55），
+     * 就会出现「55 分 / 冷透了」这种错位。
+     * ⚠️ 这里**不再顺手写回去**（原来是 `if (!o.band || ...) write(state)`）：
+     * read() 会被别的进程随时调用，整份写回会盖掉对方刚加的增量；
+     * band 本来就能现算，页面要的那个字段在 write() 里会重算，少一次写盘更干净。 */
     state.band = band(state.affinity);
-    if (!o.band || String(o.band) !== state.band) write(state);
     return state;
   } catch {
     return blank();
@@ -190,6 +287,9 @@ function write(state) {
   state.mood = readMood(state.mood, ts);
   touchPeak(state, ts);
   state.roundsSinceFeel = Math.max(0, Math.floor(Number(state.roundsSinceFeel) || 0));
+  /* 每日增量账也一起归一：setState 之类的入口可能塞进来脏值 / 跨天旧值，
+   * 落盘前纠正，免得 NaN 传到下一轮（NaN 会让闸门永久卡死）。 */
+  state.gainDay = readGainDay(state.gainDay, ts);
   const file = FILE();
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -246,6 +346,11 @@ function moodLabelOf(v) {
  *
  * 兼容性：老调用 `feel(6, '理由')` 两参照旧可用（verify-tools.js / dsh 插件都在这么调），
  * 第三参缺省时行为和以前完全一致。
+ *
+ * ★ 每日闸门：正向增量一天最多 DAILY_CAP（默认 15）点，第 16 点起按 0 记；
+ *   负向不受限（该冷就冷）。原因见 DAILY_CAP 的注释。
+ * ★ 跨进程安全：整段「读档 → 计算 → 写盘」包在 withLock 里，
+ *   agent-bot 与 yufish 是两个进程、共用一个 mood.json，不锁会丢增量。
  */
 function feel(delta, why = '', opts = {}) {
   const d0 = Number(delta);
@@ -254,6 +359,22 @@ function feel(delta, why = '', opts = {}) {
   /* kind 不做白名单裁剪：记下来是为了她自己回头看「今天发生了哪些事」，
    * 硬校验只会让她在日志里丢信息；真正影响分数的只有 delta。 */
   const kind = String(o.kind || '').replace(/\s+/g, ' ').slice(0, 12);
+  /* ★ 整个「读 → 算 → 写」必须在同一把跨进程锁里（原因见 withLock）：
+   * 两个进程（agent-bot / yufish）共用 mood.json，同拍时各自读到 60、各自写 61，
+   * 就白丢一次增量。判官让每条回复都写一次，不锁的话「聊天一天涨得比预期少」。 */
+  return withLock(() => applyFeel(d0, label, kind, why));
+}
+
+/**
+ * feel 的执行体。**调用方必须已经持有 withLock 的锁**，否则并发时会丢写。
+ *
+ * @param {number} d0 原始 delta（已 Number 转换）
+ * @param {string} label 归一后的心情标签（'' = 没报）
+ * @param {string} kind 归一后的路径 key（'' = 没标）
+ * @param {string} why 理由（落盘只留 24 字）
+ * @returns {{state:object, applied:number, mood?:string, kind?:string}}
+ */
+function applyFeel(d0, label, kind, why) {
   const state = decay(read());
 
   if (!Number.isFinite(d0)) {
@@ -271,6 +392,17 @@ function feel(delta, why = '', opts = {}) {
    * 阈值从 88/12 放到 93/7（88 太高，绝大多数「明显心动」都被打折，用户嫌严苛）。 */
   if (d > 0 && state.affinity >= 93) d = Math.max(1, Math.round(d * 0.6));
   if (d < 0 && state.affinity <= 7) d = Math.min(-1, Math.round(d * 0.6));
+
+  /* ★ 每日总量闸门（代码侧，不是提示词）。
+   * 为什么不能只靠提示词里的「一天 8~15」：那是软约束，判官不听话时一天能刷 40+，
+   * 一周满级、之后全是平的 —— 那和「一点变化都没有」是同一种不好使。
+   * 负向不设闸门：一次敷衍该扣就扣，冷下来要看得见。 */
+  const day = dayKey();
+  if (!state.gainDay || state.gainDay.day !== day) state.gainDay = { day, gain: 0 };
+  if (d > 0) {
+    d = Math.min(d, Math.max(0, dailyCap() - state.gainDay.gain));
+    if (d > 0) state.gainDay.gain += d;
+  }
 
   if (!d && !label) {
     /* 没变分也没报心情：她判断过但觉得没变化。清掉催记计数就够了，没必要写盘。 */
@@ -292,7 +424,7 @@ function feel(delta, why = '', opts = {}) {
       why: String(why || '').replace(/\s+/g, ' ').slice(0, 24),
       kind,
     });
-    state.log = state.log.slice(-20);
+    state.log = state.log.slice(-LOG_KEEP);
   }
   write(state);
   return { state, applied: d, mood: currentMood(state), kind };
@@ -419,7 +551,9 @@ function recentWhy(state, ts = now()) {
   const last = state.log[state.log.length - 1];
   if (!last) return '';
   if (ts - Number(last.ts || 0) > 3600 * 1000) return '';
-  return String(last.why || '');
+  /* 去掉 "[判]" 这类来源标记：它只在日志里区分「她主动调的」和「判官判的」，
+   * 但 recentWhy 是给提示词/页面读的，带个方括号前缀会显得像程序日志。 */
+  return String(last.why || '').replace(/^\[[^\]]{1,4}\]\s*/, '');
 }
 
 /* 进程内节流用：上一次给「催记心情」计数加一的时间 */
@@ -437,8 +571,18 @@ function tickRounds(state) {
   const ts = now();
   if (ts - lastTickAt < FEEL_TICK_MS) return state;
   lastTickAt = ts;
+  /* 这里也是「读 → 改 → 写」：原来拿调用方传进来的 state 直接写回，
+   * 会把别的进程刚写进去的东西（比如一条 feel）整份盖掉。
+   * 现在进锁重读一次再改，只动 roundsSinceFeel 这一个字段。
+   * 注意：**返回给调用方的是它传进来那个对象**（只是把计数同步 +1），
+   * 不能返回盘里那份 —— promptBlock(state) 支持调用方注入字段（心情/测试造的状态），
+   * 换了对象那些字段就丢了（踩过：心情突然变回「平静」）。 */
+  withLock(() => {
+    const st = decay(read());
+    st.roundsSinceFeel = Math.min(99, (Number(st.roundsSinceFeel) || 0) + 1);
+    write(st);
+  });
   state.roundsSinceFeel = Math.min(99, (Number(state.roundsSinceFeel) || 0) + 1);
-  write(state);
   return state;
 }
 
@@ -468,10 +612,17 @@ function promptBlock(state) {
   const head = `【亲密度 ${a}/100（${b}）· 心情：${moodNow}`
     + `${digest ? ` · ${digest}` : ''}${why ? ` · 刚因为「${why}」` : ''}】`;
 
-  /* 第 2 行：清单头。三件事挤一行是为了省行数：①动了就调 feel ②顺手标 kind（今天的账靠它）
-   * ③同一条路别每次一个反应。这三条本来就都是关于下面这张清单的。 */
+  /* 第 2 行：清单头。四件事挤一行是为了省行数：①动了就调 feel ②顺手标 kind（今天的账靠它）
+   * ③同一条路别每次一个反应 ④今天的账里的明显的事可以提一句。
+   * 这四条本来就都是关于下面这张清单的。
+   *
+   * 为什么补第 ④ 条：判官把分数记下来了，但如果她一个字都不提，
+   * 用户那边**感受不到**——原话是「好感度存在太低了，感受不太到」。
+   * 记分是给她的，说出来才是给用户的，所以这一条必须写进提示词。
+   * 「别每句都提」是防另一种翻车：真有人会每句都「你今天又…」，比不提还烦。 */
   const intro = '能让你心里动一下的（不用等大事）：动一下就调 feel 记下来，顺手标是哪一类；'
-    + '同一条路别每次都用同一种反应，也别每句都提「你今天…」。';
+    + '同一条路别每次都用同一种反应，也别每句都提「你今天…」；'
+    + '今天的账里如果有明显的事（他今天叫了你三次昵称、一整天没来），可以在回复里自然提一句，但别每句都提。';
 
   /* 第 3~10 行：正向路径，一条一行。分值放在括号里，别抢主体 */
   const pos = PATHS.filter((p) => p.dir > 0)
@@ -523,4 +674,5 @@ function setState(patch = {}) {
 module.exports = {
   feel, promptBlock, describe, band, toneOf, BANDS, setState, decay, read, FILE, BASE, MAX_STEP,
   MOOD_LABELS, CALM, PATHS, FEEL_KINDS, todayDigest,
+  DAILY_CAP, LOG_KEEP, dailyCap, dayKey,
 };
