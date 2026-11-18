@@ -10,30 +10,31 @@
 
 ## 装
 
-1. 从 [Releases](../../../releases) 下载 `happy-nav-1.1.apk`
+1. 从 [Releases](../../../releases) 下载 `happy-nav-1.3.apk`
 2. 手机上点开安装（第一次要允许「未知来源」）
 3. 首次启动填地址，例如 `http://192.168.1.10:3000` 或 `https://yu.example.com`
 4. 地址只存在本机，重装才需要再填一次
 
 ## 填错了地址怎么改
 
-三条路，按顺序试：
+四条路，按顺序试：
 
-1. **右下角 ⚙** → 「修改地址」。这个齿轮是原生按钮，盖在网页上面，页面白屏也点得到。
-2. **连不上时的那个页面**（不是浏览器默认的白屏）里有个「地址填错了？改地址」按钮。
-3. 实在找不到：系统设置 → 应用 → 与鱼 → 存储 → **清除数据**，下次启动就回到首次设置。地址只存在本机，清掉不心疼（聊天记录在服务器上，不在手机里）。
+1. **网页设置 →「连接」→「修改地址」**（页面能打开时）。这个 tab 只在 App 壳里出现：WebView 的 UA 带 `HappyNavShell/1.3`，普通浏览器会自动隐藏它。
+2. **连不上时的那个页面**（不是浏览器默认的白屏）里有个「地址填错了？改地址」按钮，走 `happynav://settings`。网络层错误、主框架 4xx/5xx、SSL 证书错误都会跳到这个页面；这个按钮千万别删。
+3. **长按返回键** → 直接弹出原生「修改地址」。它完全不依赖网页：地址返回 200 但不是与鱼页、或页面 JS 挂掉白屏时，错误页不显示、网页设置面板也不存在，这个手势是终极兜底。单次短按、两秒内两次退出和 1.2 完全一致，不受影响。
+4. 实在找不到：系统设置 → 应用 → 与鱼 → 存储 → **清除数据**，下次启动就回到首次设置。地址只存在本机，清掉不心疼（聊天记录在服务器上，不在手机里）。
 
 ## 能做什么
 
 | 能做 | 怎么做的 |
 |---|---|
 | 全屏、没有地址栏 | 一个 Activity + WebView |
-| 返回键 = 网页后退 | 退到首页再按一次才退出（两秒内两次） |
+| 返回键 = 网页后退 | 单次照旧后退 / 两秒内两次退出；长按 = 改地址（见下） |
 | 发图 / 传文件 | 接了系统的文件选择器 |
 | 下载 | 转给系统下载管理器，通知栏可见 |
 | 点外链 | 同域名在壳里开，其它交给系统浏览器 |
 | 连不上 | 不白屏，给「重新连接」页 |
-| 改地址 / 刷新 / 清缓存 | 右下角 ⚙（半透明，不挡内容） |
+| 改地址 / 刷新 / 清缓存 | 网页设置 →「连接」tab（`happynav://settings` / `reload` / `clear-cache`）；页面打不开时用错误页的「改地址」按钮 |
 
 ## 做不到什么
 
@@ -68,7 +69,7 @@ PLATFORM=$HOME/android-build/plat/android-34/android.jar \
 bash build-apk.sh
 ```
 
-产物：`build/happy-nav-1.1.apk`（已签名，21KB）。
+产物：`build/happy-nav-1.3.apk`（已签名，21KB）。
 
 脚本做的事就六步：`aapt2 compile` → `aapt2 link` → `javac` → `d8` → 塞 `classes.dex` + `zipalign` → `apksigner sign`。没有隐藏步骤，也没有下载依赖。
 
@@ -87,7 +88,7 @@ bash build-apk.sh
 | 图标 | `res/drawable/ic_launcher_foreground.xml`（矢量，改颜色改 `colors.xml` 的 `brand`） |
 | 主题色 / 启动背景 | `res/values/colors.xml`、`styles.xml` |
 | 首次打开的行为 | `MainActivity.java` 的 `onCreate` |
-| ⚙ 菜单项 | `MainActivity.java` 的 `showMenu` |
+| 改地址 / 刷新 / 清缓存 / 关于 | `MainActivity.java` 的 `handleUrl` / `clearCacheAndReload` + `public/yu.html` 的 `#paneLink`（1.3 起从原生浮层菜单搬进网页设置面板） |
 | 判断内链/外链 | `MainActivity.java` 的 `handleUrl` |
 
 ## 目录
@@ -106,3 +107,9 @@ clients/android/
 **这一版没有在真机上跑过**——构建机上没有设备也没有模拟器。已验证的是：能编译、`apksigner verify` 通过、`aapt2 dump badging` 的包名/版本/权限/启动 Activity 都对。
 
 所以第一次装完请重点看三件事：能不能打开、能不能发消息、能不能发图。有问题把 `adb logcat | grep happynav` 或手机上的报错发出来。
+
+### 恢复入口（页面打不开时）
+
+1.3 的补强：`onReceivedError`（网络层）、`onReceivedHttpError`（主框架 4xx/5xx）、`onReceivedSslError`（证书）都会切到错误页，错误页里的 `happynav://settings` 按钮始终保留。但「HTTP 200 却不是与鱼页」和「JS 挂掉白屏」不会触发任何错误回调，所以又加了一个纯原生的**长按返回键 → showSetup()**（`onKeyDown` 里 `startTracking()` 开启长按跟踪，`onKeyLongPress` 弹对话框，`onKeyUp` 消费掉这次按键，避免弹完又走一次默认返回）。
+
+这套手势、三个错误回调和上面的 WebView 重建**同样没有在真机上跑过**（构建机没有设备/模拟器）。装完请专门验一次：把地址填成一个返回 nginx 默认页的 URL，确认长按返回键能弹出改地址框；顺带确认单次返回、两秒内两次退出都还和 1.2 一样正常。

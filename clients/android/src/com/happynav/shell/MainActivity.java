@@ -3,16 +3,15 @@ package com.happynav.shell;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,10 +19,12 @@ import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
 import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -51,15 +52,15 @@ public class MainActivity extends Activity {
 
     private static final String PREFS = "shell";
     private static final String KEY_URL = "url";
-    private static final String UA_SUFFIX = " HappyNavShell/1.0";
+    private static final String UA_SUFFIX = " HappyNavShell/1.3";
     private static final int REQ_FILE = 1001;
     private static final int REQ_AUDIO = 1002;
-
     private WebView web;
-    private View gear;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingAudioRequest;
     private long lastBackAt = 0L;
+    /** 长按返回键已唤出改地址对话框时，把随后的 onKeyUp 消费掉，避免又走一次默认返回 */
+    private boolean backLongHandled = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,6 +165,15 @@ public class MainActivity extends Activity {
     /* ---------------- 主界面 ---------------- */
 
     private void openSite(String url) {
+        /* 改地址是整界面重建：先把旧 WebView 从视图树上摘下来销毁，
+         * 否则连改几次地址会一层层累积 WebView（各自还占着 Cookie/缓存）。 */
+        if (web != null) {
+            if (web.getParent() instanceof ViewGroup) {
+                ((ViewGroup) web.getParent()).removeView(web);
+            }
+            web.destroy();
+            web = null;
+        }
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.parseColor("#F7F7F5"));
 
@@ -198,6 +208,23 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
                 if (req != null && req.isForMainFrame()) showOffline(view.getUrl());
+            }
+
+            /** 4xx/5xx 不走 onReceivedError：只认主框架，别让一张挂掉的图片把整页换成错误页 */
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest req,
+                                            WebResourceResponse err) {
+                if (req != null && req.isForMainFrame() && err != null
+                        && err.getStatusCode() >= 400) {
+                    showOffline(view.getUrl());
+                }
+            }
+
+            /** 证书不对就别硬连：取消加载，给错误页（里面有改地址入口） */
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError err) {
+                if (handler != null) handler.cancel();
+                showOffline(view.getUrl());
             }
         });
 
@@ -271,64 +298,31 @@ public class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        gear = buildGear();
-        /* ⚙ 挪到右上角：原来在右下角，正好压在聊天输入框的发送按钮 / 语音按钮上，
-         * 打字时经常误触（家人反馈「点了没发出去」）。右上角是标题区，不挡操作。
-         * 尺寸 44 → 40、透明度 0.45 → 0.3：更小更淡，只当「角落里的一个功能」。 */
-        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(40), dp(40));
-        glp.gravity = Gravity.TOP | Gravity.END;
-        glp.setMargins(0, dp(8), dp(8), 0);
-        root.addView(gear, glp);
-
         setContentView(root);
         web.loadUrl(url);
     }
 
-    /** 右上角那个小齿轮：刷新 / 改地址 / 清缓存 / 关于。半透明，不挡内容。 */
-    private View buildGear() {
-        TextView t = new TextView(this);
-        t.setText("⚙");
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-        t.setTextColor(Color.parseColor("#243230"));
-        t.setGravity(Gravity.CENTER);
-        t.setAlpha(0.3f);
-        t.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { showMenu(); }
-        });
-        return t;
-    }
-
-    private void showMenu() {
-        final String[] items = {"刷新", "修改地址", "清空缓存并重载", "关于"};
-        new AlertDialog.Builder(this)
-                .setItems(items, new DialogInterface.OnClickListener() {
-                    @Override public void onClick(DialogInterface d, int which) {
-                        if (which == 0) {
-                            if (web != null) web.reload();
-                        } else if (which == 1) {
-                            showSetup(prefs().getString(KEY_URL, ""));
-                        } else if (which == 2) {
-                            if (web != null) {
-                                web.clearCache(true);
-                                web.clearFormData();
-                                CookieManager.getInstance().removeAllCookies(null);
-                                CookieManager.getInstance().flush();
-                                web.reload();
-                            }
-                        } else {
-                            new AlertDialog.Builder(MainActivity.this)
-                                    .setTitle("与鱼 · 手机壳 1.0")
-                                    .setMessage("这不是另一个网站，只是把你的站点装进一个干净的壳里："
-                                            + "没有开屏广告、没有推荐流，地址只存在本机。\n\n"
-                                            + "AI、记忆、聊天记录都在你自己那台服务器上，"
-                                            + "手机丢了只需改个地址重装。\n\n"
-                                            + "语音录制需要 https 地址；http 下页面会提示「这个环境不给录音」。")
-                                    .setPositiveButton("知道了", null)
-                                    .show();
-                        }
+    /**
+     * 清掉 WebView 缓存、表单数据和全部 Cookie，然后重载当前页。
+     * 原浮层菜单里的第 3 项，现在由网页「连接」tab 的 happynav://clear-cache 触发。
+     */
+    private void clearCacheAndReload() {
+        if (web == null) return;
+        web.clearCache(true);
+        web.clearFormData();
+        /* 等 Cookie 真的清完再重载：紧跟着同步重载会把旧 Cookie 又带上去。
+         * 整个方法只重载一次，就在下面这个回调里。 */
+        CookieManager.getInstance().removeAllCookies(new ValueCallback<Boolean>() {
+            @Override public void onReceiveValue(Boolean ok) {
+                if (web == null) return;
+                web.post(new Runnable() {
+                    @Override public void run() {
+                        if (web != null) web.reload();
                     }
-                })
-                .show();
+                });
+            }
+        });
+        CookieManager.getInstance().flush();
     }
 
     /** 同域在壳里开，外链交给系统浏览器；非 http(s) 一律外抛 */
@@ -336,11 +330,16 @@ public class MainActivity extends Activity {
         if (uri == null) return false;
         String scheme = uri.getScheme();
         if (scheme == null) return false;
-        /* 页面里要能叫出「改地址」：错误页的按钮就是 happynav://settings */
+        /* 网页「连接」tab 和错误页都靠这三个 scheme 叫起壳的能力：
+         *   happynav://settings     改地址（错误页里的按钮，必须保留）
+         *   happynav://reload       刷新
+         *   happynav://clear-cache  清缓存 / 表单 / Cookie 后重载
+         * 关于那段说明是静态文字，直接放在网页的「连接」tab 里，不需要 scheme。 */
         if ("happynav".equals(scheme)) {
             String host = uri.getHost();
             if ("settings".equals(host)) showSetup(prefs().getString(KEY_URL, ""));
             else if ("reload".equals(host) && web != null) web.reload();
+            else if ("clear-cache".equals(host)) clearCacheAndReload();
             return true;
         }
         if (!scheme.equals("http") && !scheme.equals("https")) {
@@ -374,7 +373,7 @@ public class MainActivity extends Activity {
                 + "border:1px solid #C9D6D3;color:#243230;text-decoration:none;font-size:14px'>地址填错了？改地址</a>"
                 + "</div>"
                 + "<p style='color:#A9B6B4;font-size:12px;margin-top:20px'>"
-                + "服务器开着吗？右上角 ⚙ 也能改</p>"
+                + "服务器开着吗？地址填错了点上面的「改地址」，或长按返回键也能改地址</p>"
                 + "</div></body>";
         web.loadDataWithBaseURL(target, html, "text/html", "utf-8", null);
     }
@@ -421,6 +420,39 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(req, perms, results);
     }
 
+    /**
+     * 白屏时的终极恢复入口：长按返回键唤出改地址。
+     * 页面返回 200 但不是与鱼页、或 JS 挂掉白屏时，onReceivedError/HttpError/SslError
+     * 都不会触发，错误页和网页设置面板都不存在，这个原生手势是最后一条出路。
+     *
+     * 为什么不用「连按 3 次」：那要挡掉 onBackPressed 的「两秒内第二次退出」，
+     * 会把日常退出操作改坏。长按返回完全不碰短按和两连按，行为与 1.2 一致。
+     */
+    @Override
+    public boolean onKeyDown(int code, KeyEvent e) {
+        if (code == KeyEvent.KEYCODE_BACK) e.startTracking();
+        return super.onKeyDown(code, e);
+    }
+
+    @Override
+    public boolean onKeyLongPress(int code, KeyEvent e) {
+        if (code == KeyEvent.KEYCODE_BACK) {
+            backLongHandled = true;
+            showSetup(prefs().getString(KEY_URL, ""));
+            return true;
+        }
+        return super.onKeyLongPress(code, e);
+    }
+
+    @Override
+    public boolean onKeyUp(int code, KeyEvent e) {
+        if (code == KeyEvent.KEYCODE_BACK && backLongHandled) {
+            backLongHandled = false;
+            return true;
+        }
+        return super.onKeyUp(code, e);
+    }
+
     @Override
     public void onBackPressed() {
         if (web != null && web.canGoBack()) {
@@ -434,12 +466,6 @@ public class MainActivity extends Activity {
             lastBackAt = now;
             Toast.makeText(this, "再按一次退出", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    @Override
-    public boolean onKeyDown(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_MENU) { showMenu(); return true; }
-        return super.onKeyDown(code, e);
     }
 
     @Override
