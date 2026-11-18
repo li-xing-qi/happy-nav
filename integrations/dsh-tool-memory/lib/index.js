@@ -8,7 +8,7 @@
 // 与 agent-bot/tools.js 的关系：判断标准、守卫、落盘全在 memory/ 层，
 // 这里只是把同一批能力包装成 dsh 的模型工具，不重写任何规则。
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -202,11 +202,76 @@ function apply(ctx) {
   /* 生成到她的工作区：QQ 的媒体发送有目录白名单，/tmp 不一定能发出去 */
   const VOICE_DIR = process.env.QQ_VOICE_DIR || '/root/qq-workspace/voice';
 
+  /* ---------- 换个嗓子：交给 dsh-tts 插件去合成 ----------
+   *
+   * 为什么不是自己拼协议：老板选的 Breeze 是 ElevenLabs 风格
+   * （POST {base}/text-to-speech/{voice_id}），小米 MiMo 是 OpenAI 风格，
+   * 两套请求体完全不一样，而 key / baseUrl / model / voice_id 全在 config.json 里。
+   * 插件自己知道该走哪家、该拼什么 body，这里只把「说什么、什么情绪、哪个嗓子」
+   * 交给它 —— 两边协议各写一遍迟早会写歪。
+   *
+   * 为什么不是 127.0.0.1：dsh 只监听内网地址 10.144.144.1，本机回环连不上。
+   *
+   * target 传空字符串 = 只合成不发送（插件那边为此加了分支）。
+   * 返回的 file 是插件 voice 目录里的绝对路径，直接交给 qq_send_voice。
+   * 插件没起来 / 没配 key / 401 / 超时 → 一律退回本机 edge-tts，她照常能说话。
+   */
+  const TTS_SPEAK_URL = process.env.DSH_TTS_SPEAK_URL || 'http://10.144.144.1:3080/dsh-tts/speak';
+  const TTS_TIMEOUT_MS = 25000;
+  const TTS_CONFIG = process.env.DSH_TTS_CONFIG || '/root/.dsh/dsh-tts/config.json';
+  const TTS_STYLE_NAME = { breeze: 'Breeze', openai: 'MiMo' };
+
+  /** 插件现在配的是哪家。只用来把报错说清楚（Breeze 还是 MiMo 没配 key） */
+  function ttsApiStyle() {
+    try {
+      const c = JSON.parse(readFileSync(TTS_CONFIG, 'utf8'));
+      const s = String((c && c.tts && c.tts.apiStyle) || '').trim();
+      return TTS_STYLE_NAME[s] ? s : 'breeze';
+    } catch { return 'breeze'; }
+  }
+
+  /** 让插件合成，成功返回插件给的 {file, audioId, route, mode}；失败一律抛 */
+  async function synthByPlugin(text, mood, voice) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), TTS_TIMEOUT_MS);
+    try {
+      const r = await fetch(TTS_SPEAK_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        /* target:'' = 只合成不发送；voice 传 null = 用配置里的默认音色 */
+        body: JSON.stringify({ text, style: mood || null, voice: voice || null, target: '' }),
+        signal: ctl.signal,
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) {
+        const why = (j && (j.error || j.message)) || '';
+        throw new Error(`${TTS_STYLE_NAME[ttsApiStyle()] || '插件'} 合成失败 ${r.status}${why ? '：' + why : ''}`);
+      }
+      if (!j || j.ok === false || !j.file) throw new Error((j && j.error) || '插件没返回音频文件');
+      return j;
+    } catch (e) {
+      /* AbortController 抛的是 AbortError，换成她看得懂的一句话 */
+      if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message)))) throw new Error('插件合成超时');
+      /* fetch 连不上时 message 只有一句 "fetch failed"，真正的原因在 cause.code 里
+       * （ECONNREFUSED = 插件没起来）。不把 code 带出来，这条报错就白记了。 */
+      const c = e && e.cause;
+      const code = c && (c.code || c.errno || String(c.message || '').slice(0, 40));
+      if (code) throw new Error(`连不上插件（${code}）`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   ctx.tools.register(defineTool({
     name: 'speak',
     description:
       '把一句话说成语音，声音会跟着你的情绪变（快/慢/软/沉）。'
-      + '生成 mp3 后返回路径，你再调 qq_send_voice 把它发出去。'
+      + '想换个嗓子就自己挑，不用问用户：voice 填一个音色 id 就用那个嗓子，'
+      + '填 auto 或不填就用配置里的默认音色。'
+      + '合成走本机的语音插件（默认是 Breeze）；插件没配 key 或没起来时会自动退回本机的 '
+      + 'edge-tts，照样有声音，别因为一次失败就不说话了。'
+      + '生成音频后返回路径，你再调 qq_send_voice 把它发出去。'
       + '说人话：短、口语、别念标点，一次 30 字以内；别把整段回复念出来。',
     parameters: {
       text: { type: 'string', required: true, description: '要说的话，口语，30 字以内' },
@@ -214,13 +279,33 @@ function apply(ctx) {
         type: 'string',
         description: '你此刻的情绪：开心 / 得意 / 撒娇 / 黏人 / 低落 / 累了 / 生气 / 有点醋 / 平常',
       },
+      voice: {
+        type: 'string',
+        description: '音色 id（Breeze 的 voice_id，原样透传给插件）；'
+          + 'auto 或不填 = 用配置里的默认音色。想换声音自己挑一个，不用问用户',
+      },
     },
     output: TEXT_OUTPUT,
     async execute(args) {
       const text = String((args && args.text) || '').trim().slice(0, 80);
       if (!text) return { text: '没内容可说。' };
-      const key = String((args && args.mood) || '');
-      const style = VOICE_STYLE[key] || VOICE_STYLE['平常'];
+      const moodKey = String((args && args.mood) || '');
+      const want = String((args && args.voice) || '').trim();
+      const voice = (!want || want === 'auto') ? '' : want;
+
+      /* ① 先走插件（Breeze / 配置里选的那家）。成功就直接用它给的路径。 */
+      let note = '';
+      try {
+        const j = await synthByPlugin(text, moodKey, voice);
+        const who = j.route || TTS_STYLE_NAME[ttsApiStyle()] || '';
+        const tag = [moodKey || '平常', who, voice].filter(Boolean).join(' · ');
+        return { text: `语音好了：${j.file}（${tag}）。用 qq_send_voice 发出去。` };
+      } catch (e) {
+        note = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 110);
+      }
+
+      /* ② 插件这条路不通 → 本机 edge-tts 顶上。情绪照旧翻译成语速/音调。 */
+      const style = VOICE_STYLE[moodKey] || VOICE_STYLE['平常'];
       try {
         mkdirSync(VOICE_DIR, { recursive: true });
         const file = `${VOICE_DIR}/yu-${Date.now()}.mp3`;
@@ -232,10 +317,10 @@ function apply(ctx) {
           '--text', text,
           '--write-media', file,
         ], { timeout: 25000 });
-        return { text: `语音好了：${file}（${key || '平常'}）。用 qq_send_voice 发出去。` };
+        return { text: `语音好了：${file}（${moodKey || '平常'}；${note}，先用本机 edge-tts 顶上）。用 qq_send_voice 发出去。` };
       } catch (e) {
         const msg = String((e && e.message) || e).slice(0, 120);
-        return { text: `语音没生成出来：${msg}` };
+        return { text: `语音没生成出来：${msg}（插件那边：${note}）` };
       }
     },
   }));

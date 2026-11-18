@@ -334,6 +334,58 @@ function readTtsConfig() {
   try { return JSON.parse(fs.readFileSync(TTS_CONFIG, 'utf8')); } catch { return null; }
 }
 
+/* 两家合成通道：breeze（ElevenLabs 风格）/ openai（小米 MiMo 风格）。
+ * 老板选的是 Breeze，所以缺省值就是 breeze；老配置里有人把 mimo 写成 apiStyle，
+ * 读的时候一并认下来。 */
+const TTS_API_STYLES = ['breeze', 'openai'];
+function ttsApiStyleOf(t) {
+  const s = String((t && t.apiStyle) || '').trim();
+  if (s === 'mimo') return 'openai';
+  return TTS_API_STYLES.includes(s) ? s : 'breeze';
+}
+
+/* MiMo 那边能选的中文女声白名单。
+ * 为什么写死而不是全量透出 presetVoices：presetVoices 是给别的通道用的全集，
+ * 里面还有男声和英文音色；她要是某天挑成男声、或者换成英文腔，就不是「同一个人」了。
+ * Breeze 这边不设白名单 —— voice_id 是用户自己在官网克隆/选出来的，本来就该全给。 */
+const TTS_MIMO_VOICE_IDS = ['冰糖', '茉莉', 'mimo_default'];
+
+/** 归一化一份音色列表：[{id,name,note}]，也可能是 ['id'] 或 [{voice_id,name}] */
+function normVoiceList(raw, allow) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  for (const v of raw) {
+    if (!v) continue;
+    const obj = typeof v === 'string' ? { id: v } : v;
+    const id = String(obj.id || obj.voice_id || obj.voice || '').trim();
+    if (!id) continue;
+    if (allow && !allow.includes(id)) continue;
+    if (out.some((x) => x.id === id)) continue;
+    out.push({
+      id,
+      name: String(obj.name || obj.label || id),
+      note: String(obj.note || obj.desc || ''),
+    });
+  }
+  return out;
+}
+
+/**
+ * 页面「音色」下拉的数据源，按 apiStyle 分两家给：
+ *   breeze → tts.breeze.voices（可能为空，为空时页面退化成文本框让他手填 voice_id）
+ *   mimo   → tts.presetVoices 里只剩中文女声
+ */
+function ttsVoices(t) {
+  const b = (t && t.breeze) || {};
+  const breeze = normVoiceList(b.voices || b.voiceList || b.presetVoices, null);
+  /* 当前选中的 voice_id 如果不在列表里，也要让它出现在下拉里；
+   * 否则页面一保存就把用户之前的设置悄悄顶成第一项。 */
+  const cur = String(b.voice || '').trim();
+  if (cur && !breeze.some((x) => x.id === cur)) breeze.unshift({ id: cur, name: cur, note: '当前' });
+  const mimo = normVoiceList(t && t.presetVoices, TTS_MIMO_VOICE_IDS);
+  return { breeze, mimo };
+}
+
 /** 只露前 4 位和后 4 位，中间的 key 本体永远不回给浏览器 */
 function maskKey(k) {
   const s = String(k || '');
@@ -350,21 +402,95 @@ function ttsSnapshot() {
   return {
     ok: true,
     enabled: t.enabled !== false,
+    /* 现在用哪家：页面上的单选就绑它 */
+    apiStyle: ttsApiStyleOf(t),
     model: String(t.model || ''),
     voice: String(t.voice || ''),
+    /* 音色下拉的数据源，两家分开给 */
+    voices: ttsVoices(t),
     mimo: {
       hasKey: !!t.apiKey,
       hint: maskKey(t.apiKey),
       baseUrl: String(t.baseUrl || ''),
       model: String(t.model || ''),
+      voice: String(t.voice || ''),
     },
     breeze: {
       hasKey: !!b.apiKey,
       hint: maskKey(b.apiKey),
       baseUrl: String(b.baseUrl || ''),
       model: String(b.model || ''),
+      voice: String(b.voice || ''),
     },
   };
+}
+
+/* ---------- 音色列表：现拉（代理到 dsh-tts 插件） ----------
+ *
+ * 为什么要代理：插件只听 10.144.144.1:3080（内网地址），手机/浏览器连不上，
+ * 页面只能找我们，我们再去问插件。
+ *
+ * 为什么要带 apiKey：老板可能刚把 key 打进输入框、还没点保存就点「刷新音色」，
+ * 那时 config.json 里还是空的。插件支持用 body 里的 apiKey 覆盖已存配置，
+ * 所以这里把输入框里的值原样透传（空串 = 让插件用已存的）。
+ */
+const TTS_PLUGIN_BASE = process.env.DSH_TTS_BASE || 'http://10.144.144.1:3080';
+const TTS_VOICES_TIMEOUT_MS = 15000;
+
+/** config 里这条通道已存的 key（页面没填时兜底用，省得插件那边再猜一次） */
+function storedTtsKey(apiStyle) {
+  const c = readTtsConfig();
+  const t = (c && c.tts) || {};
+  const b = t.breeze || {};
+  return String((apiStyle === 'breeze' ? b.apiKey : t.apiKey) || '').trim();
+}
+
+async function fetchPluginVoices(apiStyle, apiKey) {
+  const url = `${TTS_PLUGIN_BASE.replace(/\/+$/, '')}/dsh-tts/voices`;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TTS_VOICES_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiStyle, apiKey: String(apiKey || '') }),
+      signal: ctl.signal,
+    });
+    const j = await r.json().catch(() => null);
+    if (!j) return { ok: false, error: `语音插件返回的不是 JSON（HTTP ${r.status}）` };
+    /* 上游 502/401 也走这条路：转成 {ok:false,error} 给前端，绝不抛 500 */
+    if (!r.ok || j.ok === false) {
+      return { ok: false, error: String(j.error || `语音插件返回 HTTP ${r.status}`) };
+    }
+    const list = normVoiceList(j.voices, null);
+    return { ok: true, count: list.length, voices: list, note: String(j.note || '') };
+  } catch (e) {
+    /* 上游连不上 / 超时：同样只是 {ok:false}，HTTP 状态码保持 200 */
+    if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message)))) {
+      return { ok: false, error: `连不上 TTS 插件（超时 ${TTS_VOICES_TIMEOUT_MS / 1000}s）` };
+    }
+    const code = e && e.cause && (e.cause.code || e.cause.errno);
+    return { ok: false, error: `连不上 TTS 插件${code ? `（${code}）` : ''}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 拉到就顺手存进 tts.breeze.voices：下次进面板直接有下拉，不用每次点刷新 */
+function saveBreezeVoices(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const c = readTtsConfig();
+  if (!c) return;
+  const t = c.tts || (c.tts = {});
+  t.breeze = t.breeze || {};
+  t.breeze.voices = list.map((v) => ({ id: v.id, name: v.name || v.id, note: v.note || '' }));
+  const tmp = `${TTS_CONFIG}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(c, null, 2));
+    fs.renameSync(tmp, TTS_CONFIG);
+  } catch {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
 }
 
 function writeTtsConfig(patch) {
@@ -372,6 +498,13 @@ function writeTtsConfig(patch) {
   if (!c) return { ok: false, error: '读不到 TTS 配置' };
   const p = (patch && typeof patch === 'object') ? patch : {};
   const t = c.tts || (c.tts = {});
+
+  /* 先落 apiStyle：下面写 voice 时要靠它决定写哪一支 */
+  if (typeof p.apiStyle === 'string') {
+    const s = p.apiStyle.trim();
+    if (s === 'mimo') t.apiStyle = 'openai';
+    else if (TTS_API_STYLES.includes(s)) t.apiStyle = s;
+  }
 
   /* 空字符串 = 「这次不改」，而不是「清空 key」。
    * 界面上 key 输入框是空的（只显示掩码），用户只改模型时不该把 key 抹掉。 */
@@ -385,7 +518,27 @@ function writeTtsConfig(patch) {
     t.breeze.model = p.breezeModel.trim();
   }
   if (typeof p.model === 'string' && p.model.trim()) t.model = p.model.trim();
-  if (typeof p.voice === 'string' && p.voice.trim()) t.voice = p.voice.trim();
+
+  /* voice 是一个字段两家共用：按 apiStyle 写到对应分支。
+   * 写错分支的后果很隐蔽——页面上看着存了，合成时却还是老嗓子，所以这里判两次。 */
+  if (typeof p.voice === 'string' && p.voice.trim()) {
+    const v = p.voice.trim();
+    if (ttsApiStyleOf(t) === 'breeze') {
+      t.breeze = t.breeze || {};
+      t.breeze.voice = v;
+    } else {
+      t.voice = v;
+    }
+  } else if (p.voiceDefault === true) {
+    /* 下拉选了第一项「默认」：显式清空这一家的 voice，回到插件自己的配置。
+     * 这条必须单独判——空字符串在别处表示「这次不改」，不能说清就清。 */
+    if (ttsApiStyleOf(t) === 'breeze') {
+      t.breeze = t.breeze || {};
+      t.breeze.voice = '';
+    } else {
+      t.voice = '';
+    }
+  }
   if (typeof p.enabled === 'boolean') t.enabled = p.enabled;
 
   const tmp = `${TTS_CONFIG}.tmp-${process.pid}`;
@@ -977,6 +1130,24 @@ const server = http.createServer(safe(async (req, res) => {
       return json(res, writeTtsConfig(b));
     }
     return json(res, ttsSnapshot());
+  }
+
+  /* 设置面板「🔄 刷新音色」：在这里代理问一次插件，页面不用手抄 voice_id。
+   * apiKey 带上（可能是刚打进输入框还没保存的那个）；拉到就顺手写进 config，
+   * 下次进面板直接从 GET 的 voices.breeze 渲染，不用每次都点。
+   * 失败一律把插件的 error 原样回给页面（401 = key 不对，count:0 = 账号里没建音色）。 */
+  if (p === '/api/settings/tts/voices') {
+    if (req.method !== 'POST') return json(res, { ok: false, error: '只支持 POST' });
+    const b = await readBody(req);
+    const want = String(b.apiStyle || '').trim();
+    const cfgNow = readTtsConfig();
+    const cur = ttsApiStyleOf(cfgNow && cfgNow.tts);
+    const apiStyle = want === 'mimo' ? 'openai' : (TTS_API_STYLES.includes(want) ? want : cur);
+    /* 页面上的输入框优先（用户可能刚打好 key 还没保存），没填就用 config 里已存的 */
+    const typed = String(b.apiKey == null ? '' : b.apiKey).trim();
+    const r = await fetchPluginVoices(apiStyle, typed || storedTtsKey(apiStyle));
+    if (r.ok && apiStyle === 'breeze') saveBreezeVoices(r.voices);
+    return json(res, r);
   }
 
   /* ---------- 上传的图片 / GIF ---------- */

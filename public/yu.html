@@ -8,7 +8,11 @@
 <title>与鱼 · 和鱼的开心导航 v5.001</title>
 <script>
   try{var _b=localStorage.getItem('wnav_bg');if(_b==='sky'||_b==='sea')document.documentElement.dataset.bg=_b;}catch(e){}
-  try{var _t=localStorage.getItem('yu_theme');if(_t==='white'||_t==='sky'||_t==='sea'||_t==='warm')document.documentElement.dataset.bg=(_t==='warm'?'white':_t),document.documentElement.dataset.yu=_t;}catch(e){}
+  /* yu_theme 是 save() 写的 JSON 串（带引号），wnav_bg 是原始串 —— 两种都得认。
+     只比原始串的话这条预上色永远不命中，刷新时会先闪一下白再跳成深海。 */
+  try{var _t=localStorage.getItem('yu_theme');
+    if(_t&&_t.charAt(0)==='"'){try{_t=JSON.parse(_t);}catch(e2){}}
+    if(_t==='white'||_t==='sky'||_t==='sea'||_t==='warm')document.documentElement.dataset.bg=(_t==='warm'?'white':_t),document.documentElement.dataset.yu=_t;}catch(e){}
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -226,6 +230,24 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 .tts-state{font-size:11px;padding:2px 9px;border-radius:99px;border:1px solid var(--line2);color:var(--ink3);}
 .tts-state.on{color:var(--accent);border-color:var(--accent);}
 .smsg{margin-top:8px;text-align:center;font-size:11.5px;color:var(--ink3);min-height:16px;}
+/* 设置面板的 tab 条：窄屏不换行（nowrap + 横向滚动兜底，滚条本身藏起来） */
+.set-tabs{display:flex;gap:6px;margin-top:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;padding-bottom:2px;}
+.set-tabs::-webkit-scrollbar{display:none;}
+.set-tabs button{flex:1 1 0;min-width:0;white-space:nowrap;padding:8px 10px;border:1px solid var(--line2);
+  border-radius:9px;background:var(--paper2);color:var(--ink2);font-size:12.5px;}
+.set-tabs button[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.set-pane{margin-top:2px;}
+/* 语音 tab 的音色下拉 */
+.sel{flex:1 1 auto;min-width:140px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;
+  background:var(--paper2);color:var(--ink);font-size:13.5px;}
+/* 刷新音色失败时的提示：要说清是 key 错了还是没建音色，所以让它显眼一点 */
+.vnote-err{color:#c0392b;}
+/* 侧栏那张「我的资料」卡片本身就是设置入口，不再另挂编辑按钮 */
+.me-card{width:100%;text-align:left;font:inherit;color:inherit;background:none;border:1px solid transparent;
+  border-radius:12px;padding:7px;margin:-7px;cursor:pointer;}
+.me-card:hover{border-color:var(--line);background:var(--paper2);}
+.me-card .chev{margin-left:auto;color:var(--ink3);font-size:13px;}
 .rec-box{display:flex;align-items:center;gap:12px;padding:12px 0;}
 .rec-dot{width:13px;height:13px;border-radius:50%;background:#c0564b;animation:blink 1s infinite;}
 @keyframes blink{50%{opacity:.25}}
@@ -328,8 +350,13 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
   <aside class="side" id="side">
     <div class="side-top"><span class="seal">和</span><b>与鱼</b><span class="v">v5.001</span></div>
     <div class="side-sec">
-      <div class="side-h">我的资料 <button id="editProfile">编辑</button></div>
-      <div class="me"><div class="av" id="meAv">🐟</div><div><div class="n" id="meName">—</div><div class="s" id="meSub">在线</div></div></div>
+      <div class="side-h">我的资料</div>
+      <!-- 卡片本身就是入口：点一下打开设置面板的「资料」页 -->
+      <button class="me me-card" id="meCard" title="点头像改资料">
+        <div class="av" id="meAv">🐟</div>
+        <div><div class="n" id="meName">—</div><div class="s" id="meSub">在线</div></div>
+        <span class="chev">›</span>
+      </button>
     </div>
     <div class="side-sec">
       <div class="side-h">这间房里</div>
@@ -345,15 +372,6 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
     <div class="side-sec">
       <div class="side-h">房间里的小仓库</div>
       <div class="stat"><span id="stStk">自定义表情 0</span><span id="stKao">自定义颜文字 0</span></div>
-    </div>
-    <div class="side-sec">
-      <div class="side-h">外观</div>
-      <div class="themes" id="themes">
-        <button class="t-white" data-t="white" title="纯白" aria-pressed="true"></button>
-        <button class="t-sky" data-t="sky" title="天空" aria-pressed="false"></button>
-        <button class="t-sea" data-t="sea" title="深海" aria-pressed="false"></button>
-        <button class="t-warm" data-t="warm" title="暖纸" aria-pressed="false"></button>
-      </div>
     </div>
     <div class="side-foot">
       <a href="/">← 回大厅</a>
@@ -371,8 +389,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
         <div class="s"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方游进来…</span></div>
       </div>
       <div class="hacts">
-        <button class="hbtn" id="hProfile" title="头像昵称设置">✎</button>
-        <button class="hbtn" id="hSetup" title="设置">⚙</button>
+        <button class="hbtn" id="hSetup" title="设置（资料 · 外观 · 语音）">⚙</button>
         <button class="hbtn" id="hInvite" title="邀请对方">🔗</button>
       </div>
     </header>
@@ -411,53 +428,85 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 
 <div class="side-mask hidden" id="sideMask"></div>
 
-<!-- 资料设置 -->
-<div class="mask hidden" id="pMask"></div>
-<div class="ov hidden" id="pOv" role="dialog" aria-modal="true" aria-label="我的资料">
-  <h2>✎ 我的资料 <button class="x" id="pX">✕</button></h2>
-  <div class="ov-sec"><label>头像</label>
-    <div class="avatar-grid" id="avatarGrid"></div>
-    <div class="ov-row"><button class="chip" id="uploadAv">＋ 上传图片当头像</button><span style="font-size:11px;color:var(--ink3)" id="avNow">当前：🐟</span></div>
-  </div>
-  <div class="ov-sec"><label>昵称</label><div class="ov-row"><input type="text" id="pName" maxlength="12" placeholder="最多 12 个字"></div></div>
-  <div class="ov-sec"><label>我的气泡颜色</label><div class="chips" id="bubChips"></div></div>
-  <div class="ov-sec"><label>字号</label><div class="chips" id="fontChips">
-    <button class="chip" data-f="-1">小</button><button class="chip" data-f="0">标准</button><button class="chip" data-f="1">大</button>
-  </div></div>
-  <div class="ov-sec"><label>外观背景</label><div class="chips" id="themeChips">
-    <button class="chip" data-t="white">纯白</button><button class="chip" data-t="sky">天空</button>
-    <button class="chip" data-t="sea">深海</button><button class="chip" data-t="warm">暖纸</button>
-  </div></div>
-  <p class="ov-note">昵称、头像、气泡和字号会同步给房间里的对方；背景只保存在这台设备，也和首页共用同一套主题。</p>
-  <button class="ov-done" id="pDone">完成</button>
-</div>
-
-<!-- 设置：语音合成的 Key（分门别类，小米和 Breeze 各一块） -->
+<!-- 设置：一个弹层、三个 tab（页头只留一个 ⚙ 入口）
+     tab 1 资料 ← 原 #pOv 的控件
+     tab 2 外观 ← 原侧栏「外观」分区
+     tab 3 语音 ← 原 #sOv 的 Key 面板 + 按 apiStyle 切换的音色下拉 -->
 <div class="mask hidden" id="sMask"></div>
 <div class="ov hidden" id="sOv" role="dialog" aria-modal="true" aria-label="设置">
   <h2>⚙ 设置 <button class="x" id="sX">✕</button></h2>
 
-  <div class="ov-sec">
-    <label>语音合成 · 小米 MiMo</label>
-    <div class="ov-row"><span class="tts-state" id="mimoState">未配置</span></div>
-    <div class="ov-row"><input type="text" id="mimoKey" placeholder="粘贴 MiMo 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
-    <div class="ov-row"><input type="text" id="mimoModel" placeholder="模型，默认 mimo-v2.5-tts" autocomplete="off" spellcheck="false"></div>
+  <div class="set-tabs" id="setTabs" role="tablist">
+    <button data-pane="profile" class="on" role="tab" aria-selected="true">资料</button>
+    <button data-pane="look" role="tab" aria-selected="false">外观</button>
+    <button data-pane="voice" role="tab" aria-selected="false">语音</button>
   </div>
 
-  <div class="ov-sec">
-    <label>语音合成 · Breeze Blue</label>
-    <div class="ov-row"><span class="tts-state" id="breezeState">未配置</span></div>
-    <div class="ov-row"><input type="text" id="breezeKey" placeholder="粘贴 Breeze 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
-    <div class="ov-row"><input type="text" id="breezeModel" placeholder="模型 id（Breeze 必填）" autocomplete="off" spellcheck="false"></div>
-  </div>
+  <!-- ===== tab 1 · 资料 ===== -->
+  <section class="set-pane" id="paneProfile" role="tabpanel" aria-label="资料">
+    <div class="ov-sec"><label>头像</label>
+      <div class="avatar-grid" id="avatarGrid"></div>
+      <div class="ov-row"><button class="chip" id="uploadAv">＋ 上传图片当头像</button><span style="font-size:11px;color:var(--ink3)" id="avNow">当前：🐟</span></div>
+    </div>
+    <div class="ov-sec"><label>昵称</label><div class="ov-row"><input type="text" id="pName" maxlength="12" placeholder="最多 12 个字"></div></div>
+    <div class="ov-sec"><label>我的气泡颜色</label><div class="chips" id="bubChips"></div></div>
+    <div class="ov-sec"><label>字号</label><div class="chips" id="fontChips">
+      <button class="chip" data-f="-1">小</button><button class="chip" data-f="0">标准</button><button class="chip" data-f="1">大</button>
+    </div></div>
+    <p class="ov-note">昵称、头像、气泡和字号会同步给房间里的对方；背景在「外观」里，只保存在这台设备。</p>
+  </section>
 
-  <div class="ov-sec">
-    <label>音色</label>
-    <div class="ov-row"><input type="text" id="ttsVoice" placeholder="预置音色，默认 冰糖" autocomplete="off" spellcheck="false"></div>
-  </div>
+  <!-- ===== tab 2 · 外观 ===== -->
+  <section class="set-pane hidden" id="paneLook" role="tabpanel" aria-label="外观">
+    <div class="ov-sec"><label>背景主题</label>
+      <div class="themes" id="themes">
+        <button class="t-white" data-t="white" title="纯白" aria-pressed="true"></button>
+        <button class="t-sky" data-t="sky" title="天空" aria-pressed="false"></button>
+        <button class="t-sea" data-t="sea" title="深海" aria-pressed="false"></button>
+        <button class="t-warm" data-t="warm" title="暖纸" aria-pressed="false"></button>
+      </div>
+      <p class="ov-note" style="margin-top:10px">纯白 / 天空 / 深海 / 暖纸。点一下立刻生效，只保存在这台设备，也和首页共用同一套主题。</p>
+    </div>
+  </section>
 
-  <p class="ov-note">两家都填也行，用哪个由插件里的「调用优先级」决定。已保存的 Key 只显示前后四位，输入框留空表示不改动。</p>
-  <button class="ov-done" id="sSave">保存</button>
+  <!-- ===== tab 3 · 语音 ===== -->
+  <section class="set-pane hidden" id="paneVoice" role="tabpanel" aria-label="语音">
+    <div class="ov-sec">
+      <label>用哪家合成</label>
+      <div class="chips" id="styleChips">
+        <button class="chip" data-s="breeze" aria-pressed="true">Breeze（推荐）</button>
+        <button class="chip" data-s="openai" aria-pressed="false">小米 MiMo</button>
+      </div>
+      <p class="ov-note" style="margin-top:8px">选中的这家就是她说话时用的通道；另一家的 Key 留着也不会被删。</p>
+    </div>
+
+    <div class="ov-sec">
+      <label>Breeze</label>
+      <div class="ov-row"><span class="tts-state" id="breezeState">未配置</span></div>
+      <div class="ov-row"><input type="text" id="breezeKey" placeholder="粘贴 Breeze 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="text" id="breezeModel" placeholder="模型 id（必填，ElevenLabs 风格）" autocomplete="off" spellcheck="false"></div>
+    </div>
+
+    <div class="ov-sec">
+      <label>小米 MiMo</label>
+      <div class="ov-row"><span class="tts-state" id="mimoState">未配置</span></div>
+      <div class="ov-row"><input type="text" id="mimoKey" placeholder="粘贴 MiMo 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="text" id="mimoModel" placeholder="模型，默认 mimo-v2.5-tts" autocomplete="off" spellcheck="false"></div>
+    </div>
+
+    <div class="ov-sec">
+      <label>音色 <span id="voiceWhich" style="font-weight:400;letter-spacing:0;color:var(--ink3)">Breeze</span></label>
+      <div class="ov-row" id="voiceSelRow">
+        <select id="voiceSel" class="sel"></select>
+        <button class="chip" id="voiceRefresh" style="flex:0 0 auto;white-space:nowrap">🔄 刷新音色</button>
+      </div>
+      <div class="ov-note" id="voiceTip">下拉里是这个账号能用的音色；保存后她就用这个嗓子说话。</div>
+    </div>
+
+    <p class="ov-note">已保存的 Key 只显示前后四位，输入框留空表示不改动。</p>
+  </section>
+
+  <button class="ov-done" id="sDone">保存</button>
   <div class="smsg" id="sMsg"></div>
 </div>
 
@@ -932,8 +981,20 @@ $('recSend').onclick=async function(){
   if(r){await send({type:'voice',url:r.url,dur:dur});closeRec();toast('语音已发出');}
 };
 
-/* ---------------- 资料 ---------------- */
-function openProfile(){
+/* ---------------- 设置面板：资料 / 外观 / 语音 三个 tab ----------------
+ * 为什么合成一个：以前页头有 ✎ 和 ⚙、侧栏还有「编辑」和「外观」分区，
+ * 同一批设置散在四处，手机上还容易点错。现在页头只留一个 ⚙，进来用 tab 分。
+ *
+ * 保存按钮按当前 tab 决定提交什么——三件事不能混在一次提交里：
+ *   资料 → localStorage + POST /api/yu/profile
+ *   语音 → POST /api/settings/tts（config.json 的 key / 模型 / 音色）
+ *   外观 → 点色块就生效（applyTheme 自己写 localStorage），没有后端可提交，按钮只是「完成」 */
+var SET_TAB='profile';
+var SET_BTN={profile:'保存',look:'完成',voice:'保存'};
+/* 语音 tab 的本地状态：GET 回来的 apiStyle + 两家的音色列表 + 各自当前选中的 voice */
+var TTS={apiStyle:'breeze',voices:{breeze:[],mimo:[]},picked:{breeze:'',openai:''}};
+
+function profilePaneFill(){
   $('pName').value=PROFILE.name||'';
   var g=$('avatarGrid');
   g.innerHTML=AVATARS.map(function(a){return '<button data-av="'+esc(a)+'" aria-pressed="'+(a===PROFILE.avatar?'true':'false')+'">'+a+'</button>';}).join('');
@@ -947,61 +1008,167 @@ function openProfile(){
   $('fontChips').querySelectorAll('button').forEach(function(b){b.onclick=function(){
     PROFILE.fontSize=+b.dataset.f;$('fontChips').querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.f==String(PROFILE.fontSize)?'true':'false');});};
     b.setAttribute('aria-pressed',b.dataset.f==String(PROFILE.fontSize)?'true':'false');});
-  $('themeChips').querySelectorAll('button').forEach(function(b){b.onclick=function(){applyTheme(b.dataset.t);
-    $('themeChips').querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.t===theme?'true':'false');});};
-    b.setAttribute('aria-pressed',b.dataset.t===theme?'true':'false');});
-  $('pMask').classList.remove('hidden');$('pOv').classList.remove('hidden');
+  $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
 }
-function closeProfile(){$('pMask').classList.add('hidden');$('pOv').classList.add('hidden');}
-$('editProfile').onclick=openProfile;$('hProfile').onclick=openProfile;
-$('pX').onclick=closeProfile;$('pMask').onclick=closeProfile;
-$('pDone').onclick=async function(){
-  PROFILE.name=$('pName').value.trim().slice(0,12)||'小鱼';
-  save('yu_profile',PROFILE);paintMe();
-  try{await fetch('/api/yu/profile',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({code:CODE,pid:PID,name:PROFILE.name,avatar:PROFILE.avatar,bubble:PROFILE.bubble,fontSize:PROFILE.fontSize})});}catch(e){}
-  $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
-  closeProfile();toast('资料已更新');
-};
-$('uploadAv').onclick=function(){$('avFile').click();};
-
-/* ---------------- 设置：语音合成的 Key ---------------- */
-/* 为什么放在与鱼页面而不是 dsh 后台：dsh web 只监听内网，手机上打不开。
-   这里只改 config.json 里跟 key / 模型 / 音色有关的几项，插件其他配置原样保留。 */
-function openSetup(){
+/** 切 tab：只管显隐和按钮文案，不碰数据 */
+function showPane(tab){
+  SET_TAB=SET_BTN[tab]?tab:'profile';
+  $('setTabs').querySelectorAll('button').forEach(function(b){
+    b.setAttribute('aria-selected',b.dataset.pane===SET_TAB?'true':'false');
+  });
+  $('paneProfile').classList.toggle('hidden',SET_TAB!=='profile');
+  $('paneLook').classList.toggle('hidden',SET_TAB!=='look');
+  $('paneVoice').classList.toggle('hidden',SET_TAB!=='voice');
+  $('sDone').textContent=SET_BTN[SET_TAB];
+  $('sMsg').textContent='';
+  if(SET_TAB==='voice')loadTts();
+}
+function openSetup(tab){
+  $('sMsg').textContent='';
+  profilePaneFill();
   $('sMask').classList.remove('hidden');
   $('sOv').classList.remove('hidden');
-  $('sMsg').textContent='';
-  loadTts();
+  /* 默认打开「资料」：改名换头像是最常用的一件 */
+  showPane(tab||'profile');
+  $('sOv').scrollTop=0;
 }
 function closeSetup(){
   $('sMask').classList.add('hidden');
   $('sOv').classList.add('hidden');
 }
+/** 资料 tab 的提交：原 pDone 那段逻辑原样保留，只是从「完成」按钮挪到按 tab 分发的保存里 */
+async function saveProfile(){
+  PROFILE.name=$('pName').value.trim().slice(0,12)||'小鱼';
+  save('yu_profile',PROFILE);paintMe();
+  try{await fetch('/api/yu/profile',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:CODE,pid:PID,name:PROFILE.name,avatar:PROFILE.avatar,bubble:PROFILE.bubble,fontSize:PROFILE.fontSize})});}catch(e){}
+  $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
+  closeSetup();toast('资料已更新');
+}
+$('hSetup').onclick=function(){openSetup('profile');};
+$('meCard').onclick=function(){openSetup('profile');};
+$('setTabs').onclick=function(e){
+  var b=e.target.closest('button[data-pane]');
+  if(b)showPane(b.dataset.pane);
+};
+$('sX').onclick=closeSetup;
+$('sMask').onclick=closeSetup;
+$('uploadAv').onclick=function(){$('avFile').click();};
+$('sDone').onclick=function(){
+  if(SET_TAB==='voice')return saveTts();
+  if(SET_TAB==='look'){closeSetup();toast('外观已切换');return;}
+  return saveProfile();
+};
+
+/* ---------------- 语音 tab：Key / 模型 / 音色 ---------------- */
+/* 为什么放在与鱼页面而不是 dsh 后台：dsh web 只监听内网，手机上打不开。
+   这里只改 config.json 里跟 apiStyle / key / 模型 / 音色有关的几项，插件其他配置原样保留。 */
 function setTtsBadge(id,o){
   var el=$(id);if(!el)return;
   if(o&&o.hasKey){el.textContent='已配置 '+o.hint;el.className='tts-state on';}
   else{el.textContent='未配置';el.className='tts-state';}
 }
+function paintStyleChips(){
+  $('styleChips').querySelectorAll('button').forEach(function(b){
+    b.setAttribute('aria-pressed',b.dataset.s===TTS.apiStyle?'true':'false');
+  });
+}
+/* 服务端返回的是 voices:{breeze,mimo}，而 apiStyle 的值是 breeze/openai ——
+ * 两边名字对不上，这里统一映射一次，别在到处写三元。 */
+function voicesFor(style){return TTS.voices[style==='openai'?'mimo':'breeze']||[];}
+function currentVoiceValue(){return $('voiceSel').value||'';}
+/** 音色下拉：第一项永远是「默认（用插件当前配置）」，后面是列表。
+ *  列表来自进面板时的 GET，或点「🔄 刷新音色」现拉的那一份。 */
+function paintVoiceControl(){
+  var list=voicesFor(TTS.apiStyle);
+  var cur=TTS.picked[TTS.apiStyle]||'';
+  $('voiceWhich').textContent=(TTS.apiStyle==='breeze')?'Breeze':'MiMo';
+  var opts=['<option value="">默认（用插件当前配置）</option>'];
+  list.forEach(function(v){
+    opts.push('<option value="'+esc(v.id)+'">'+esc(v.name||v.id)+(v.note?'（'+esc(v.note)+'）':'')+'</option>');
+  });
+  $('voiceSel').innerHTML=opts.join('');
+  /* 存着的 voice_id 如果不在列表里（比如刚刷新、后台删了那个音色），也要能看见它、
+   * 别让保存时悄悄换成第一项。 */
+  if(cur && !list.some(function(v){return v.id===cur;})){
+    var o=document.createElement('option');
+    o.value=cur;o.textContent=cur+'（已保存）';
+    $('voiceSel').appendChild(o);
+  }
+  $('voiceSel').value=cur;
+}
 async function loadTts(){
   try{
     var d=await fetch('/api/settings/tts').then(function(r){return r.json();});
     if(!d.ok){$('sMsg').textContent=d.error||'读不到配置';return;}
+    TTS.apiStyle=(d.apiStyle==='openai')?'openai':'breeze';
+    var v=d.voices||{};
+    TTS.voices={breeze:(v.breeze||[]),mimo:(v.mimo||[])};
+    /* 两家的 voice 各存在各的分支里（breeze.voice / tts.voice），读的时候别串 */
+    TTS.picked.breeze=(d.breeze&&d.breeze.voice)||'';
+    TTS.picked.openai=d.voice||'';
     setTtsBadge('mimoState',d.mimo);
     setTtsBadge('breezeState',d.breeze);
     $('mimoModel').value=d.model||'';
     $('breezeModel').value=(d.breeze&&d.breeze.model)||'';
-    $('ttsVoice').value=d.voice||'';
+    paintStyleChips();
+    paintVoiceControl();
+    var n=voicesFor(TTS.apiStyle).length;
+    $('voiceTip').className='ov-note';
+    $('voiceTip').textContent=n?('已存 '+n+' 个音色，选一个再点保存。')
+      :'还没有音色列表，点「🔄 刷新音色」从后台拉一次。';
   }catch(e){$('sMsg').textContent='读不到配置，检查网络';}
 }
+
+/* 「🔄 刷新音色」：现问一次插件（浏览器直连会跨域/够不到内网，走我们服务端代理）。
+ * 带上输入框里现在的 key —— 老板常常是刚粘完 key、还没保存就想先看看有哪些嗓子。 */
+$('voiceRefresh').onclick=async function(){
+  var btn=$('voiceRefresh');
+  var tip=$('voiceTip');
+  var label=btn.textContent;
+  var key=String($((TTS.apiStyle==='breeze'?'breezeKey':'mimoKey')).value||'').trim();
+  btn.disabled=true;btn.textContent='刷新中…';
+  tip.className='ov-note';tip.textContent='';
+  try{
+    var r=await fetch('/api/settings/tts/voices',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({apiStyle:TTS.apiStyle,apiKey:key})}).then(function(x){return x.json();});
+    if(!r||r.ok===false){
+      /* 失败要原样显示：401 就是 key 错，超时就是插件没起来，别吞成一句“失败” */
+      tip.className='ov-note vnote-err';
+      tip.textContent='拉不到音色：'+((r&&r.error)||'未知错误');
+      return;
+    }
+    var list=(r.voices||[]).filter(function(v){return v&&v.id;});
+    TTS.voices[TTS.apiStyle==='openai'?'mimo':'breeze']=list;
+    paintVoiceControl();
+    if(!list.length){
+      tip.className='ov-note vnote-err';
+      tip.textContent='这个账号里还没有音色。去 Breeze 官网建一个（克隆一段 10~30 秒音频，'
+        +'或用它自带的音色库挑一个），再回来点刷新。';
+    }else{
+      tip.className='ov-note';
+      tip.textContent='拉到 '+list.length+' 个音色，选一个再点保存。'+(r.note?('（'+r.note+'）'):'');
+      toast('拉到 '+list.length+' 个音色');
+    }
+  }catch(e){
+    tip.className='ov-note vnote-err';
+    tip.textContent='拉不到音色：'+((e&&e.message)||'网络错误');
+  }finally{
+    btn.disabled=false;btn.textContent=label;
+  }
+};
 async function saveTts(){
   $('sMsg').textContent='保存中…';
   var body={
+    apiStyle:TTS.apiStyle,
     mimoKey:$('mimoKey').value.trim(),
     breezeKey:$('breezeKey').value.trim(),
     model:$('mimoModel').value.trim(),
     breezeModel:$('breezeModel').value.trim(),
-    voice:$('ttsVoice').value.trim()
+    /* 只提交当前这一家的音色；服务端按 apiStyle 写到对应分支，另一家原样留着。
+     * 选「默认」时 voice 是空串，得用 voiceDefault 明确说「要清掉」——空串在别处表示「这次不改」。 */
+    voice:currentVoiceValue(),
+    voiceDefault:!currentVoiceValue()
   };
   try{
     var r=await fetch('/api/settings/tts',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1010,19 +1177,30 @@ async function saveTts(){
       /* 保存成功后清空输入框：key 不在页面上留着，需要改再贴一次 */
       $('mimoKey').value='';$('breezeKey').value='';
       setTtsBadge('mimoState',r.mimo);setTtsBadge('breezeState',r.breeze);
+      TTS.apiStyle=(r.apiStyle==='openai')?'openai':'breeze';
+      var v=r.voices||{};
+      TTS.voices={breeze:(v.breeze||[]),mimo:(v.mimo||[])};
+      TTS.picked.breeze=(r.breeze&&typeof r.breeze.voice==='string')?r.breeze.voice:TTS.picked.breeze;
+      TTS.picked.openai=(typeof r.voice==='string')?r.voice:TTS.picked.openai;
+      paintStyleChips();paintVoiceControl();
       $('sMsg').textContent='已保存，她下次说话就按新的来';
     }else{$('sMsg').textContent=r.error||'保存失败';}
   }catch(e){$('sMsg').textContent='保存失败，检查网络';}
 }
-$('hSetup').onclick=openSetup;
-$('sX').onclick=closeSetup;
-$('sMask').onclick=closeSetup;
-$('sSave').onclick=saveTts;
+$('styleChips').onclick=function(e){
+  var b=e.target.closest('button[data-s]');
+  if(!b)return;
+  /* 先记住这一家刚才选的音色，切过去之后还能还原回来 */
+  TTS.picked[TTS.apiStyle]=currentVoiceValue()||TTS.picked[TTS.apiStyle];
+  TTS.apiStyle=(b.dataset.s==='openai')?'openai':'breeze';
+  paintStyleChips();paintVoiceControl();
+  $('sMsg').textContent='';
+};
 
 $('avFile').addEventListener('change',async function(e){
   var f=(e.target.files||[])[0];e.target.value='';if(!f)return;
   toast('头像上传中…');var r=await upload(f,'avatar');
-  if(r){PROFILE.avatar=r.url;save('yu_profile',PROFILE);$('avNow').textContent='当前：自定义图片';paintMe();toast('头像换好了，记得点完成');}
+  if(r){PROFILE.avatar=r.url;save('yu_profile',PROFILE);$('avNow').textContent='当前：自定义图片';paintMe();toast('头像换好了，记得点保存');}
 });
 
 /* ---------------- 其它交互 ---------------- */
@@ -1053,7 +1231,7 @@ document.addEventListener('keydown',function(e){
   if(e.key!=='Escape')return;
   $('lightbox').classList.add('hidden');
   if(trayOpen)closeTray();
-  if(!$('pOv').classList.contains('hidden'))closeProfile();
+  if(!$('sOv').classList.contains('hidden'))closeSetup();
   if(!$('rOv').classList.contains('hidden'))closeRec();
   toggleSide(false);
 });
@@ -1063,11 +1241,12 @@ window.addEventListener('beforeunload',function(){if(es)try{es.close();}catch(e)
   var once=function(){A.startBgm();['pointerdown','click','keydown'].forEach(function(ev){document.removeEventListener(ev,once,true);});};
   ['pointerdown','click','keydown'].forEach(function(ev){document.addEventListener(ev,once,true);});
 })();
-})();
 
 /* [EXTERNAL-DEP · TTS] 文字转语音：调 /api/yu/tts，服务器用 edge-tts 合成后直接发进房间
    ★ 2026-11-11 教训：这段必须放在 script 末尾当独立语句，
-     不能插进 renderMsg 之类的函数中间，否则会把 if 链切断，整页 JS 全挂（踩过）。 */
+     不能插进 renderMsg 之类的函数中间，否则会把 if 链切断，整页 JS 全挂（踩过）。
+   ★ 它要用 $ / toast / CODE / PID / closeRec，所以必须留在下面那个大闭包里执行
+     —— 闭包的 })(); 已经挪到这段后面。 */
 $('ttsGo').onclick=async function(){
   var txt=($('ttsText').value||'').trim();
   if(!txt){toast('先写点要念的内容');return;}
@@ -1086,6 +1265,9 @@ $('ttsGo').onclick=async function(){
   }catch(e){hint.textContent='合成失败：'+e.message;toast('合成失败');}
   finally{btn.disabled=false;btn.textContent='合成并发送';}
 };
+/* 关掉上面那个大闭包：这台「合成并发送」按钮要用 $ / toast / CODE / PID / closeRec，
+   以前 })(); 摆在这段前面，一加载就 ReferenceError（按钮永远绑不上），现在挪到最后。 */
+})();
 </script>
 </body>
 </html>
