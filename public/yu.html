@@ -222,6 +222,10 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 .ov-done{margin-top:18px;width:100%;padding:12px;border:0;border-radius:11px;background:var(--accent);color:#fff;
   font-size:13.5px;font-weight:600;letter-spacing:.05em;}
 .ov-note{font-size:11px;color:var(--ink3);line-height:1.8;margin-top:12px;}
+/* 设置面板里的「已配置 / 未配置」小徽章与保存提示 */
+.tts-state{font-size:11px;padding:2px 9px;border-radius:99px;border:1px solid var(--line2);color:var(--ink3);}
+.tts-state.on{color:var(--accent);border-color:var(--accent);}
+.smsg{margin-top:8px;text-align:center;font-size:11.5px;color:var(--ink3);min-height:16px;}
 .rec-box{display:flex;align-items:center;gap:12px;padding:12px 0;}
 .rec-dot{width:13px;height:13px;border-radius:50%;background:#c0564b;animation:blink 1s infinite;}
 @keyframes blink{50%{opacity:.25}}
@@ -368,6 +372,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
       </div>
       <div class="hacts">
         <button class="hbtn" id="hProfile" title="头像昵称设置">✎</button>
+        <button class="hbtn" id="hSetup" title="设置">⚙</button>
         <button class="hbtn" id="hInvite" title="邀请对方">🔗</button>
       </div>
     </header>
@@ -425,6 +430,35 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
   </div></div>
   <p class="ov-note">昵称、头像、气泡和字号会同步给房间里的对方；背景只保存在这台设备，也和首页共用同一套主题。</p>
   <button class="ov-done" id="pDone">完成</button>
+</div>
+
+<!-- 设置：语音合成的 Key（分门别类，小米和 Breeze 各一块） -->
+<div class="mask hidden" id="sMask"></div>
+<div class="ov hidden" id="sOv" role="dialog" aria-modal="true" aria-label="设置">
+  <h2>⚙ 设置 <button class="x" id="sX">✕</button></h2>
+
+  <div class="ov-sec">
+    <label>语音合成 · 小米 MiMo</label>
+    <div class="ov-row"><span class="tts-state" id="mimoState">未配置</span></div>
+    <div class="ov-row"><input type="text" id="mimoKey" placeholder="粘贴 MiMo 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+    <div class="ov-row"><input type="text" id="mimoModel" placeholder="模型，默认 mimo-v2.5-tts" autocomplete="off" spellcheck="false"></div>
+  </div>
+
+  <div class="ov-sec">
+    <label>语音合成 · Breeze Blue</label>
+    <div class="ov-row"><span class="tts-state" id="breezeState">未配置</span></div>
+    <div class="ov-row"><input type="text" id="breezeKey" placeholder="粘贴 Breeze 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+    <div class="ov-row"><input type="text" id="breezeModel" placeholder="模型 id（Breeze 必填）" autocomplete="off" spellcheck="false"></div>
+  </div>
+
+  <div class="ov-sec">
+    <label>音色</label>
+    <div class="ov-row"><input type="text" id="ttsVoice" placeholder="预置音色，默认 冰糖" autocomplete="off" spellcheck="false"></div>
+  </div>
+
+  <p class="ov-note">两家都填也行，用哪个由插件里的「调用优先级」决定。已保存的 Key 只显示前后四位，输入框留空表示不改动。</p>
+  <button class="ov-done" id="sSave">保存</button>
+  <div class="smsg" id="sMsg"></div>
 </div>
 
 <!-- 录音 -->
@@ -930,6 +964,61 @@ $('pDone').onclick=async function(){
   closeProfile();toast('资料已更新');
 };
 $('uploadAv').onclick=function(){$('avFile').click();};
+
+/* ---------------- 设置：语音合成的 Key ---------------- */
+/* 为什么放在与鱼页面而不是 dsh 后台：dsh web 只监听内网，手机上打不开。
+   这里只改 config.json 里跟 key / 模型 / 音色有关的几项，插件其他配置原样保留。 */
+function openSetup(){
+  $('sMask').classList.remove('hidden');
+  $('sOv').classList.remove('hidden');
+  $('sMsg').textContent='';
+  loadTts();
+}
+function closeSetup(){
+  $('sMask').classList.add('hidden');
+  $('sOv').classList.add('hidden');
+}
+function setTtsBadge(id,o){
+  var el=$(id);if(!el)return;
+  if(o&&o.hasKey){el.textContent='已配置 '+o.hint;el.className='tts-state on';}
+  else{el.textContent='未配置';el.className='tts-state';}
+}
+async function loadTts(){
+  try{
+    var d=await fetch('/api/settings/tts').then(function(r){return r.json();});
+    if(!d.ok){$('sMsg').textContent=d.error||'读不到配置';return;}
+    setTtsBadge('mimoState',d.mimo);
+    setTtsBadge('breezeState',d.breeze);
+    $('mimoModel').value=d.model||'';
+    $('breezeModel').value=(d.breeze&&d.breeze.model)||'';
+    $('ttsVoice').value=d.voice||'';
+  }catch(e){$('sMsg').textContent='读不到配置，检查网络';}
+}
+async function saveTts(){
+  $('sMsg').textContent='保存中…';
+  var body={
+    mimoKey:$('mimoKey').value.trim(),
+    breezeKey:$('breezeKey').value.trim(),
+    model:$('mimoModel').value.trim(),
+    breezeModel:$('breezeModel').value.trim(),
+    voice:$('ttsVoice').value.trim()
+  };
+  try{
+    var r=await fetch('/api/settings/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)}).then(function(x){return x.json();});
+    if(r.ok){
+      /* 保存成功后清空输入框：key 不在页面上留着，需要改再贴一次 */
+      $('mimoKey').value='';$('breezeKey').value='';
+      setTtsBadge('mimoState',r.mimo);setTtsBadge('breezeState',r.breeze);
+      $('sMsg').textContent='已保存，她下次说话就按新的来';
+    }else{$('sMsg').textContent=r.error||'保存失败';}
+  }catch(e){$('sMsg').textContent='保存失败，检查网络';}
+}
+$('hSetup').onclick=openSetup;
+$('sX').onclick=closeSetup;
+$('sMask').onclick=closeSetup;
+$('sSave').onclick=saveTts;
+
 $('avFile').addEventListener('change',async function(e){
   var f=(e.target.files||[])[0];e.target.value='';if(!f)return;
   toast('头像上传中…');var r=await upload(f,'avatar');

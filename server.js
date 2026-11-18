@@ -317,6 +317,88 @@ function moodSnapshot() {
   };
 }
 
+/* ============================================================
+   TTS 设置（与鱼页面里那个「设置」面板用的）
+
+   为什么做在这里、不做在 dsh 后台：
+     dsh web 只监听 10.144.144.1（内网），手机上根本打不开；
+     与鱼页面才是老板平时真正在用的界面，填 key 就该在顺手的地方。
+
+   只碰 config.json 里跟「填 key / 选模型」有关的那几项，其余字段原样保留
+   —— 那是 TTS 插件自己的配置（请求模板、阈值、试听参数…），我们没有理由重写。
+   写盘用 tmp + rename：插件那边随时可能读这份文件，不能让它读到半截。
+   ============================================================ */
+const TTS_CONFIG = process.env.TTS_CONFIG || '/root/.dsh/dsh-tts/config.json';
+
+function readTtsConfig() {
+  try { return JSON.parse(fs.readFileSync(TTS_CONFIG, 'utf8')); } catch { return null; }
+}
+
+/** 只露前 4 位和后 4 位，中间的 key 本体永远不回给浏览器 */
+function maskKey(k) {
+  const s = String(k || '');
+  if (!s) return '';
+  if (s.length <= 8) return '****';
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+function ttsSnapshot() {
+  const c = readTtsConfig();
+  if (!c) return { ok: false, error: '读不到 TTS 配置（dsh 那边可能没装插件）' };
+  const t = c.tts || {};
+  const b = t.breeze || {};
+  return {
+    ok: true,
+    enabled: t.enabled !== false,
+    model: String(t.model || ''),
+    voice: String(t.voice || ''),
+    mimo: {
+      hasKey: !!t.apiKey,
+      hint: maskKey(t.apiKey),
+      baseUrl: String(t.baseUrl || ''),
+      model: String(t.model || ''),
+    },
+    breeze: {
+      hasKey: !!b.apiKey,
+      hint: maskKey(b.apiKey),
+      baseUrl: String(b.baseUrl || ''),
+      model: String(b.model || ''),
+    },
+  };
+}
+
+function writeTtsConfig(patch) {
+  const c = readTtsConfig();
+  if (!c) return { ok: false, error: '读不到 TTS 配置' };
+  const p = (patch && typeof patch === 'object') ? patch : {};
+  const t = c.tts || (c.tts = {});
+
+  /* 空字符串 = 「这次不改」，而不是「清空 key」。
+   * 界面上 key 输入框是空的（只显示掩码），用户只改模型时不该把 key 抹掉。 */
+  if (typeof p.mimoKey === 'string' && p.mimoKey.trim()) t.apiKey = p.mimoKey.trim();
+  if (typeof p.breezeKey === 'string' && p.breezeKey.trim()) {
+    t.breeze = t.breeze || {};
+    t.breeze.apiKey = p.breezeKey.trim();
+  }
+  if (typeof p.breezeModel === 'string' && p.breezeModel.trim()) {
+    t.breeze = t.breeze || {};
+    t.breeze.model = p.breezeModel.trim();
+  }
+  if (typeof p.model === 'string' && p.model.trim()) t.model = p.model.trim();
+  if (typeof p.voice === 'string' && p.voice.trim()) t.voice = p.voice.trim();
+  if (typeof p.enabled === 'boolean') t.enabled = p.enabled;
+
+  const tmp = `${TTS_CONFIG}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(c, null, 2));
+    fs.renameSync(tmp, TTS_CONFIG);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch {}
+    return { ok: false, error: `写入失败：${e.message}` };
+  }
+  return ttsSnapshot();
+}
+
 let fourLayer = null;
 try { fourLayer = require(path.join(__dirname, 'memory', 'bridge.js')); } catch {}
 const FOUR_LAYER_OFF = process.env.FOUR_LAYER === '0';
@@ -886,6 +968,16 @@ const server = http.createServer(safe(async (req, res) => {
    * 只显示档位词 + 心情 + 今天的账，不返回分数。
    * 读不到文件也返回 200 + {ok:false}，页面自己退回「还没见过」。 */
   if (p === '/api/mood') return json(res, moodSnapshot());
+
+  /* 设置面板：TTS 的 key / 模型。
+   * GET 只回掩码，POST 才写盘；空 key = 不改（防止只改模型时把 key 抹掉）。 */
+  if (p === '/api/settings/tts') {
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      return json(res, writeTtsConfig(b));
+    }
+    return json(res, ttsSnapshot());
+  }
 
   /* ---------- 上传的图片 / GIF ---------- */
   if (p.startsWith('/m/')) {
