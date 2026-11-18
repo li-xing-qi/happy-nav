@@ -462,6 +462,8 @@ async function act(action) {
 const seenChatKeys = new Set();   // 已经处理过的消息（用 pid+at+text 做键，避免时间戳相同漏消息）
 
 async function handleChat(v) {
+  // 本轮开始时刻：判官拿它判断这一轮她自己记过心情没有（避免同一轮计两次分）
+  const turnAt = Date.now();
   const chats = (v.chat || []).filter((m) => m.pid !== PID);
   if (!chats.length) return;
 
@@ -555,6 +557,7 @@ async function handleChat(v) {
         replyText: reply,
         channel: 'gomoku',
         sessionId: CODE,
+        since: turnAt,
         log,
       }).catch(() => {});
     }

@@ -261,17 +261,57 @@ function parse(text) {
 /* ---------- 判一次 ---------- */
 
 /**
+ * 这一轮她自己记过了吗？（判官只该「补救她没记」，不该「再判一次」）
+ *
+ * 线上实测出现过一轮两份记录：
+ *   [gomoku] 工具 feel → 记下了，你现在对他更亲近了一点。   ← 她自己调的（d:3）
+ *   [gomoku] 判 +2 一起玩 开心「他叫我鱼鱼，还邀我下棋」    ← 判官 1 秒后又判一次（d:2）
+ * 一轮最多吃 5 分，一天 15 分的额度三四条消息就没了，用户又会觉得「聊几句就不动了」。
+ *
+ * 判定口径：
+ *   · 只看「她自己的记录」：last.why 以 MARK（[判]）开头的是**判官自己**写的，
+ *     不算「她记过了」。这一条很关键——上一轮判官的记录时间戳可能落在这轮消息之后
+ *     （用户在她回复期间又补一句），不排除就会把这一轮误跳过、白漏一次评分。
+ *   · since 缺失（老调用）→ 不跳过，保持向后兼容。
+ *
+ * @param {number} since 本轮用户消息到达/开始处理的时刻（ms）
+ * @returns {boolean} true = 这一轮已经有她的记录，判官该跳过
+ */
+function sheAlreadyFelt(since) {
+  const s = Number(since);
+  if (!Number.isFinite(s) || s <= 0) return false;
+  try {
+    const st = mood.read();
+    const log = Array.isArray(st && st.log) ? st.log : [];
+    return log.some((e) => {
+      const ts = Number(e && e.ts) || 0;
+      if (!ts || ts < s) return false;
+      return !String((e && e.why) || '').startsWith(MARK);   // 判官自己写的不算
+    });
+  } catch {
+    return false;   // 读不到档就不跳过：宁可多判一次，也别漏判
+  }
+}
+
+/**
  * 真正跑一次判官（已经排队进来了）。
  *
  * @param {Function} rawLlm core.llmRaw 风格的函数 (messages, opts) => Promise<message>
- * @param {object} o { userText, replyText, channel, sessionId, log }
- * @returns {Promise<object>} {delta, kind, mood, why, applied, raw}；失败时 delta 0
+ * @param {object} o { userText, replyText, channel, sessionId, log, since }
+ * @returns {Promise<object|null>} {delta, kind, mood, why, applied, raw}；
+ *   这一轮她自己记过了就返回 null（不发请求）；失败时 delta 0
  */
 async function runJudge(rawLlm, o) {
   const log = typeof o.log === 'function' ? o.log : defaultLog;
   const result = { delta: 0, kind: '', mood: '', why: '', applied: 0, raw: '', ledger: '' };
   try {
     if (typeof rawLlm !== 'function') return result;
+    /* ★ 先看她这一轮自己记过没有：记过了就整个跳过，连请求都不发（省一次模型调用和 token）。
+     * 放在发请求之前是刻意的——这是「省钱」和「不重复计分」的双重目的。 */
+    if (sheAlreadyFelt(o.since)) {
+      try { log('本轮她自己记过了，判官跳过'); } catch { /* 日志坏了不影响跳过 */ }
+      return null;
+    }
     /* 先取「今天的账」：判官要看见同类事今天做了几次，才会自己收着给。
      * 只读文件，失败就空着（最多不贬值，不影响判分）。 */
     const ledger = todayLedger();
@@ -316,7 +356,10 @@ async function runJudge(rawLlm, o) {
  * 返回的 Promise 一定会 resolve（成功给结果，失败/队列丢弃给 null），不会 reject。
  *
  * @param {Function} rawLlm core.llmRaw（或任何 (messages, {maxTokens, temperature}) => Promise<message>）
- * @param {object} opts { userText, replyText, channel, sessionId, log }
+ * @param {object} opts { userText, replyText, channel, sessionId, log, since }
+ *   · since 本轮用户消息**开始处理**的时刻（ms）。给了就启用「她自己记过就跳过」的守卫，
+ *     不传则照常判（向后兼容老调用）。守卫本体在 runJudge 里、发请求之前，
+ *     不在这里提前判：排队几十毫秒后再看一次更准（用户可能刚好在这一轮里补了 feel）。
  * @returns {Promise<{delta:number, kind:string, mood:string, why:string, applied:number}|null>}
  */
 async function judge(rawLlm, opts = {}) {
@@ -325,6 +368,8 @@ async function judge(rawLlm, opts = {}) {
   const replyText = clip(o.replyText, 800);
   // 缺一边就没得判（比如她只发表情包、或者用户消息是空文件）
   if (!userText || !replyText) return null;
+  /* 她自己记过没有，统一在 runJudge 里判一次（见 sheAlreadyFelt）——
+   * 那里更贴近真正发请求的时刻，也省得两处逻辑各写一份、各打一条日志。 */
   return new Promise((resolve) => {
     schedule(() => runJudge(rawLlm, {
       ...o, userText, replyText,
@@ -338,7 +383,7 @@ function stats() {
 }
 
 module.exports = {
-  judge, parse, stats, todayLedger,
+  judge, parse, stats, todayLedger, sheAlreadyFelt,
   systemPrompt, userPrompt, firstObject,
   MARK, MAX_TOKENS, TEMPERATURE, MAX_QUEUE, MAX_DELTA, DAY_MS,
 };

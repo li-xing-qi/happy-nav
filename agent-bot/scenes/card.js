@@ -320,6 +320,8 @@ let lastChatId = 0;
 let lastReplyAt = 0;
 
 async function maybeChat(s) {
+  // 本轮开始时刻：判官拿它判断这一轮她自己记过心情没有（避免同一轮计两次分）
+  const turnAt = Date.now();
   const mine = s.me?.seat;
   const chats = (s.chat || []).filter((x) => x.seat !== mine && x.id > lastChatId);
   if (!chats.length) return;
@@ -374,6 +376,7 @@ async function maybeChat(s) {
         replyText: reply,
         channel: 'card',
         sessionId: ROOM,
+        since: turnAt,
         log,
       }).catch(() => {});
     }

@@ -168,6 +168,8 @@ function fireJudge() {
     replyText: t.replyText,
     channel: 'yu',
     sessionId: String(CONF.room || 'yu'),
+    /* 这条消息到达的时刻：判官据此判断这一轮她自己记过心情没有（避免计两次分） */
+    since: t.at,
     log,
   }).catch(() => {});
   /* 队列里还有配好对的，接着判（下一拍，别在同一帧里连发） */

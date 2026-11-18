@@ -474,6 +474,9 @@ function compactTurns(list) {
 }
 
 async function reply(msgs) {
+  /* 本轮开始时刻：判官用它判断「这一轮她自己记过心情没有」。
+   * 节流排队的消息会重新进来，所以取的是真正开始处理的时间，不是入队时间。 */
+  const turnAt = Date.now();
   const content = buildUserContent(msgs);
   const flat = typeof content === 'string' ? content : content[0].text;
   hist.push('user', flat);
@@ -688,6 +691,7 @@ async function reply(msgs) {
       replyText: out,
       channel: 'chat',
       sessionId: String(conf.room || 'chat'),
+      since: turnAt,
       log,
     }).catch(() => {});
     // 说「记住 XX」→ 先落盘，再回一句「记好了」（不是只念命令）
