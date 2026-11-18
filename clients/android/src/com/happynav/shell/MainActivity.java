@@ -425,32 +425,33 @@ public class MainActivity extends Activity {
      * 页面返回 200 但不是与鱼页、或 JS 挂掉白屏时，onReceivedError/HttpError/SslError
      * 都不会触发，错误页和网页设置面板都不存在，这个原生手势是最后一条出路。
      *
-     * 为什么不用「连按 3 次」：那要挡掉 onBackPressed 的「两秒内第二次退出」，
-     * 会把日常退出操作改坏。长按返回完全不碰短按和两连按，行为与 1.2 一致。
+     * 短按与两连按退出完全走系统默认（onBackPressed 与 1.2 逐字一致），不受影响；
+     * 长按后系统仍会派发一次 onKeyUp，用 backLongHandled 把那一次消费掉，
+     * 否则弹完对话框又会再执行一次返回。
      */
     @Override
-    public boolean onKeyDown(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_BACK) e.startTracking();
-        return super.onKeyDown(code, e);
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) event.startTracking();
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
-    public boolean onKeyLongPress(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_BACK) {
+    public boolean onKeyLongPress(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             backLongHandled = true;
             showSetup(prefs().getString(KEY_URL, ""));
             return true;
         }
-        return super.onKeyLongPress(code, e);
+        return super.onKeyLongPress(keyCode, event);
     }
 
     @Override
-    public boolean onKeyUp(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_BACK && backLongHandled) {
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && backLongHandled) {
             backLongHandled = false;
-            return true;
+            return true;   // 消费，别再走默认返回
         }
-        return super.onKeyUp(code, e);
+        return super.onKeyUp(keyCode, event);
     }
 
     @Override

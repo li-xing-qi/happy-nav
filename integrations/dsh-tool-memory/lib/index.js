@@ -8,7 +8,7 @@
 // 与 agent-bot/tools.js 的关系：判断标准、守卫、落盘全在 memory/ 层，
 // 这里只是把同一批能力包装成 dsh 的模型工具，不重写任何规则。
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, copyFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -293,13 +293,20 @@ function apply(ctx) {
       const want = String((args && args.voice) || '').trim();
       const voice = (!want || want === 'auto') ? '' : want;
 
-      /* ① 先走插件（Breeze / 配置里选的那家）。成功就直接用它给的路径。 */
+      /* ① 先走插件（Breeze / 配置里选的那家）。
+       * 插件把音频写在自己的 dsh-tts/voice 目录，但 qq_send_voice 只放行
+       * mediaDir 和会话 cwd（/root/qq-workspace）——那个目录不在白名单里，
+       * 直接把路径交出去会被拒。先复制一份到 VOICE_DIR 再返回。
+       * 复制失败就往下走 edge-tts，保证还有声音。 */
       let note = '';
       try {
         const j = await synthByPlugin(text, moodKey, voice);
         const who = j.route || TTS_STYLE_NAME[ttsApiStyle()] || '';
         const tag = [moodKey || '平常', who, voice].filter(Boolean).join(' · ');
-        return { text: `语音好了：${j.file}（${tag}）。用 qq_send_voice 发出去。` };
+        mkdirSync(VOICE_DIR, { recursive: true });
+        const dst = `${VOICE_DIR}/tts-${Date.now()}${path.extname(j.file || '') || '.wav'}`;
+        copyFileSync(j.file, dst);
+        return { text: `语音好了：${dst}（${tag}）。用 qq_send_voice 发出去。` };
       } catch (e) {
         note = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 110);
       }
