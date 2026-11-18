@@ -8,9 +8,13 @@
 // 与 agent-bot/tools.js 的关系：判断标准、守卫、落盘全在 memory/ 层，
 // 这里只是把同一批能力包装成 dsh 的模型工具，不重写任何规则。
 import { createRequire } from 'node:module';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const execFileAsync = promisify(execFile);
 
 /* defineTool 要从 dsh 自带的包里拿。
  * 插件装在 profile 的 node_modules 时，裸名解析不到 dsh 安装目录里的包，
@@ -173,6 +177,66 @@ function apply(ctx) {
       });
       if (!r || !r.applied) return { text: '心情没有变化。' };
       return { text: r.applied > 0 ? '记下了，你现在对他更亲近了一点。' : '记下了，你现在有点疏远。' };
+    },
+  }));
+
+  /* ============ 说话（带情绪） ============
+   * 她本来就会自己调 edge-tts 发语音，但每次都用一个默认嗓子和默认语速，
+   * 听起来是「朗读」不是「说话」。这里把情绪翻译成 edge-tts 的三个物理参数：
+   *   语速（rate）+ 音调（pitch）+ 音色（voice）
+   * 同一个模型、同一句话，语速差 29% 就是「开心」和「低落」的区别（实测 2.83s vs 3.65s）。
+   *
+   * 音色只用两个女声：晓晓（温暖，大多数时候）、晓伊（活泼，开心/得意时）。
+   * 不给她更多嗓子，因为她是同一个人，不该今天一个声音明天一个。 */
+  const VOICE_STYLE = {
+    开心: { voice: 'zh-CN-XiaoyiNeural', rate: '+12%', pitch: '+16Hz' },
+    得意: { voice: 'zh-CN-XiaoyiNeural', rate: '+8%', pitch: '+10Hz' },
+    撒娇: { voice: 'zh-CN-XiaoxiaoNeural', rate: '-6%', pitch: '+26Hz' },
+    黏人: { voice: 'zh-CN-XiaoxiaoNeural', rate: '-3%', pitch: '+18Hz' },
+    低落: { voice: 'zh-CN-XiaoxiaoNeural', rate: '-18%', pitch: '-16Hz' },
+    累了: { voice: 'zh-CN-XiaoxiaoNeural', rate: '-22%', pitch: '-10Hz' },
+    生气: { voice: 'zh-CN-XiaoxiaoNeural', rate: '+6%', pitch: '+2Hz' },
+    有点醋: { voice: 'zh-CN-XiaoxiaoNeural', rate: '+2%', pitch: '+7Hz' },
+    平常: { voice: 'zh-CN-XiaoxiaoNeural', rate: '-2%', pitch: '+3Hz' },
+  };
+  /* 生成到她的工作区：QQ 的媒体发送有目录白名单，/tmp 不一定能发出去 */
+  const VOICE_DIR = process.env.QQ_VOICE_DIR || '/root/qq-workspace/voice';
+
+  ctx.tools.register(defineTool({
+    name: 'speak',
+    description:
+      '把一句话说成语音，声音会跟着你的情绪变（快/慢/软/沉）。'
+      + '生成 mp3 后返回路径，你再调 qq_send_voice 把它发出去。'
+      + '说人话：短、口语、别念标点，一次 30 字以内；别把整段回复念出来。',
+    parameters: {
+      text: { type: 'string', required: true, description: '要说的话，口语，30 字以内' },
+      mood: {
+        type: 'string',
+        description: '你此刻的情绪：开心 / 得意 / 撒娇 / 黏人 / 低落 / 累了 / 生气 / 有点醋 / 平常',
+      },
+    },
+    output: TEXT_OUTPUT,
+    async execute(args) {
+      const text = String((args && args.text) || '').trim().slice(0, 80);
+      if (!text) return { text: '没内容可说。' };
+      const key = String((args && args.mood) || '');
+      const style = VOICE_STYLE[key] || VOICE_STYLE['平常'];
+      try {
+        mkdirSync(VOICE_DIR, { recursive: true });
+        const file = `${VOICE_DIR}/yu-${Date.now()}.mp3`;
+        await execFileAsync('edge-tts', [
+          '--voice', style.voice,
+          /* 必须用 --rate=-18% 的等号形式：负数开头的值会被 argparse 当成选项 */
+          `--rate=${style.rate}`,
+          `--pitch=${style.pitch}`,
+          '--text', text,
+          '--write-media', file,
+        ], { timeout: 25000 });
+        return { text: `语音好了：${file}（${key || '平常'}）。用 qq_send_voice 发出去。` };
+      } catch (e) {
+        const msg = String((e && e.message) || e).slice(0, 120);
+        return { text: `语音没生成出来：${msg}` };
+      }
     },
   }));
 

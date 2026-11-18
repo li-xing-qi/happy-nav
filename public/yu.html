@@ -714,6 +714,18 @@ function ingest(m){
 }
 function linkify(s){return esc(s).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');}
 
+/* 把表情/颜文字插到输入框光标处 —— 微信、QQ、Slack 都是这个行为：
+   文字类的表情是句子的一部分（能接着打字、能删），只有图片贴纸才点了就发。 */
+function insertAtCursor(text){
+  var el=$('inp');
+  if(!el)return;
+  var s=(el.selectionStart==null?el.value.length:el.selectionStart);
+  var e=(el.selectionEnd==null?s:el.selectionEnd);
+  el.value=el.value.slice(0,s)+text+el.value.slice(e);
+  var pos=s+text.length;
+  el.selectionStart=el.selectionEnd=pos;
+  el.focus();
+}
 async function send(obj){
   obj.code=CODE;obj.pid=PID;
   try{
@@ -801,9 +813,9 @@ function drawTray(){
   if(TAB==='yellow'){
     b.innerHTML='<div class="yellow-grid">'+YELLOW.map(function(x,i){
       return '<button class="yel" data-i="'+i+'" title="'+esc(x[1])+'"><span class="face">'+x[0]+'</span><span class="lb">'+esc(x[1])+'</span></button>';
-    }).join('')+'</div><div class="tray-tip">小黄豆是内置表情，点一下就发出去，对方那边也是同一张脸。</div>';
+    }).join('')+'</div><div class="tray-tip">小黄豆点一下是插到输入框里，可以接着打字、跟句子一起发出去（和微信 QQ 一样）；想单独发就打完直接回车。</div>';
     b.querySelectorAll('.yel').forEach(function(el){
-      el.onclick=function(){var x=YELLOW[+el.dataset.i];send({type:'emoji',emoji:x[0],label:x[1]});};
+      el.onclick=function(){var x=YELLOW[+el.dataset.i];insertAtCursor(x[0]);};
     });
   }else if(TAB==='custom'){
     b.innerHTML='<div class="stk-grid">'+(STICKERS.length?STICKERS.map(function(u){
@@ -820,8 +832,8 @@ function drawTray(){
       return '<button data-k="'+esc(k)+'" class="'+(custom.indexOf(k)>=0?'mine':'')+'" title="'+(custom.indexOf(k)>=0?'自定义':'初始')+'">'+esc(k)+'</button>';
     }).join('')+'</div>'+
       '<div class="kao-add"><input id="kaoIn" maxlength="60" placeholder="贴一个颜文字，比如 (｡◕‿◕｡)"><button id="kaoAdd">＋ 添加自定义</button></div>'+
-      '<div class="tray-tip">上面是初始颜文字；「＋ 添加自定义」会把新颜文字存进这间房，两个人共用，也会备份在这台设备。深色描边的就是自定义的。</div>';
-    b.querySelectorAll('button[data-k]').forEach(function(el){el.onclick=function(){send({type:'kaomoji',text:el.dataset.k});closeTray();};});
+      '<div class="tray-tip">点一下插到输入框里，能跟句子一起发；「＋ 添加自定义」会把新颜文字存进这间房，两个人共用，也会备份在这台设备。深色描边的就是自定义的。</div>';
+    b.querySelectorAll('button[data-k]').forEach(function(el){el.onclick=function(){insertAtCursor(el.dataset.k);};});
     $('kaoAdd').onclick=addKao;
     $('kaoIn').addEventListener('keydown',function(e){if(e.key==='Enter')addKao();});
   }
