@@ -180,6 +180,59 @@ const boomLlm = async () => { throw new Error('模拟模型 500'); };
   const none = await judge.judge(countLlm, { userText: '   ', replyText: '', channel: 'chat' });
   ok(none === null && called === 0, '用户空 / 回复空 → 直接跳过，不发请求');
 
+  console.log('\n[case] 同一轮不许计两次分：她记过了，判官就不许再判（上线后实测踩过）');
+  /* 现场长这样：
+   *   [gomoku] 工具 feel → 记下了，你现在对他更亲近了一点。   ← 她自己调的（d:3）
+   *   [gomoku] 判 +2 一起玩 开心「他叫我鱼鱼，还邀我下棋」    ← 判官 1 秒后又判（d:2）
+   * 一轮 +5，日闸门 15 分三四条消息就吃光，用户只会觉得「聊几句又不动了」。
+   * 所以 since（本轮开始处理的时刻）之后只要她自己记过，judge 必须整个跳过、连请求都不发。 */
+  reset({ affinity: 60 });
+  mood.feel(3, '他叫我鱼鱼', { kind: '一起玩' });          // 她这一轮自己记的
+  let skipCalled = 0;
+  const skipLlm = async () => { skipCalled += 1; return { content: '{"delta":2}' }; };
+  const skipLogs = [];
+  const skipped = await judge.judge(skipLlm, {
+    userText: '鱼鱼下棋吗', replyText: '来呀', channel: 'gomoku',
+    since: Date.now() - 1000, log: (m) => skipLogs.push(String(m)),
+  });
+  ok(skipped === null, '跳过时返回 null', JSON.stringify(skipped));
+  ok(skipCalled === 0, '一次模型请求都没发（省 token 也省延迟）', `调用 ${skipCalled} 次`);
+  ok(skipLogs.some((l) => /跳过/.test(l)), '日志里写了「跳过」', skipLogs.join(' | '));
+  const scored = mood.read();
+  ok(scored.affinity === 63 && scored.log.filter((e) => e.kind === '一起玩').length === 1,
+    '这一轮只有她记的那一条（+3），没有被判官叠成 +5', `${scored.affinity}/${scored.log.length}`);
+
+  console.log('\n[case] 她这一轮没记 → 判官照常补判');
+  fs.writeFileSync(process.env.MOOD_FILE, JSON.stringify({
+    affinity: 60, updatedAt: Date.now(), band: '还算熟',
+    log: [{ ts: Date.now() - 3600 * 1000, d: 2, why: '很久以前', kind: '陪着' }],
+  }));
+  const fill = await judge.judge(fakeLlm('{"delta":2,"kind":"昵称","mood":"开心","why":"他叫我小傻鱼"}'), {
+    userText: '小傻鱼', replyText: '嗯？', channel: 'chat',
+    since: Date.now() - 1000, log: () => {},
+  });
+  ok(fill && fill.applied === 2, '判官正常判了 +2', JSON.stringify(fill && { d: fill.delta, a: fill.applied }));
+  ok(Math.round(mood.read().affinity) === 62, '分数落库（60 → 62）', String(mood.read().affinity));
+
+  console.log('\n[case] 上一轮判官自己的记录不该挡住这一轮');
+  /* 上一轮的判官记录时间戳可能落在这轮消息之后（用户在她回复期间又补一句）。
+   * 那种记录 why 带 [判]，不算「她记过了」，否则这一轮会被误跳过、白漏一次评分。 */
+  reset({ affinity: 60 });
+  mood.feel(2, `${judge.MARK}上一轮判的`, { kind: '陪着' });   // 模拟上一轮判官的记录
+  let againCalled = 0;
+  const againLlm = async () => { againCalled += 1; return { content: '{"delta":3}' }; };
+  const again = await judge.judge(againLlm, {
+    userText: '在吗', replyText: '在', channel: 'chat', since: Date.now() - 1000, log: () => {},
+  });
+  ok(againCalled === 1, '没有被 [判] 记录误拦，照常发请求', `调用 ${againCalled} 次`);
+  ok(again && again.applied === 3, '这一轮照常判分', JSON.stringify(again && { a: again.applied }));
+
+  console.log('\n[case] 不传 since → 保持老行为（向后兼容）');
+  const legacy = await judge.judge(fakeLlm('{"delta":1,"kind":"陪着","mood":"","why":"一起待着"}'), {
+    userText: '在吗', replyText: '在呀', channel: 'chat', log: () => {},
+  });
+  ok(legacy && legacy.applied === 1, '没传 since 时照常判', JSON.stringify(legacy && { a: legacy.applied }));
+
   console.log('\n[case] 串行队列：同时只跑一个');
   reset({ affinity: 55 });
   let live = 0;
