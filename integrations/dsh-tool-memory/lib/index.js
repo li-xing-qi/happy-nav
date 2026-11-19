@@ -201,6 +201,34 @@ function apply(ctx) {
   };
   /* 生成到她的工作区：QQ 的媒体发送有目录白名单，/tmp 不一定能发出去 */
   const VOICE_DIR = process.env.QQ_VOICE_DIR || '/root/qq-workspace/voice';
+  /* OneBot 插件自己的媒体目录：**唯一在任何轮次都放行的目录**。
+   * 为什么还要这一份：qq_send_voice 的白名单 = mediaDir + 会话工作区，
+   * 而「会话工作区」只有在**这一轮的发起人是管理员**时才加进去
+   * （dsh-onebot-qq 的 mediaSendRoots：activeTurnRole === 'admin'）。
+   * 定时提醒这类自动触发的轮次按 member 处理，工作区不在白名单里 ——
+   * 她明明合成好了却发不出去，报「本地路径不在允许的媒体目录内」。
+   * 所以每次都往 mediaDir 也放一份，发送用这一份；工作区那份留着她自己回看。 */
+  const MEDIA_DIR = process.env.QQ_MEDIA_DIR || '/root/.dsh/media/onebot';
+
+  /** 把合成好的音频摆到「一定能发出去」的目录，返回发送用的路径。
+   *  mediaDir 优先（所有轮次都放行），失败再退回工作区（正常对话仍可用）。 */
+  function stageAudio(srcFile) {
+    const ext = path.extname(srcFile || '') || '.wav';
+    const name = `tts-${Date.now()}${ext}`;
+    let sendable = '';
+    try {
+      mkdirSync(MEDIA_DIR, { recursive: true });
+      sendable = path.join(MEDIA_DIR, name);
+      copyFileSync(srcFile, sendable);
+    } catch { sendable = ''; }
+    let backup = '';
+    try {
+      mkdirSync(VOICE_DIR, { recursive: true });
+      backup = path.join(VOICE_DIR, name);
+      copyFileSync(srcFile, backup);
+    } catch { backup = ''; }
+    return sendable || backup;
+  }
 
   /* ---------- 换个嗓子：交给 dsh-tts 插件去合成 ----------
    *
@@ -353,9 +381,8 @@ function apply(ctx) {
         const j = await synthByPlugin(text, moodKey, voice, sing);
         const who = j.route || TTS_STYLE_NAME[ttsApiStyle()] || '';
         const tag = [moodKey || '平常', sing ? '唱' : '', who, voice].filter(Boolean).join(' · ');
-        mkdirSync(VOICE_DIR, { recursive: true });
-        const dst = `${VOICE_DIR}/tts-${Date.now()}${path.extname(j.file || '') || '.wav'}`;
-        copyFileSync(j.file, dst);
+        const dst = stageAudio(j.file);
+        if (!dst) throw new Error('音频复制不出来');
         return { text: `语音好了：${dst}（${tag}）。用 qq_send_voice 发出去。` };
       } catch (e) {
         note = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 110);
@@ -367,8 +394,12 @@ function apply(ctx) {
       /* ② 插件这条路不通 → 本机 edge-tts 顶上。情绪照旧翻译成语速/音调。 */
       const style = VOICE_STYLE[moodKey] || VOICE_STYLE['平常'];
       try {
-        mkdirSync(VOICE_DIR, { recursive: true });
-        const file = `${VOICE_DIR}/yu-${Date.now()}.mp3`;
+        /* 同样先落 mediaDir：自动触发的轮次只认这个目录 */
+        let dir = MEDIA_DIR;
+        try { mkdirSync(dir, { recursive: true }); }
+        catch { dir = VOICE_DIR; mkdirSync(dir, { recursive: true }); }
+        const name = `yu-${Date.now()}.mp3`;
+        const file = path.join(dir, name);
         await execFileAsync('edge-tts', [
           '--voice', style.voice,
           /* 必须用 --rate=-18% 的等号形式：负数开头的值会被 argparse 当成选项 */
@@ -377,6 +408,8 @@ function apply(ctx) {
           '--text', text,
           '--write-media', file,
         ], { timeout: 25000 });
+        /* 工作区再留一份，方便她自己回看（失败无所谓） */
+        try { mkdirSync(VOICE_DIR, { recursive: true }); copyFileSync(file, path.join(VOICE_DIR, name)); } catch {}
         return { text: `语音好了：${file}（${moodKey || '平常'}；${note}，先用本机 edge-tts 顶上）。用 qq_send_voice 发出去。` };
       } catch (e) {
         const msg = String((e && e.message) || e).slice(0, 120);
