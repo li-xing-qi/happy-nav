@@ -37,6 +37,7 @@
   var usingFiles = false;
   var deck = null;          // 两个播放器轮换，实现交叉淡化
   var activeDeck = 0;
+  var curIdx = -1;          // 此刻真正在放的那一副（ended 只认它）
   var errCount = 0;
 
   function state() {
@@ -213,13 +214,17 @@
     if (!track) return false;
     if (!deck) {
       deck = [mkDeck(), mkDeck()];
+      /* 注意：监听里比的是 curIdx（正在放的那一副），不是 activeDeck。
+       * activeDeck 在开播后立刻翻到下一副，用它判断的话 ended 永远对不上，
+       * 一首放完就再也不会自动往下走。 */
       deck.forEach(function (d, i) {
-        d.el.addEventListener('ended', function () { if (i === activeDeck) nextTrack(); });
-        d.el.addEventListener('error', function () { if (i === activeDeck) onTrackError(); });
+        d.el.addEventListener('ended', function () { if (i === curIdx) nextTrack(); });
+        d.el.addEventListener('error', function () { if (i === curIdx) onTrackError(); });
       });
     }
     var cur = deck[activeDeck];
     var old = deck[1 - activeDeck];
+    curIdx = activeDeck;
     try {
       cur.el.src = '/music/' + track.file;
       cur.el.load();
