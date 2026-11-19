@@ -1,6 +1,6 @@
 # dsh-tool-memory
 
-给 [dsh](https://github.com/deepseek-ai/deepseek-harness) 加四个记忆工具，让「与鱼」里的 AI 能自己记约定、记事实、查约定、撤约定。
+给 [dsh](https://github.com/deepseek-ai/deepseek-harness) 加六个工具：四个管记忆，两个管嗓子。
 
 | 工具 | 干什么 |
 |---|---|
@@ -8,6 +8,11 @@
 | `remember_fact` | 记一条长期事实（写进 `MEMORY.md` 的「关于老板」段） |
 | `list_rules` | 列出当前生效的约定（含 id） |
 | `revoke_rule` | 按 id 精确撤销一条 |
+| `speak` | 把一句话合成语音（带情绪、可换音色、`sing=true` 才是唱），返回路径交给 `qq_send_voice` |
+| `my_voice` | 看现在走哪家 TTS / 哪个音色 / 还能选哪些；传 id 就换默认嗓子 |
+
+后两个工具依赖第三方的 `dsh-plugin-tts`，链路、配置字段、额度、唱歌为什么必须另配 key，
+全在 **[docs/语音.md](../../docs/语音.md)**。
 
 ## 为什么需要它
 

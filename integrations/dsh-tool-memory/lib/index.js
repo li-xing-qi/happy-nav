@@ -221,6 +221,11 @@ function apply(ctx) {
   const TTS_CONFIG = process.env.DSH_TTS_CONFIG || '/root/.dsh/dsh-tts/config.json';
   const TTS_STYLE_NAME = { breeze: 'Breeze', openai: 'MiMo' };
 
+  /* 站点自己的设置接口：读配置 + 改默认音色都走它。
+   * 为什么不直接改 config.json：那个文件在 /root/.dsh 下，不在她的工作区里（写不进去）；
+   * 站点这个接口跑在同一台机器上，回环调用不需要令牌，而且写盘带原子替换。 */
+  const TTS_SETTINGS_URL = process.env.YU_TTS_SETTINGS_URL || 'http://127.0.0.1:3000/api/settings/tts';
+
   /** 插件现在配的是哪家。只用来把报错说清楚（Breeze 还是 MiMo 没配 key） */
   function ttsApiStyle() {
     try {
@@ -230,16 +235,43 @@ function apply(ctx) {
     } catch { return 'breeze'; }
   }
 
-  /** 让插件合成，成功返回插件给的 {file, audioId, route, mode}；失败一律抛 */
-  async function synthByPlugin(text, mood, voice) {
+  /** 连站点设置接口：读当前配置 / 改默认音色。超时短，失败一律抛给调用方兜底 */
+  async function ttsSettings(patch) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), TTS_TIMEOUT_MS);
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    try {
+      const r = await fetch(TTS_SETTINGS_URL, patch
+        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch), signal: ctl.signal }
+        : { signal: ctl.signal });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || j.ok === false) throw new Error((j && (j.error || j.message)) || `设置接口 ${r.status}`);
+      return j;
+    } finally { clearTimeout(timer) }
+  }
+
+  /** 唱歌只能走小米那套：Breeze 协议里压根没有唱歌参数（插件里写死 sing → openai）。
+   * 这里提前判一次 key，免得她等半天拿到一句 401 还不知道为什么。 */
+  function mimoKeyMissing() {
+    try {
+      const c = JSON.parse(readFileSync(TTS_CONFIG, 'utf8'));
+      return !String((c && c.tts && c.tts.apiKey) || '').trim();
+    } catch { return true }
+  }
+
+  /** 让插件合成，成功返回插件给的 {file, audioId, route, mode}；失败一律抛 */
+  async function synthByPlugin(text, mood, voice, sing) {
+    const ctl = new AbortController();
+    /* 唱歌是重活：插件内部要重试好几次、每次 10~90 秒，25 秒的说话超时一定不够 */
+    const timer = setTimeout(() => ctl.abort(), sing ? 180000 : TTS_TIMEOUT_MS);
     try {
       const r = await fetch(TTS_SPEAK_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         /* target:'' = 只合成不发送；voice 传 null = 用配置里的默认音色 */
-        body: JSON.stringify({ text, style: mood || null, voice: voice || null, target: '' }),
+        body: JSON.stringify({
+          text, style: mood || null, voice: voice || null, target: '',
+          ...(sing ? { sing: true } : {}),
+        }),
         signal: ctl.signal,
       });
       const j = await r.json().catch(() => null);
@@ -251,7 +283,7 @@ function apply(ctx) {
       return j;
     } catch (e) {
       /* AbortController 抛的是 AbortError，换成她看得懂的一句话 */
-      if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message)))) throw new Error('插件合成超时');
+      if (e && (e.name === 'AbortError' || /abort/i.test(String(e.message)))) throw new Error(sing ? '唱歌超时（上游太慢，可以再试一次）' : '插件合成超时');
       /* fetch 连不上时 message 只有一句 "fetch failed"，真正的原因在 cause.code 里
        * （ECONNREFUSED = 插件没起来）。不把 code 带出来，这条报错就白记了。 */
       const c = e && e.cause;
@@ -268,13 +300,15 @@ function apply(ctx) {
     description:
       '把一句话说成语音，声音会跟着你的情绪变（快/慢/软/沉）。'
       + '想换个嗓子就自己挑，不用问用户：voice 填一个音色 id 就用那个嗓子，'
-      + '填 auto 或不填就用配置里的默认音色。'
-      + '合成走本机的语音插件（默认是 Breeze）；插件没配 key 或没起来时会自动退回本机的 '
+      + '填 auto 或不填就用配置里的默认音色（不知道有哪些 id 就调 my_voice 看）。'
+      + '合成走本机的语音插件（现在走 Breeze）；插件没配 key 或没起来时会自动退回本机的 '
       + 'edge-tts，照样有声音，别因为一次失败就不说话了。'
       + '生成音频后返回路径，你再调 qq_send_voice 把它发出去。'
+      + 'sing=true 才是「唱」：Breeze 没有唱歌参数，唱歌固定走小米 MiMo（要有 MiMo 的 key），'
+      + '而且很慢（10~90 秒）、上游是概率性的，只在她真的说要唱时用；这时必须同时给出歌词。'
       + '说人话：短、口语、别念标点，一次 30 字以内；别把整段回复念出来。',
     parameters: {
-      text: { type: 'string', required: true, description: '要说的话，口语，30 字以内' },
+      text: { type: 'string', required: true, description: '要说（要唱）的话，口语，30 字以内' },
       mood: {
         type: 'string',
         description: '你此刻的情绪：开心 / 得意 / 撒娇 / 黏人 / 低落 / 累了 / 生气 / 有点醋 / 平常',
@@ -284,6 +318,10 @@ function apply(ctx) {
         description: '音色 id（Breeze 的 voice_id，原样透传给插件）；'
           + 'auto 或不填 = 用配置里的默认音色。想换声音自己挑一个，不用问用户',
       },
+      sing: {
+        type: 'boolean',
+        description: 'true = 唱出来（不是念）。只有走 MiMo 才行，见工具说明',
+      },
     },
     output: TEXT_OUTPUT,
     async execute(args) {
@@ -292,6 +330,18 @@ function apply(ctx) {
       const moodKey = String((args && args.mood) || '');
       const want = String((args && args.voice) || '').trim();
       const voice = (!want || want === 'auto') ? '' : want;
+      const sing = args && args.sing === true;
+
+      /* ⓪ 唱歌这条路：Breeze 协议没有唱歌参数，插件里 sing 一律切到小米那套。
+       * MiMo 没 key 的话，等 20 秒只会拿到一句 401。这里提前拦住，直接把话说明白。 */
+      if (sing && mimoKeyMissing()) {
+        return {
+          text: '唱不了：唱歌只能走小米 MiMo，可现在 MiMo 的 key 是空的'
+            + '（平时说话走的 Breeze 协议本身没有唱歌参数）。'
+            + '让老板在设置面板「语音」页把 MiMo 的 key 填上（小米 TTS 现在免费），再说一声「唱给我听」。'
+            + '现在要我念这段歌词的话，把 sing 去掉就行。',
+        };
+      }
 
       /* ① 先走插件（Breeze / 配置里选的那家）。
        * 插件把音频写在自己的 dsh-tts/voice 目录，但 qq_send_voice 只放行
@@ -300,9 +350,9 @@ function apply(ctx) {
        * 复制失败就往下走 edge-tts，保证还有声音。 */
       let note = '';
       try {
-        const j = await synthByPlugin(text, moodKey, voice);
+        const j = await synthByPlugin(text, moodKey, voice, sing);
         const who = j.route || TTS_STYLE_NAME[ttsApiStyle()] || '';
-        const tag = [moodKey || '平常', who, voice].filter(Boolean).join(' · ');
+        const tag = [moodKey || '平常', sing ? '唱' : '', who, voice].filter(Boolean).join(' · ');
         mkdirSync(VOICE_DIR, { recursive: true });
         const dst = `${VOICE_DIR}/tts-${Date.now()}${path.extname(j.file || '') || '.wav'}`;
         copyFileSync(j.file, dst);
@@ -310,6 +360,9 @@ function apply(ctx) {
       } catch (e) {
         note = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 110);
       }
+
+      /* 唱歌失败就别退到 edge-tts 了：那只会念白，发出去更尴尬 */
+      if (sing) return { text: `没唱出来：${note}。可以再说一次，或者改成念（去掉 sing）。` };
 
       /* ② 插件这条路不通 → 本机 edge-tts 顶上。情绪照旧翻译成语速/音调。 */
       const style = VOICE_STYLE[moodKey] || VOICE_STYLE['平常'];
@@ -329,6 +382,48 @@ function apply(ctx) {
         const msg = String((e && e.message) || e).slice(0, 120);
         return { text: `语音没生成出来：${msg}（插件那边：${note}）` };
       }
+    },
+  }));
+
+  /* 换嗓子：让她自己看、自己改。
+   * 以前这些只有设置面板里有，她想换个声音得先摸到 config.json（还写不进去），
+   * 于是整段对话都在猜「音色 id 到底长什么样」。这里一次给全：现在用谁、还能选谁、
+   * 以及怎么把默认嗓子换掉（走站点设置接口，写盘原子替换）。 */
+  ctx.tools.register(defineTool({
+    name: 'my_voice',
+    description:
+      '看你现在这个嗓子：走哪家（Breeze / MiMo）、用的哪个音色、还有哪些能换。'
+      + '传 voice 就把默认嗓子换成它（以后说话默认用它，不用每次指定）。'
+      + '老板说「换个声音」「用那个大肥鱼」「你声音不好听」时先调这个看一眼再决定，'
+      + '别让他去设置面板里点。',
+    parameters: {
+      voice: {
+        type: 'string',
+        description: '要设成默认的音色 id（必须是下面列出来的那个 id，不是名字）；不传 = 只看不改',
+      },
+    },
+    output: TEXT_OUTPUT,
+    async execute(args) {
+      const want = String((args && args.voice) || '').trim();
+      let snap;
+      try {
+        snap = await ttsSettings(want ? { voice: want } : null);
+      } catch (e) {
+        return { text: `设置接口没通（${String((e && e.message) || e).slice(0, 80)}），先照旧用现在的嗓子。` };
+      }
+      const styleKey = snap.apiStyle === 'openai' ? 'mimo' : 'breeze';
+      const cur = snap[styleKey] || {};
+      const list = ((snap.voices && snap.voices[styleKey]) || []).filter((v) => v && v.id);
+      const head = `现在走 ${TTS_STYLE_NAME[styleKey] || styleKey}，模型 ${cur.model || '默认'}，`
+        + `默认音色 ${cur.voice || '（未指定）'}。`;
+      if (!list.length) return { text: `${head}音色列表还是空的——要么没配 key，要么账号里没建音色。` };
+      const lines = list.slice(0, 30).map((v) => `  ${v.id}  ${v.name || ''}`).join('\n');
+      if (!want) {
+        return { text: `${head}可选 ${list.length} 个：\n${lines}\n想换就再调一次，voice 填上面某个 id。` };
+      }
+      const hit = list.find((v) => v.id === want);
+      if (!hit) return { text: `没有 id=${want} 这个音色。可选的是这 ${list.length} 个：\n${lines}` };
+      return { text: `换好了：以后默认用「${hit.name || hit.id}」（${hit.id}，${TTS_STYLE_NAME[styleKey]}）。` };
     },
   }));
 
