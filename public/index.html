@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="description" content="和鱼的开心导航 · 一个入口：万象牌、聊天室、五子棋、与鱼、心有灵犀。">
-<title>和鱼的开心导航 v5.001</title>
+<title>和鱼的开心导航 v5.003</title>
 <script>
   /* 先恢复背景，避免刷新时闪白 */
   try {
@@ -186,6 +186,27 @@
   .pdone{margin-top:14px;width:100%;padding:11px;border:none;border-radius:10px;background:#141414;color:#fff;
     font-size:13.5px;font-weight:600;letter-spacing:.05em;}
 
+  /* ---- 音乐：场景 / 当前曲目 / 曲目列表 ---- */
+  .mchips{margin-top:10px;display:flex;flex-wrap:wrap;gap:7px;}
+  .mchips button{padding:7px 13px;border:1px solid #e6e6e6;border-radius:99px;background:#fff;font-size:12px;color:#4a4a4a;}
+  .mchips button:hover{border-color:#cfcfcf;}
+  .mchips button.on{background:#141414;border-color:#141414;color:#fff;font-weight:600;}
+  .nrow{margin-top:10px;display:flex;align-items:center;gap:8px;}
+  .nrow b{flex:1 1 auto;min-width:0;font-size:12.5px;font-weight:600;color:#1d1d1d;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mini{width:34px;height:30px;border:1px solid #e6e6e6;border-radius:9px;background:#fff;font-size:12px;color:#4a4a4a;}
+  .mini:hover{border-color:#cfcfcf;}
+  .tlist{margin-top:10px;max-height:148px;overflow-y:auto;border:1px solid #eee;border-radius:10px;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  .tlist button{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;
+    padding:9px 11px;border:0;border-bottom:1px solid #f2f2f2;background:#fff;font-size:12.5px;color:#333;text-align:left;}
+  .tlist button:last-child{border-bottom:0;}
+  .tlist button.on{color:#141414;font-weight:600;background:#fafafa;}
+  .tlist button i{font-style:normal;font-size:10.5px;color:#9a9a9a;flex:0 0 auto;}
+  .tlist .empty{padding:11px;font-size:11.5px;color:#9a9a9a;}
+  .addr{margin-top:10px;padding:9px 11px;border:1px solid #eee;border-radius:9px;background:#fafafa;
+    font-size:12px;color:#4a4a4a;word-break:break-all;}
+
   @media(max-width:480px){
     .shell{padding-left:16px;padding-right:16px;}
     .wordmark{font-size:20px;}
@@ -253,7 +274,7 @@
     <a class="brand" href="/" aria-label="和鱼的开心导航 首页">
       <span class="logo" aria-hidden="true">和</span>
       <h1 class="wordmark">和鱼的开心导航</h1>
-      <span class="ver">v5.001</span>
+      <span class="ver">v5.003</span>
     </a>
     <div class="top-actions">
       <button class="setbtn" id="setBtn" aria-expanded="false" aria-controls="setPanel">
@@ -273,7 +294,7 @@
 
   <footer class="foot">
     <div>联机方式：同一个房间号 · 数据存在你自己的服务器上</div>
-    <div><b>和鱼的开心导航</b> · v5.001 · 本地部署版</div>
+    <div><b>和鱼的开心导航</b> · v5.003 · 本地部署版</div>
   </footer>
 </div>
 
@@ -295,6 +316,24 @@
     <div class="row">
       <div class="rlabel">背景音乐<small>轻缓循环，全站同一套开关</small></div>
       <button class="switch" id="musicBtn" aria-pressed="false">关</button>
+      <div class="mchips" id="sceneChips">
+        <button type="button" data-scene="daily">日常</button>
+        <button type="button" data-scene="love">傍晚</button>
+        <button type="button" data-scene="night">深夜</button>
+        <button type="button" data-scene="focus">棋局</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="rlabel">正在放<small id="nowMeta">还没开始</small></div>
+      <div class="nrow">
+        <b id="nowTitle">—</b>
+        <button class="mini" id="mPrev2" aria-label="上一首">⏮</button>
+        <button class="mini" id="mNext2" aria-label="下一首">⏭</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="rlabel">曲目<small>点一首直接放</small></div>
+      <div class="tlist" id="trackList"><div class="empty">加载中…</div></div>
     </div>
     <div class="row">
       <div class="rlabel">音量</div>
@@ -306,6 +345,15 @@
     <div class="row">
       <div class="rlabel">点击音效<small>很轻的「嗒」一声，明显低于背景音乐</small></div>
       <button class="switch on" id="sfxBtn" aria-pressed="true">开</button>
+    </div>
+    <div class="row hidden" id="connBox">
+      <div class="rlabel">手机壳<small>只在 App 里出现：改地址只存本机</small></div>
+      <div class="addr" id="connOrigin">—</div>
+      <div class="bgs" style="grid-template-columns:repeat(3,1fr);margin-top:10px">
+        <button class="bgopt" id="connEdit" style="flex-direction:row;justify-content:center">改地址</button>
+        <button class="bgopt" id="connReload" style="flex-direction:row;justify-content:center">刷新页面</button>
+        <button class="bgopt" id="connClear" style="flex-direction:row;justify-content:center">清空缓存</button>
+      </div>
     </div>
   </div>
   <p class="phint">声音设置全站通用；浏览器需要先有一次点击才允许出声。系统开启「减少动态效果」时，漂浮颗粒与卡片动效会停用。</p>
@@ -455,6 +503,9 @@
     mask.classList.remove('hidden');
     setBtn.setAttribute('aria-expanded', 'true');
     paintAudio();
+    if (!listBuilt) buildTracks();
+    paintMusic();
+    if (A.loadManifest) A.loadManifest().then(function () { if (!listBuilt) buildTracks(); paintMusic(); });
     panel.focus();
   }
   function closeSet() {
@@ -491,6 +542,84 @@
   });
   musicBtn.addEventListener('click', function () { A.toggleMute(); });
   sfxBtn.addEventListener('click', function () { A.setSfx(!A.state().sfxOn); });
+
+  /* ---------- 背景音乐：场景 / 逐首挑 / 上一首下一首 ----------
+   * 这些原来散在「与鱼」页头（一个 ♪ 按钮），老板嫌图标多、而且音乐是全站的，
+   * 所以统一收到首页这个设置面板里。与鱼那边不再有音乐入口。 */
+  var SCENE_CN = { daily: '日常', love: '傍晚', night: '深夜', focus: '棋局' };
+  var sceneChips = $('sceneChips'), trackBox = $('trackList');
+  var nowTitle = $('nowTitle'), nowMeta = $('nowMeta');
+  var listBuilt = false;
+
+  function buildTracks() {
+    var list = (A.tracks && A.tracks()) || [];
+    trackBox.innerHTML = '';
+    if (!list.length) {
+      var d = document.createElement('div');
+      d.className = 'empty';
+      d.textContent = '曲目没加载出来（看 /music/manifest.json 在不在）';
+      trackBox.appendChild(d);
+      return;
+    }
+    list.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('data-id', t.id);
+      var n = document.createElement('span');
+      n.textContent = t.title || t.id;
+      var m = document.createElement('i');
+      m.textContent = t.mood || '';
+      b.appendChild(n); b.appendChild(m);
+      b.onclick = function () { A.playById(t.id); paintMusic(); };
+      trackBox.appendChild(b);
+    });
+    listBuilt = true;
+  }
+
+  function paintMusic() {
+    var st = A.state();
+    nowTitle.textContent = st.title || '—';
+    nowMeta.textContent = [
+      SCENE_CN[st.scene] || '',
+      st.bgm ? (st.source === 'files' ? '播放中' : '合成器兜底') : '已暂停'
+    ].filter(Boolean).join(' · ') || '还没开始';
+    var chips = sceneChips.querySelectorAll('button');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle('on', chips[i].getAttribute('data-scene') === (st.scene || ''));
+    }
+    var items = trackBox.querySelectorAll('button[data-id]');
+    for (var k = 0; k < items.length; k++) {
+      items[k].classList.toggle('on', items[k].getAttribute('data-id') === (st.id || ''));
+    }
+  }
+
+  sceneChips.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-scene]') : null;
+    if (!b) return;
+    var sc = b.getAttribute('data-scene');
+    if (A.state().bgm) A.setScene(sc); else A.startBgm(sc);
+    paintMusic();
+  });
+  $('mPrev2').addEventListener('click', function () { A.prev(); paintMusic(); });
+  $('mNext2').addEventListener('click', function () { A.next(); paintMusic(); });
+  A.onChange(paintMusic);
+
+  /* ---------- 手机壳专属：改地址 / 刷新 / 清缓存 ----------
+   * 这几项原来在「与鱼」设置的第 4 个页签里，现在也收到首页；
+   * 浏览器里 happynav:// 无效，所以非壳环境整块隐藏。 */
+  (function shellBox() {
+    var box = $('connBox');
+    var isShell = /HappyNavShell/.test(navigator.userAgent || '');
+    if (!box || !isShell) return;
+    box.classList.remove('hidden');
+    $('connOrigin').textContent = location.origin || location.href;
+    $('connEdit').addEventListener('click', function () { location.href = 'happynav://settings'; });
+    $('connReload').addEventListener('click', function () { location.href = 'happynav://reload'; });
+    $('connClear').addEventListener('click', function () {
+      if (!window.confirm('清空缓存会清掉 Cookie 和表单数据，并重新加载页面。确定继续吗？')) return;
+      location.href = 'happynav://clear-cache';
+    });
+  })();
 
   /* 首页背景音乐：首次点击 / 按键后才启动（浏览器自动播放策略） */
   (function armBgm() {

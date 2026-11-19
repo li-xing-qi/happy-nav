@@ -19,7 +19,7 @@
 
 四条路，按顺序试：
 
-1. **网页设置 →「连接」→「修改地址」**（页面能打开时）。这个 tab 只在 App 壳里出现：WebView 的 UA 带 `HappyNavShell/1.3`，普通浏览器会自动隐藏它。
+1. **首页 → 设置 →「手机壳」→「改地址」**（页面能打开时）。这一块只在 App 壳里出现：WebView 的 UA 带 `HappyNavShell/1.3`，普通浏览器会自动隐藏它。
 2. **连不上时的那个页面**（不是浏览器默认的白屏）里有个「地址填错了？改地址」按钮，走 `happynav://settings`。网络层错误、主框架 4xx/5xx、SSL 证书错误都会跳到这个页面；这个按钮千万别删。
 3. **长按返回键** → 直接弹出原生「修改地址」。它完全不依赖网页：地址返回 200 但不是与鱼页、或页面 JS 挂掉白屏时，错误页不显示、网页设置面板也不存在，这个手势是终极兜底。单次短按、两秒内两次退出和 1.2 完全一致，不受影响。
 4. 实在找不到：系统设置 → 应用 → 与鱼 → 存储 → **清除数据**，下次启动就回到首次设置。地址只存在本机，清掉不心疼（聊天记录在服务器上，不在手机里）。
@@ -34,7 +34,7 @@
 | 下载 | 转给系统下载管理器，通知栏可见 |
 | 点外链 | 同域名在壳里开，其它交给系统浏览器 |
 | 连不上 | 不白屏，给「重新连接」页 |
-| 改地址 / 刷新 / 清缓存 | 网页设置 →「连接」tab（`happynav://settings` / `reload` / `clear-cache`）；页面打不开时用错误页的「改地址」按钮 |
+| 改地址 / 刷新 / 清缓存 | 首页 → 设置 →「手机壳」（`happynav://settings` / `reload` / `clear-cache`）；页面打不开时用错误页的「改地址」按钮 |
 
 ## 做不到什么
 
@@ -88,7 +88,7 @@ bash build-apk.sh
 | 图标 | `res/drawable/ic_launcher_foreground.xml`（矢量，改颜色改 `colors.xml` 的 `brand`） |
 | 主题色 / 启动背景 | `res/values/colors.xml`、`styles.xml` |
 | 首次打开的行为 | `MainActivity.java` 的 `onCreate` |
-| 改地址 / 刷新 / 清缓存 / 关于 | `MainActivity.java` 的 `handleUrl` / `clearCacheAndReload` + `public/yu.html` 的 `#paneLink`（1.3 起从原生浮层菜单搬进网页设置面板） |
+| 改地址 / 刷新 / 清缓存 / 关于 | `MainActivity.java` 的 `handleUrl` / `clearCacheAndReload` + `public/index.html` 的 `#connBox`（1.3 从原生浮层菜单搬进网页设置；后来为减少与鱼页头图标，统一收到首页设置面板） |
 | 判断内链/外链 | `MainActivity.java` 的 `handleUrl` |
 
 ## 目录

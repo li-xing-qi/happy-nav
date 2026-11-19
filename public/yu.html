@@ -210,24 +210,6 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
   max-height:min(86vh,680px);overflow-y:auto;background:var(--paper);border:1px solid var(--line2);border-radius:16px;
   padding:18px;box-shadow:0 24px 70px rgba(10,25,30,.28);}
 .ov h2{font-size:15px;letter-spacing:.05em;display:flex;align-items:center;gap:8px;}
-/* ---- 背景音乐小面板 ---- */
-.mnow{padding:10px 12px;border:1px solid var(--line2);border-radius:11px;background:var(--paper2);margin-top:12px;}
-.mnow b{display:block;font-size:13.5px;}
-.mnow span{display:block;font-size:11px;color:var(--ink3);margin-top:3px;}
-.mchips{display:flex;gap:7px;flex-wrap:wrap;}
-.mchips button{padding:7px 12px;border:1px solid var(--line2);border-radius:99px;background:var(--paper2);font-size:12px;color:var(--ink);}
-.mchips button.on{background:var(--accent);border-color:transparent;color:#fff;font-weight:600;}
-.mrow{display:flex;gap:8px;margin-top:12px;}
-.mrow .mbtn{flex:1 1 auto;padding:9px 6px;border:1px solid var(--line2);border-radius:10px;background:var(--paper2);font-size:12.5px;color:var(--ink);}
-.mrow .mbtn.pri{background:var(--accent);border-color:transparent;color:#fff;font-weight:600;}
-.mlist{max-height:168px;overflow-y:auto;border:1px solid var(--line2);border-radius:11px;background:var(--paper2);}
-.mlist button{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 11px;
-  border:0;border-bottom:1px solid var(--line);background:none;font-size:12.5px;color:var(--ink);text-align:left;}
-.mlist button:last-child{border-bottom:0;}
-.mlist button.on{color:var(--accent);font-weight:600;}
-.mlist button span{font-size:10.5px;color:var(--ink3);flex:0 0 auto;}
-.mlist .empty{padding:11px;font-size:11.5px;color:var(--ink3);}
-.mhint{font-size:10.5px;color:var(--ink3);line-height:1.7;margin-top:10px;}
 .ov .x{margin-left:auto;border:0;background:none;color:var(--ink3);font-size:16px;}
 .ov-sec{margin-top:15px;}
 .ov-sec>label{display:block;font-size:11px;letter-spacing:.12em;color:var(--ink3);margin-bottom:8px;}
@@ -409,9 +391,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
         <div class="s"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方游进来…</span></div>
       </div>
       <div class="hacts">
-        <button class="hbtn" id="hMusic" title="背景音乐（选场景 / 换歌）" aria-label="背景音乐">♪</button>
-        <button class="hbtn" id="hSetup" title="设置（资料 · 外观 · 语音 · 连接）" aria-label="设置">⚙</button>
-        <button class="hbtn" id="hInvite" title="邀请对方">🔗</button>
+        <button class="hbtn" id="hSetup" title="设置（资料 · 外观 · 语音）" aria-label="设置">⚙</button>
       </div>
     </header>
 
@@ -449,37 +429,11 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 
 <div class="side-mask hidden" id="sideMask"></div>
 
-<!-- 设置：一个弹层、四个 tab（页头只留一个 ⚙ 入口）
+<!-- 设置：一个弹层、三个 tab（页头只留一个 ⚙ 入口）
      tab 1 资料 ← 原 #pOv 的控件
      tab 2 外观 ← 原侧栏「外观」分区
      tab 3 语音 ← 原 #sOv 的 Key 面板 + 按 apiStyle 切换的音色下拉
-     tab 4 连接 ← 原 APK 壳右上角 ⚙ 菜单的四项功能；只在壳里显示 -->
-<div class="mask hidden" id="mMask"></div>
-<div class="ov hidden" id="mOv" role="dialog" aria-modal="true" aria-label="背景音乐">
-  <h2>♪ 背景音乐 <button class="x" id="mX">✕</button></h2>
-  <div class="mnow">
-    <b id="mTitle">还没开始</b>
-    <span id="mMeta">点下面任一首就开始放</span>
-  </div>
-  <div class="ov-sec"><label>场景（决定自动播的是哪一组）</label>
-    <div class="mchips" id="mScenes">
-      <button data-scene="daily">日常</button>
-      <button data-scene="love">傍晚</button>
-      <button data-scene="night">深夜</button>
-      <button data-scene="focus">棋局</button>
-    </div>
-  </div>
-  <div class="mrow">
-    <button class="mbtn" id="mPrev">⏮ 上一首</button>
-    <button class="mbtn" id="mNext">下一首 ⏭</button>
-    <button class="mbtn pri" id="mToggle">开 / 关</button>
-  </div>
-  <div class="ov-sec"><label>曲目（点一首直接放）</label>
-    <div class="mlist" id="mList"><div class="empty">加载中…</div></div>
-  </div>
-  <p class="mhint">音乐文件在你自己服务器上，不连外网；音量与静音跟全站设置共用。</p>
-</div>
-
+     音乐与「连接」（改地址/刷新/清缓存）不在这一页：都在首页的设置面板里。 -->
 <div class="mask hidden" id="sMask"></div>
 <div class="ov hidden" id="sOv" role="dialog" aria-modal="true" aria-label="设置">
   <h2>⚙ 设置 <button class="x" id="sX">✕</button></h2>
@@ -488,7 +442,6 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
     <button data-pane="profile" class="on" role="tab" aria-selected="true">资料</button>
     <button data-pane="look" role="tab" aria-selected="false">外观</button>
     <button data-pane="voice" role="tab" aria-selected="false">语音</button>
-    <button data-pane="link" role="tab" aria-selected="false" id="linkTab">连接</button>
   </div>
 
   <!-- ===== tab 1 · 资料 ===== -->
@@ -553,35 +506,6 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
     </div>
 
     <p class="ov-note">已保存的 Key 只显示前后四位，输入框留空表示不改动。</p>
-  </section>
-
-  <!-- ===== tab 4 · 连接（原 APK 壳 ⚙ 菜单；只在 HappyNavShell UA 下显示） ===== -->
-  <section class="set-pane hidden" id="paneLink" role="tabpanel" aria-label="连接">
-    <div class="ov-sec">
-      <label>服务器地址</label>
-      <div class="ov-row"><input type="text" id="linkOrigin" readonly aria-label="当前服务器地址"></div>
-      <div class="ov-row" style="margin-top:10px"><button class="chip" id="linkSettings">修改地址</button></div>
-      <p class="ov-note" style="margin-top:6px">地址只存在这台手机本机，改完会重新打开页面。</p>
-    </div>
-
-    <div class="ov-sec">
-      <label>页面与缓存</label>
-      <div class="ov-row">
-        <button class="chip" id="linkReload">刷新页面</button>
-        <button class="chip" id="linkClear">清空缓存并重载</button>
-      </div>
-      <p class="ov-note" style="margin-top:8px">清缓存会一并清掉 Cookie 和表单数据，页面会重新加载。</p>
-    </div>
-
-    <div class="ov-sec">
-      <label>关于 · 与鱼手机壳 1.3</label>
-      <p class="ov-note" style="margin-top:4px">
-        这不是另一个网站，只是把你的站点装进一个干净的壳里：没有开屏广告、没有推荐流，地址只存在本机。<br>
-        AI、记忆、聊天记录都在你自己那台服务器上，手机丢了只需改个地址重装。<br>
-        语音录制需要 https 地址；http 下页面会提示「这个环境不给录音」。
-      </p>
-    </div>
-    <p class="ov-note">这几项都是即时动作，不用保存；点「关闭」即可退出设置。</p>
   </section>
 
   <button class="ov-done" id="sDone">保存</button>
@@ -1059,7 +983,7 @@ $('recSend').onclick=async function(){
   if(r){await send({type:'voice',url:r.url,dur:dur});closeRec();toast('语音已发出');}
 };
 
-/* ---------------- 设置面板：资料 / 外观 / 语音 / 连接 四个 tab ----------------
+/* ---------------- 设置面板：资料 / 外观 / 语音 三个 tab ----------------
  * 为什么合成一个：以前页头有 ✎ 和 ⚙、侧栏还有「编辑」和「外观」分区，
  * 同一批设置散在四处，手机上还容易点错。现在页头只留一个 ⚙，进来用 tab 分。
  *
@@ -1067,15 +991,10 @@ $('recSend').onclick=async function(){
  *   资料 → localStorage + POST /api/yu/profile
  *   语音 → POST /api/settings/tts（config.json 的 key / 模型 / 音色）
  *   外观 → 点色块就生效（applyTheme 自己写 localStorage），没有后端可提交，按钮只是「完成」
- *   连接 → 全是即时动作，按钮是「关闭」，只关面板、不提交任何东西
- *
- * 「连接」是 APK 壳专属：WebView 的 UA 里带 HappyNavShell/1.3。
- * 浏览器里那三个 happynav:// scheme 无效，所以非壳环境直接把这个 tab 藏起来。 */
-var UA_STR=navigator.userAgent||'';
-var IS_SHELL=(typeof UA_STR.includes==='function')
-  ? UA_STR.includes('HappyNavShell') : (UA_STR.indexOf('HappyNavShell')!==-1);
-var SET_TAB='profile';
-var SET_BTN={profile:'保存',look:'完成',voice:'保存',link:'关闭'};
+ * 音乐与「连接（改地址 / 刷新 / 清缓存）」已经搬到首页设置面板：
+ *   音乐是全站的，壳能力也是全站的，放在与鱼里既找不到又占页头图标。
+ */var SET_TAB='profile';
+var SET_BTN={profile:'保存',look:'完成',voice:'保存'};
 /* 语音 tab 的本地状态：GET 回来的 apiStyle + 两家的音色列表 + 各自当前选中的 voice */
 var TTS={apiStyle:'breeze',voices:{breeze:[],mimo:[]},picked:{breeze:'',openai:''}};
 
@@ -1095,9 +1014,8 @@ function profilePaneFill(){
     b.setAttribute('aria-pressed',b.dataset.f==String(PROFILE.fontSize)?'true':'false');});
   $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
 }
-/** 切 tab：只管显隐和按钮文案，不碰数据。非壳环境不允许切到「连接」 */
+/** 切 tab：只管显隐和按钮文案，不碰数据 */
 function showPane(tab){
-  if(tab==='link'&&!IS_SHELL)tab='profile';
   SET_TAB=SET_BTN[tab]?tab:'profile';
   $('setTabs').querySelectorAll('button').forEach(function(b){
     b.setAttribute('aria-selected',b.dataset.pane===SET_TAB?'true':'false');
@@ -1105,17 +1023,9 @@ function showPane(tab){
   $('paneProfile').classList.toggle('hidden',SET_TAB!=='profile');
   $('paneLook').classList.toggle('hidden',SET_TAB!=='look');
   $('paneVoice').classList.toggle('hidden',SET_TAB!=='voice');
-  $('paneLink').classList.toggle('hidden',SET_TAB!=='link');
   $('sDone').textContent=SET_BTN[SET_TAB];
   $('sMsg').textContent='';
   if(SET_TAB==='voice')loadTts();
-  if(SET_TAB==='link')fillLinkPane();
-}
-/** 「连接」tab 的地址是只读的，每次切进来刷一次，别显示缓存里的旧值 */
-function fillLinkPane(){
-  var o=location.origin;
-  /* file:// 或老 WebView 下 origin 可能是字符串 "null"，退回到完整地址 */
-  $('linkOrigin').value=(o&&o!=='null')?o:location.href;
 }
 function openSetup(tab){
   $('sMsg').textContent='';
@@ -1144,42 +1054,15 @@ $('meCard').onclick=function(){openSetup('profile');};
 $('setTabs').onclick=function(e){
   var b=e.target.closest('button[data-pane]');
   if(!b)return;
-  if(b.dataset.pane==='link'&&!IS_SHELL)return;   /* 双保险：非壳根本点不进「连接」 */
   showPane(b.dataset.pane);
 };
 $('sX').onclick=closeSetup;
 $('sMask').onclick=closeSetup;
 $('uploadAv').onclick=function(){$('avFile').click();};
 $('sDone').onclick=function(){
-  /* 「连接」只关面板：不能落到下面的 saveProfile / saveTts 分支去 */
-  if(SET_TAB==='link'){closeSetup();return;}
   if(SET_TAB==='voice')return saveTts();
   if(SET_TAB==='look'){closeSetup();toast('外观已切换');return;}
   if(SET_TAB==='profile')return saveProfile();
-};
-
-/* ---------------- 连接 tab：壳能力（happynav:// scheme） ----------------
- * 非壳环境把 tab 按钮从 #setTabs 里藏掉，.hidden 是 display:none!important，
- * 连 tab 条都不会占位；showPane 里还有一层兜底，切不进去。 */
-(function initLinkTab(){
-  var btn=$('linkTab');
-  if(!IS_SHELL&&btn)btn.classList.add('hidden');
-})();
-/** 三个动作只在壳里有意义；非壳环境按钮本来就不可见，这里再给个无害的退化 */
-function shellGo(url,browserFallback){
-  if(IS_SHELL){location.href=url;return;}
-  if(browserFallback)browserFallback();
-}
-$('linkSettings').onclick=function(){
-  shellGo('happynav://settings',function(){toast('修改服务器地址只在 App 壳里可用');});
-};
-$('linkReload').onclick=function(){
-  shellGo('happynav://reload',function(){location.reload();});
-};
-$('linkClear').onclick=function(){
-  /* 会清掉 Cookie / 表单数据，动手前必须确认一次 */
-  if(!window.confirm('清空缓存会清掉 Cookie 和表单数据，并重新加载页面。确定继续吗？'))return;
-  shellGo('happynav://clear-cache',function(){toast('清缓存只在 App 壳里可用');});
 };
 
 /* ---------------- 语音 tab：Key / 模型 / 音色 ---------------- */
@@ -1337,7 +1220,8 @@ function copyInvite(){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('邀请链接已复制');},function(){toast(url);});
   else toast(url);
 }
-$('hInvite').onclick=copyInvite;$('copyLink').onclick=copyInvite;
+/* 邀请只剩侧栏那一个入口（页头的 🔗 已删：老板嫌图标多） */
+$('copyLink').onclick=copyInvite;
 $('clearRoom').onclick=function(){
   $('msgs').innerHTML='<div class="empty"><span class="big">🐟</span>本地显示已清空<br>刷新页面就能把聊天记录找回来</div>';
   toggleSide(false);toast('只是清了这台设备的显示，服务器记录还在');
@@ -1364,73 +1248,6 @@ window.addEventListener('beforeunload',function(){if(es)try{es.close();}catch(e)
   ['pointerdown','click','keydown'].forEach(function(ev){document.addEventListener(ev,once,true);});
 })();
 
-/* 背景音乐面板：选场景 / 逐首挑 / 上一首下一首 / 开关。
-   注意别和「首屏音频」抢：这里每一下都是用户主动点的，直接调 API 就行。 */
-(function(){
-  var A=window.WNAV_AUDIO;if(!A)return;
-  var CN={daily:'日常',love:'傍晚',night:'深夜',focus:'棋局'};
-  function g(id){return document.getElementById(id);}
-  var built=false;
-
-  function currentId(){var s=A.state?A.state():{};return s.id||'';}
-
-  function renderList(){
-    var box=g('mList'),list=(A.tracks&&A.tracks())||[];
-    box.innerHTML='';
-    if(!list.length){
-      var d=document.createElement('div');d.className='empty';
-      d.textContent='曲目没加载出来（看看 /music/manifest.json 在不在）';
-      box.appendChild(d);return;
-    }
-    list.forEach(function(t){
-      var b=document.createElement('button');
-      b.type='button';b.setAttribute('data-id',t.id);
-      var n=document.createElement('em');n.style.fontStyle='normal';n.textContent=t.title||t.id;
-      var m=document.createElement('span');m.textContent=t.mood||'';
-      b.appendChild(n);b.appendChild(m);
-      b.onclick=function(){A.playById(t.id);render();};
-      box.appendChild(b);
-    });
-    built=true;
-  }
-
-  function render(){
-    var s=A.state?A.state():{};
-    g('mTitle').textContent=s.title||(s.bgm?'播放中':'还没开始');
-    g('mMeta').textContent=[CN[s.scene]||'',s.bgm?(s.source==='files'?'曲目播放':'合成器兜底'):'已暂停']
-      .filter(Boolean).join(' · ');
-    [].forEach.call(g('mScenes').children,function(b){
-      b.classList.toggle('on',b.getAttribute('data-scene')===(s.scene||''));
-    });
-    g('mToggle').textContent=s.bgm?'关掉':'播放';
-    var cid=s.id||'';
-    [].forEach.call(g('mList').children,function(b){
-      if(!b.getAttribute('data-id'))return;
-      b.classList.toggle('on',b.getAttribute('data-id')===cid);
-    });
-  }
-
-  function openM(){
-    g('mMask').classList.remove('hidden');g('mOv').classList.remove('hidden');
-    if(!built)renderList();
-    render();
-    if(A.loadManifest)A.loadManifest().then(function(){if(!built)renderList();render();});
-  }
-  function closeM(){g('mMask').classList.add('hidden');g('mOv').classList.add('hidden');}
-
-  g('hMusic').onclick=function(){g('mOv').classList.contains('hidden')?openM():closeM();};
-  g('mX').onclick=closeM;g('mMask').onclick=closeM;
-  g('mScenes').onclick=function(e){
-    var b=e.target&&e.target.closest?e.target.closest('button[data-scene]'):null;if(!b)return;
-    var sc=b.getAttribute('data-scene');
-    if(A.state().bgm)A.setScene(sc);else A.startBgm(sc);
-    render();
-  };
-  g('mNext').onclick=function(){A.next();render();};
-  g('mPrev').onclick=function(){A.prev();render();};
-  g('mToggle').onclick=function(){if(A.state().bgm)A.stopBgm();else A.startBgm();render();};
-  if(A.onChange)A.onChange(render);
-})();
 
 /* [EXTERNAL-DEP · TTS] 文字转语音：调 /api/yu/tts，服务器用 edge-tts 合成后直接发进房间
    ★ 2026-11-11 教训：这段必须放在 script 末尾当独立语句，
