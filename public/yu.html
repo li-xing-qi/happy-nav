@@ -210,6 +210,24 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
   max-height:min(86vh,680px);overflow-y:auto;background:var(--paper);border:1px solid var(--line2);border-radius:16px;
   padding:18px;box-shadow:0 24px 70px rgba(10,25,30,.28);}
 .ov h2{font-size:15px;letter-spacing:.05em;display:flex;align-items:center;gap:8px;}
+/* ---- 背景音乐小面板 ---- */
+.mnow{padding:10px 12px;border:1px solid var(--line2);border-radius:11px;background:var(--paper2);margin-top:12px;}
+.mnow b{display:block;font-size:13.5px;}
+.mnow span{display:block;font-size:11px;color:var(--ink3);margin-top:3px;}
+.mchips{display:flex;gap:7px;flex-wrap:wrap;}
+.mchips button{padding:7px 12px;border:1px solid var(--line2);border-radius:99px;background:var(--paper2);font-size:12px;color:var(--ink);}
+.mchips button.on{background:var(--accent);border-color:transparent;color:#fff;font-weight:600;}
+.mrow{display:flex;gap:8px;margin-top:12px;}
+.mrow .mbtn{flex:1 1 auto;padding:9px 6px;border:1px solid var(--line2);border-radius:10px;background:var(--paper2);font-size:12.5px;color:var(--ink);}
+.mrow .mbtn.pri{background:var(--accent);border-color:transparent;color:#fff;font-weight:600;}
+.mlist{max-height:168px;overflow-y:auto;border:1px solid var(--line2);border-radius:11px;background:var(--paper2);}
+.mlist button{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 11px;
+  border:0;border-bottom:1px solid var(--line);background:none;font-size:12.5px;color:var(--ink);text-align:left;}
+.mlist button:last-child{border-bottom:0;}
+.mlist button.on{color:var(--accent);font-weight:600;}
+.mlist button span{font-size:10.5px;color:var(--ink3);flex:0 0 auto;}
+.mlist .empty{padding:11px;font-size:11.5px;color:var(--ink3);}
+.mhint{font-size:10.5px;color:var(--ink3);line-height:1.7;margin-top:10px;}
 .ov .x{margin-left:auto;border:0;background:none;color:var(--ink3);font-size:16px;}
 .ov-sec{margin-top:15px;}
 .ov-sec>label{display:block;font-size:11px;letter-spacing:.12em;color:var(--ink3);margin-bottom:8px;}
@@ -391,6 +409,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
         <div class="s"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方游进来…</span></div>
       </div>
       <div class="hacts">
+        <button class="hbtn" id="hMusic" title="背景音乐（选场景 / 换歌）" aria-label="背景音乐">♪</button>
         <button class="hbtn" id="hSetup" title="设置（资料 · 外观 · 语音 · 连接）" aria-label="设置">⚙</button>
         <button class="hbtn" id="hInvite" title="邀请对方">🔗</button>
       </div>
@@ -435,6 +454,32 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
      tab 2 外观 ← 原侧栏「外观」分区
      tab 3 语音 ← 原 #sOv 的 Key 面板 + 按 apiStyle 切换的音色下拉
      tab 4 连接 ← 原 APK 壳右上角 ⚙ 菜单的四项功能；只在壳里显示 -->
+<div class="mask hidden" id="mMask"></div>
+<div class="ov hidden" id="mOv" role="dialog" aria-modal="true" aria-label="背景音乐">
+  <h2>♪ 背景音乐 <button class="x" id="mX">✕</button></h2>
+  <div class="mnow">
+    <b id="mTitle">还没开始</b>
+    <span id="mMeta">点下面任一首就开始放</span>
+  </div>
+  <div class="ov-sec"><label>场景（决定自动播的是哪一组）</label>
+    <div class="mchips" id="mScenes">
+      <button data-scene="daily">日常</button>
+      <button data-scene="love">傍晚</button>
+      <button data-scene="night">深夜</button>
+      <button data-scene="focus">棋局</button>
+    </div>
+  </div>
+  <div class="mrow">
+    <button class="mbtn" id="mPrev">⏮ 上一首</button>
+    <button class="mbtn" id="mNext">下一首 ⏭</button>
+    <button class="mbtn pri" id="mToggle">开 / 关</button>
+  </div>
+  <div class="ov-sec"><label>曲目（点一首直接放）</label>
+    <div class="mlist" id="mList"><div class="empty">加载中…</div></div>
+  </div>
+  <p class="mhint">音乐文件在你自己服务器上，不连外网；音量与静音跟全站设置共用。</p>
+</div>
+
 <div class="mask hidden" id="sMask"></div>
 <div class="ov hidden" id="sOv" role="dialog" aria-modal="true" aria-label="设置">
   <h2>⚙ 设置 <button class="x" id="sX">✕</button></h2>
@@ -1317,6 +1362,74 @@ window.addEventListener('beforeunload',function(){if(es)try{es.close();}catch(e)
 (function(){var A=window.WNAV_AUDIO;if(!A)return;
   var once=function(){A.startBgm();['pointerdown','click','keydown'].forEach(function(ev){document.removeEventListener(ev,once,true);});};
   ['pointerdown','click','keydown'].forEach(function(ev){document.addEventListener(ev,once,true);});
+})();
+
+/* 背景音乐面板：选场景 / 逐首挑 / 上一首下一首 / 开关。
+   注意别和「首屏音频」抢：这里每一下都是用户主动点的，直接调 API 就行。 */
+(function(){
+  var A=window.WNAV_AUDIO;if(!A)return;
+  var CN={daily:'日常',love:'傍晚',night:'深夜',focus:'棋局'};
+  function g(id){return document.getElementById(id);}
+  var built=false;
+
+  function currentId(){var s=A.state?A.state():{};return s.id||'';}
+
+  function renderList(){
+    var box=g('mList'),list=(A.tracks&&A.tracks())||[];
+    box.innerHTML='';
+    if(!list.length){
+      var d=document.createElement('div');d.className='empty';
+      d.textContent='曲目没加载出来（看看 /music/manifest.json 在不在）';
+      box.appendChild(d);return;
+    }
+    list.forEach(function(t){
+      var b=document.createElement('button');
+      b.type='button';b.setAttribute('data-id',t.id);
+      var n=document.createElement('em');n.style.fontStyle='normal';n.textContent=t.title||t.id;
+      var m=document.createElement('span');m.textContent=t.mood||'';
+      b.appendChild(n);b.appendChild(m);
+      b.onclick=function(){A.playById(t.id);render();};
+      box.appendChild(b);
+    });
+    built=true;
+  }
+
+  function render(){
+    var s=A.state?A.state():{};
+    g('mTitle').textContent=s.title||(s.bgm?'播放中':'还没开始');
+    g('mMeta').textContent=[CN[s.scene]||'',s.bgm?(s.source==='files'?'曲目播放':'合成器兜底'):'已暂停']
+      .filter(Boolean).join(' · ');
+    [].forEach.call(g('mScenes').children,function(b){
+      b.classList.toggle('on',b.getAttribute('data-scene')===(s.scene||''));
+    });
+    g('mToggle').textContent=s.bgm?'关掉':'播放';
+    var cid=s.id||'';
+    [].forEach.call(g('mList').children,function(b){
+      if(!b.getAttribute('data-id'))return;
+      b.classList.toggle('on',b.getAttribute('data-id')===cid);
+    });
+  }
+
+  function openM(){
+    g('mMask').classList.remove('hidden');g('mOv').classList.remove('hidden');
+    if(!built)renderList();
+    render();
+    if(A.loadManifest)A.loadManifest().then(function(){if(!built)renderList();render();});
+  }
+  function closeM(){g('mMask').classList.add('hidden');g('mOv').classList.add('hidden');}
+
+  g('hMusic').onclick=function(){g('mOv').classList.contains('hidden')?openM():closeM();};
+  g('mX').onclick=closeM;g('mMask').onclick=closeM;
+  g('mScenes').onclick=function(e){
+    var b=e.target&&e.target.closest?e.target.closest('button[data-scene]'):null;if(!b)return;
+    var sc=b.getAttribute('data-scene');
+    if(A.state().bgm)A.setScene(sc);else A.startBgm(sc);
+    render();
+  };
+  g('mNext').onclick=function(){A.next();render();};
+  g('mPrev').onclick=function(){A.prev();render();};
+  g('mToggle').onclick=function(){if(A.state().bgm)A.stopBgm();else A.startBgm();render();};
+  if(A.onChange)A.onChange(render);
 })();
 
 /* [EXTERNAL-DEP · TTS] 文字转语音：调 /api/yu/tts，服务器用 edge-tts 合成后直接发进房间

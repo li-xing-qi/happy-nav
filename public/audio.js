@@ -43,7 +43,8 @@
   function state() {
     return {
       vol: vol, muted: muted, sfxOn: sfxOn, bgm: playing, wanted: wanted,
-      scene: music.scene, title: music.title, source: usingFiles ? 'files' : (playing ? 'synth' : '')
+      scene: music.scene, title: music.title, id: usingFiles ? music.last : '',
+      source: usingFiles ? 'files' : (playing ? 'synth' : '')
     };
   }
   function emit() {
@@ -312,6 +313,46 @@
     emit();
   }
 
+  /* ---- 手动选歌（页面上的「♪」面板用） ---- */
+  function trackList() {
+    return music.manifest ? music.manifest.tracks.slice() : [];
+  }
+
+  function playById(id) {
+    var t = music.tracks[id];
+    if (!t) return false;
+    if (muted) setMuted(false);
+    if (!music.scene) music.scene = sceneByClock();
+    /* 手动点的这首放队首，后面接当前场景的其余曲目（否则「下一首」只会重放这一首） */
+    var rest = buildQueue(music.scene).filter(function (x) { return x.id !== id; });
+    music.queue = [t].concat(rest);
+    music.idx = 0;
+    if (!playing) {
+      /* 不走 startBgm：它是异步拉清单再放第一首，会把这一首顶掉 */
+      var c = ensure();
+      if (!c) return false;
+      if (c.state === 'suspended' && c.resume) { try { c.resume().catch(function () {}); } catch (e) {} }
+      wanted = true; playing = true; errCount = 0;
+      fadeBgm(BGM_LEVEL, 1.2);
+      return playTrack(t);
+    }
+    return playTrack(t);
+  }
+
+  function next() {
+    if (muted) setMuted(false);
+    if (!playing) return startBgm();
+    nextTrack();
+    return true;
+  }
+
+  function prev() {
+    if (!playing || muted) return false;
+    if (!music.queue.length) return false;
+    music.idx = (music.idx - 1 + music.queue.length) % music.queue.length;
+    return playTrack(music.queue[music.idx]);
+  }
+
   function stopBgm(silent) {
     if (!playing && !wanted) { if (!silent) emit(); return; }
     playing = false;
@@ -390,6 +431,11 @@
     startBgm: startBgm,
     stopBgm: stopBgm,
     setScene: setScene,
+    loadManifest: loadManifest,
+    tracks: trackList,
+    playById: playById,
+    next: next,
+    prev: prev,
     click: click,
     setVol: setVol,
     setMuted: setMuted,
