@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-19",
+  "license": "Mixkit Free License：可免费用于商业与非商业项目，无需署名；不可把音乐本身作为商品/素材库再分发。",
+  "source": "https://mixkit.co/free-stock-music/",
+  "note": "112kbps 转码自官方 320kbps 预览，仅用于本项目背景音乐；曲目名单见 tracks。",
+  "scenes": {
+    "daily": ["chillax", "walking-in-the-park", "feeling-good", "smooth-like-jazz", "piano-reflections"],
+    "night": ["staring-at-the-night-sky", "rest-now", "lullaby-night", "vastness"],
+    "love": ["old-letter", "love-is-eternal", "piano-reflections", "well-be-okay"],
+    "focus": ["vastness", "piano-reflections", "rest-now", "well-be-okay"]
+  },
+  "tracks": [
+    { "id": "piano-reflections", "title": "Piano Reflections", "file": "piano-reflections.mp3", "sec": 198, "mood": "温柔钢琴" },
+    { "id": "staring-at-the-night-sky", "title": "Staring at the Night Sky", "file": "staring-at-the-night-sky.mp3", "sec": 142, "mood": "夜深" },
+    { "id": "chillax", "title": "Chillax", "file": "chillax.mp3", "sec": 144, "mood": "慵懒午后" },
+    { "id": "walking-in-the-park", "title": "Walking in the Park", "file": "walking-in-the-park.mp3", "sec": 95, "mood": "轻快散步" },
+    { "id": "rest-now", "title": "Rest Now", "file": "rest-now.mp3", "sec": 299, "mood": "安静长曲" },
+    { "id": "vastness", "title": "Vastness", "file": "vastness.mp3", "sec": 229, "mood": "留白出神" },
+    { "id": "old-letter", "title": "Old Letter", "file": "old-letter.mp3", "sec": 164, "mood": "旧信/想念" },
+    { "id": "love-is-eternal", "title": "Love is Eternal", "file": "love-is-eternal.mp3", "sec": 103, "mood": "温柔浪漫" },
+    { "id": "smooth-like-jazz", "title": "Smooth Like Jazz", "file": "smooth-like-jazz.mp3", "sec": 158, "mood": "爵士夜" },
+    { "id": "feeling-good", "title": "Feeling Good", "file": "feeling-good.mp3", "sec": 99, "mood": "心情好" },
+    { "id": "lullaby-night", "title": "Lullaby Night", "file": "lullaby-night.mp3", "sec": 103, "mood": "睡前" },
+    { "id": "well-be-okay", "title": "We'll Be Okay", "file": "well-be-okay.mp3", "sec": 104, "mood": "安慰" }
+  ]
+}

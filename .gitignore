@@ -19,6 +19,9 @@ data/
 workspace/*
 !workspace/.gitkeep
 
+# ---------- 背景音乐（25MB 的 mp3 不进版本库，用 scripts/fetch-music.sh 重下）----------
+public/music/*.mp3
+
 # ---------- 备份与临时文件 ----------
 *.bak
 *.bak-*

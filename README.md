@@ -26,6 +26,7 @@
 | 万象牌 AI 队友 | ✅ 是 | 同上，`agent-bot/` 里包含卡牌队友场景 |
 | 与鱼「跑命令 / 改文件 / 画图」 | ⚠️ 要接 dsh | 房间与桥接都在仓库里，但「干活」需要外部 dsh（见 `docs/接入dsh.md`） |
 | 语音朗读 | ⚠️ 默认关闭 | 开启后走微软在线 TTS，朗读文本会离开本机 |
+| 背景音乐 | ⚠️ 要先下曲目 | 12 首免费曲目按场景轮播（白天/夜里/深夜/棋局），跑一次 `scripts/fetch-music.sh`；不下则退回内置合成器，见 [docs/背景音乐.md](docs/背景音乐.md) |
 | 带情绪的语音 / 换嗓子 / 唱歌 | ⚠️ 要接 dsh + TTS 插件 | 链路、配置字段、Breeze/MiMo 的差别与额度、唱歌为什么必须另配 key，全在 **[docs/语音.md](docs/语音.md)** |
 | 手机 App（安卓壳） | ✅ 可选 | 21KB WebView 壳，无广告无开屏；只连你自己的地址，见 [`clients/android`](clients/android/README.md) |
 
@@ -440,6 +441,8 @@ node agent-bot/verify-tools.js            # 跑 30 项工具通道验收
 ├── engine.js              万象牌引擎（纯逻辑库，可单独 require）
 ├── content.js             卡牌、天赋、关卡数据
 ├── public/                前端页面（全部相对路径请求，可反代到任意域名）
+│   ├── audio.js           全站音频：背景音乐轮播（含场景/交叉淡化）+ 点击音效
+│   └── music/manifest.json 曲目清单与场景分组（mp3 不进仓库，见 docs/背景音乐.md）
 ├── agent-bot/             AI 陪玩进程（四个场景，可选但对完整体验是必需的）
 │   ├── config.js          集中配置：路径/模型/房间/身份都从环境变量来
 │   ├── index.js           进程入口，按开关加载场景
@@ -452,6 +455,7 @@ node agent-bot/verify-tools.js            # 跑 30 项工具通道验收
 ├── bridge/                轻量桥接（只做与鱼 ↔ dsh，不含其他场景）
 ├── scripts/
 │   ├── tts.py             语音合成封装（可选，需要 edge-tts）
+│   ├── fetch-music.sh     下载 + 转码背景音乐（首次部署必跑）
 │   ├── smoke-test.sh      部署后冒烟
 │   ├── check-deps.sh      环境体检
 │   └── migrate-uploads.js 附件迁移工具
@@ -461,7 +465,8 @@ node agent-bot/verify-tools.js            # 跑 30 项工具通道验收
 │   ├── 部署与维护手册.md   完整手册：架构、接口契约、验收用例、改造风险
 │   ├── 可选组件.md        第三方依赖的许可证与接入边界
 │   ├── 接入dsh.md        让与鱼能跑命令/改文件/画图的完整步骤
-│   └── 语音.md           带情绪的语音、换音色、唱歌的完整链路与故障对照
+│   ├── 语音.md           带情绪的语音、换音色、唱歌的完整链路与故障对照
+│   └── 背景音乐.md       场景轮播怎么做的、加歌怎么加、授权与兜底
 ├── deploy.sh              Linux/macOS 一键部署
 ├── start.ps1              Windows 一键启动
 ├── Dockerfile

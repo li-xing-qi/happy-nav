@@ -268,7 +268,9 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
   .side{position:fixed;z-index:24;left:0;top:0;bottom:0;width:min(280px,84vw);transform:translateX(-102%);
     transition:transform .24s ease;box-shadow:14px 0 40px rgba(0,0,0,.12);}
   .side.open{transform:none;}
-  .side-mask{position:fixed;inset:0;background:rgba(10,20,25,.35);z-index:23;}
+  /* 侧栏打开时不再压暗页面：只留一层透明可点区域，点空白处收起抽屉。
+     以前是 rgba(10,20,25,.35)，看起来像整屏亮度被调低，老板明确不想要。 */
+  .side-mask{position:fixed;inset:0;background:transparent;z-index:23;}
   .tip{display:none;}
   .msg .col{max-width:82%;}
   #tray{left:8px;right:8px;}
