@@ -1108,6 +1108,21 @@ const server = http.createServer(safe(async (req, res) => {
   if (p === '/yu' || p === '/yu.html') return serveStatic(res, 'yu.html');
   if (p === '/lingxi' || p === '/lingxi/index.html') return serveStatic(res, path.join('lingxi', 'index.html'));
 
+  /* ---------- 背景音乐：单独给长缓存 ----------
+   * 全局默认是 no-store（页面要即时更新），但 mp3 一首 2MB，
+   * 不缓存的话每换一首、每次刷新都要重下一遍。
+   * 曲目文件按内容命名（换歌就换文件名），所以可以放心长缓存。 */
+  if (p.startsWith('/music/')) {
+    const mdir = path.join(PUBLIC, 'music');
+    const full = path.join(PUBLIC, p.slice(1));
+    if (!full.startsWith(mdir)) return send(res, 403, 'forbidden', 'text/plain; charset=utf-8');
+    return fs.readFile(full, (err, data) => {
+      if (err) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+      send(res, 200, data, MIME[path.extname(full).toLowerCase()] || 'application/octet-stream',
+        { 'Cache-Control': 'public, max-age=604800' });
+    });
+  }
+
   /* ---------- 「与鱼」附件：图片 / 语音 inline，文件 attachment ---------- */
   if (p.startsWith('/yu-f/')) return YU.file(req, res, u, p);
 
