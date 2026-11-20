@@ -203,6 +203,31 @@ bash build-apk.sh
 
 脚本做的事就六步：`aapt2 compile` → `aapt2 link` → `javac` → `d8` → 塞 `classes.dex` + `zipalign` → `apksigner sign`。没有隐藏步骤，也没有下载依赖。
 
+## 发版（不用手点网页）
+
+装 APK 的人不该被要求先装 JDK 和 build-tools，所以成品包跟着仓库走：
+
+```
+clients/android/artifacts/
+├── happy-nav-1.4.1.apk     ← 签好名的成品（33KB）
+└── release-notes.md        ← 这一版的说明，Release 正文就是它
+```
+
+发一个新版只有两步：
+
+```bash
+cp build/happy-nav-1.4.2.apk artifacts/ && $EDITOR artifacts/release-notes.md
+git commit -am "release: 1.4.2" && git push
+git tag android-v1.4.2 && git push origin android-v1.4.2
+```
+
+`.github/workflows/release-apk.yml` 收到 tag 就建 Release、把 `artifacts/` 里最新的 apk 挂上去。
+
+**为什么不在 CI 里现构建**：`build-apk.sh` 要 JDK 17 + build-tools + `android.jar` 三件套，
+在 runner 上装齐是几百 MB 的下载，为 33KB 的包不值。要的是「下载即装」，不是「CI 会编译」。
+
+apk 不进 `.gitignore` 是故意的：它只有 33KB，而「能直接下」比「仓库干净」重要。
+
 ### 关于签名
 
 第一次构建会生成 `keystore.jks`（密码写在脚本里，不是秘密）。两点必须知道：

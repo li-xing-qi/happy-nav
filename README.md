@@ -33,6 +33,10 @@
 | 带情绪的语音 / 换嗓子 / 唱歌 | ⚠️ 要接 dsh + TTS 插件 | 链路、配置字段、Breeze/MiMo 的差别与额度、唱歌为什么必须另配 key，全在 **[docs/语音.md](docs/语音.md)** |
 | 手机 App（安卓壳） | ✅ 可选 | 21KB WebView 壳，无广告无开屏；只连你自己的地址，见 [`clients/android`](clients/android/README.md) |
 
+**安卓壳不用自己构建**：直接下 [Releases 里的 `happy-nav-1.4.1.apk`](https://github.com/li-xing-qi/happy-nav/releases/latest)（33KB，已签名）。
+发新版只要 `git tag android-vX.Y.Z && git push origin android-vX.Y.Z`，
+`.github/workflows/release-apk.yml` 会自动建 Release 并把 `clients/android/artifacts/` 里的包装上去。
+
 **一句话**：只跑站点，它是一个干净的双人聊天室 + 棋牌室；把 `agent-bot/` 也启动起来，四个场景就有了 AI 陪玩；再接上 dsh，与鱼才会「干活」。
 
 ### 关于第三方组件：本项目不包含、也不分发
