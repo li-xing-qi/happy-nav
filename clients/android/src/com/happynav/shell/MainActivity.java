@@ -7,10 +7,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
+import android.media.MediaRecorder;
 import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
@@ -36,8 +38,20 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 「与鱼」手机壳：一个不带广告、不带开屏的 WebView 容器。
@@ -63,6 +77,18 @@ public class MainActivity extends Activity {
     private long lastBackAt = 0L;
     /** 长按返回键已唤出改地址对话框时，把随后的 onKeyUp 消费掉，避免又走一次默认返回 */
     private boolean backLongHandled = false;
+
+    /* ---- 原生录音 ----
+     * 为什么要绕开网页：WebView 只在安全上下文（https / localhost）下给麦克风。
+     * 用 easytier 的内网地址是 http://，navigator.mediaDevices 直接是 undefined，
+     * 页面上的「开始录音」只会弹一句「这个环境不给录音」。
+     * 所以壳里自己用 MediaRecorder 录、自己上传、自己发消息；
+     * 页面只管计时和弹层，发出去以后靠它自己的 SSE 把这条语音收回来。 */
+    private MediaRecorder recorder;
+    private File recFile;
+    private long recStartAt = 0L;
+    private String recCode = "", recPid = "";
+    private boolean pendingVoiceStart = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -352,6 +378,242 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        /**
+         * 开始录音。返回 true 表示已经在录；false 表示没权限（系统正在问）或起不来。
+         * 页面拿 false 时只要等 __voiceStarted 回调，不要自己再点一次。
+         */
+        @JavascriptInterface
+        public boolean voiceStart(final String code, final String pid) {
+            recCode = code == null ? "" : code;
+            recPid = pid == null ? "" : pid;
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingVoiceStart = true;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        requestPermissions(
+                                new String[]{android.Manifest.permission.RECORD_AUDIO}, REQ_AUDIO);
+                    }
+                });
+                return false;
+            }
+            final CountDownLatch latch = new CountDownLatch(1);
+            final boolean[] ok = {false};
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    ok[0] = startNativeRec();
+                    latch.countDown();
+                }
+            });
+            try { latch.await(3, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return ok[0];
+        }
+
+        /** 停止并发送。录到的文件自己上传、自己发消息，页面不用管音频数据。 */
+        @JavascriptInterface
+        public boolean voiceSend() {
+            final File f = stopNativeRec(true);
+            final int dur = Math.max(1, Math.round((System.currentTimeMillis() - recStartAt) / 1000f));
+            if (f == null || !f.exists() || f.length() < 800) {
+                if (f != null) { try { f.delete(); } catch (Exception ignored) { } }
+                done(false, "太短了，按住说一句再发");
+                return false;
+            }
+            final String code = recCode, pid = recPid;
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    uploadVoice(f, dur, code, pid);
+                }
+            }, "yu-voice").start();
+            return true;
+        }
+
+        /** 关掉弹层时取消：停止并删掉，不发 */
+        @JavascriptInterface
+        public void voiceCancel() {
+            stopNativeRec(false);
+        }
+    }
+
+    /* ---------------- 原生录音 ---------------- */
+
+    private boolean startNativeRec() {
+        stopNativeRec(false);
+        try {
+            File dir = new File(getCacheDir(), "voice");
+            if (!dir.exists() && !dir.mkdirs()) return false;
+            recFile = new File(dir, "v-" + System.currentTimeMillis() + ".m4a");
+            recorder = new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioEncodingBitRate(64000);   // 60 秒 ≈ 480KB，远低于上传上限
+            recorder.setAudioSamplingRate(44100);
+            recorder.setOutputFile(recFile.getAbsolutePath());
+            recorder.prepare();
+            recorder.start();
+            recStartAt = System.currentTimeMillis();
+            return true;
+        } catch (Exception e) {
+            Log.w("YuVoice", "录音起不来：" + e);
+            stopNativeRec(false);
+            return false;
+        }
+    }
+
+    /** @param keep true 表示留下文件（要发），false 表示丢掉（取消/重录） */
+    private File stopNativeRec(boolean keep) {
+        File f = recFile;
+        try { if (recorder != null) recorder.stop(); } catch (Exception ignored) { }
+        try { if (recorder != null) recorder.release(); } catch (Exception ignored) { }
+        recorder = null;
+        recFile = null;
+        if (!keep && f != null) {
+            try { f.delete(); } catch (Exception ignored) { }
+            return null;
+        }
+        return f;
+    }
+
+    /** 上传 → 发消息。两步都在后台线程，成功后回调页面关弹层。 */
+    private void uploadVoice(File f, int dur, String code, String pid) {
+        try {
+            String base = baseUrl();
+            if (base == null) throw new IOException("还没填站点地址");
+            String name = "语音-" + System.currentTimeMillis() + ".m4a";
+            String q = base + "/api/yu/upload?code=" + Uri.encode(code) + "&pid=" + Uri.encode(pid)
+                    + "&kind=voice&name=" + Uri.encode(name);
+            JSONObject up = postBytes(q, f, name);
+            if (!up.optBoolean("ok")) throw new IOException(up.optString("error", "上传失败"));
+            String url = up.optString("url", "");
+            if (url.isEmpty()) throw new IOException("上传没返回地址");
+
+            JSONObject body = new JSONObject();
+            body.put("code", code);
+            body.put("pid", pid);
+            body.put("type", "voice");
+            body.put("url", url);
+            body.put("dur", dur);
+            JSONObject sent = postJson(base + "/api/yu/send", body);
+            if (sent.has("error")) throw new IOException(sent.optString("error", "发送失败"));
+            done(true, "");
+        } catch (Exception e) {
+            Log.w("YuVoice", "语音发送失败：" + e);
+            done(false, "发送失败：" + shortMsg(e));
+        } finally {
+            try { f.delete(); } catch (Exception ignored) { }
+        }
+    }
+
+    private void done(final boolean ok, final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (ok) Toast.makeText(MainActivity.this, "语音已发出", Toast.LENGTH_SHORT).show();
+                js("window.__voiceDone&&window.__voiceDone(" + ok + "," + JSONObject.quote(msg) + ")");
+            }
+        });
+    }
+
+    private static String shortMsg(Exception e) {
+        String m = e.getMessage();
+        if (m == null) return "网络不通";
+        return m.length() > 40 ? m.substring(0, 40) + "…" : m;
+    }
+
+    /** 页面 → 原生 的一小段 JS（用于录音状态回调） */
+    private void js(final String code) {
+        if (web == null) return;
+        web.post(new Runnable() {
+            @Override public void run() {
+                if (web == null) return;
+                try { web.evaluateJavascript(code, null); } catch (Exception ignored) { }
+            }
+        });
+    }
+
+    /* ---------------- 极简 HTTP（不引第三方库） ---------------- */
+
+    private String baseUrl() {
+        String u = prefs().getString(KEY_URL, "");
+        if (u == null || u.isEmpty()) return null;
+        try {
+            Uri p = Uri.parse(u);
+            if (p.getScheme() == null || p.getHost() == null) return null;
+            return p.getScheme() + "://" + p.getHost() + (p.getPort() > 0 ? ":" + p.getPort() : "");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JSONObject postBytes(String urlStr, File f, String name) throws IOException {
+        byte[] data = new byte[(int) f.length()];
+        FileInputStream in = new FileInputStream(f);
+        try {
+            int off = 0, n;
+            while (off < data.length && (n = in.read(data, off, data.length - off)) > 0) off += n;
+        } finally {
+            try { in.close(); } catch (Exception ignored) { }
+        }
+
+        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
+        try {
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(25000);
+            c.setFixedLengthStreamingMode(data.length);
+            c.setRequestProperty("Content-Type", "application/octet-stream");
+            c.setRequestProperty("X-File-Name", Uri.encode(name));
+            OutputStream os = c.getOutputStream();
+            os.write(data);
+            os.flush();
+            os.close();
+            int rc = c.getResponseCode();
+            InputStream is = rc >= 400 ? c.getErrorStream() : c.getInputStream();
+            return new JSONObject(readAll(is));
+        } catch (org.json.JSONException e) {
+            throw new IOException("服务器返回看不懂");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private JSONObject postJson(String urlStr, JSONObject body) throws IOException {
+        byte[] data = body.toString().getBytes("UTF-8");
+        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
+        try {
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(25000);
+            c.setFixedLengthStreamingMode(data.length);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            OutputStream os = c.getOutputStream();
+            os.write(data);
+            os.flush();
+            os.close();
+            int rc = c.getResponseCode();
+            InputStream is = rc >= 400 ? c.getErrorStream() : c.getInputStream();
+            return new JSONObject(readAll(is));
+        } catch (org.json.JSONException e) {
+            throw new IOException("服务器返回看不懂");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private static String readAll(InputStream is) throws IOException {
+        if (is == null) return "";
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        try {
+            while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+        } finally {
+            try { is.close(); } catch (Exception ignored) { }
+        }
+        return new String(bo.toByteArray(), "UTF-8");
     }
 
     /**
@@ -487,11 +749,22 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] results) {
         if (req == REQ_AUDIO) {
+            boolean granted = results.length > 0
+                    && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            /* 原生录音要的权限：给了就直接开录，并告诉页面开始计时（页面在等这个回调） */
+            if (pendingVoiceStart) {
+                pendingVoiceStart = false;
+                if (granted) {
+                    if (startNativeRec()) js("window.__voiceStarted&&window.__voiceStarted()");
+                    else Toast.makeText(this, "麦克风打不开，重开一下 App 试试", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "没给麦克风权限，语音发不了", Toast.LENGTH_LONG).show();
+                }
+                return;
+            }
             PermissionRequest pr = pendingAudioRequest;
             pendingAudioRequest = null;
             if (pr == null) return;
-            boolean granted = results.length > 0
-                    && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
             if (granted) pr.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
             else {
                 pr.deny();

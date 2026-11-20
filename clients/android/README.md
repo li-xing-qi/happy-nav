@@ -33,13 +33,15 @@
 | 发图 / 传文件 | 接了系统的文件选择器 |
 | 下载 | 转给系统下载管理器，通知栏可见 |
 | 退到后台还能收她的消息 | 1.4 起：前台服务自己守一条只读的 SSE，有新消息弹系统通知（见下） |
+| 发语音（http 地址也行） | 1.4 起：原生 `MediaRecorder` 录、原生上传，绕开 WebView 的安全上下文限制（见下） |
 | 点外链 | 同域名在壳里开，其它交给系统浏览器 |
 | 连不上 | 不白屏，给「重新连接」页 |
 | 改地址 / 刷新 / 清缓存 | 首页 → 设置 →「手机壳」（`happynav://settings` / `reload` / `clear-cache`）；页面打不开时用错误页的「改地址」按钮 |
 
 ## 做不到什么
 
-- **语音录制要 https。** 页面用的是 `navigator.mediaDevices.getUserMedia`，浏览器只在安全上下文（HTTPS / localhost）下给麦克风。填 `http://` 地址时点麦克风，页面自己会提示「这个环境不给录音」，改用「文件」发音频。
+- **浏览器里的语音录制仍然要 https**（页面用的是 `getUserMedia`，只在安全上下文下给麦克风）。
+  但**壳里不受这个限制**：1.4 起录音改由原生 `MediaRecorder` 做，`http://` 地址照样能发语音，见下一节。
 - **没有厂商推送。** 不接小米/华为/OPPO/vivo 的推送通道，所以**杀进程以后收不到**。
   1.4 的常驻服务能扛住「切走 / 从最近任务划掉 / 锁屏」，扛不住「强行停止」和
   国产 ROM 的深度清理；真要抗杀，得把 App 加进电池优化白名单。
@@ -117,6 +119,61 @@ curl -N 'http://<你的地址>/api/yu/stream?code=<房间号>&bg=1'
 # 3) 看日志（连着电脑时）
 adb logcat -s YuNotify
 ```
+
+## 发语音（1.4）
+
+### 为什么网页里的录音在你的环境里用不了
+
+页面上的「🎤」走的是 `navigator.mediaDevices.getUserMedia` + `MediaRecorder`。
+这两个 API **只在安全上下文**（https、localhost、file://）里存在。用 easytier 的内网地址
+是 `http://10.x.x.x:3000`，WebView 判定不是安全上下文，`navigator.mediaDevices` **直接是
+`undefined`** —— 点「开始录音」只会得到一句「这个环境不给录音」。
+
+这个限制在 WebView 里没有开关可关：`onPermissionRequest` 只负责「给不给」，不负责
+「有没有这个 API」。所以只能在原生做。
+
+### 壳里怎么走
+
+```
+点「开始录音」
+  └─ window.HappyNav.voiceStart(code, pid)
+       └─ 没有 RECORD_AUDIO → 系统弹权限框；允许后自动开录，并回叫 __voiceStarted()
+       └─ 有权限 → MediaRecorder(MPEG_4 / AAC / 64kbps / 44.1kHz) → 写进 cacheDir/voice/
+点「发送语音」
+  └─ window.HappyNav.voiceSend()
+       ├─ 停录、算时长（不足 800 字节当没录到）
+       ├─ POST /api/yu/upload?kind=voice&name=语音-xxx.m4a   （原始字节，X-File-Name 带头）
+       └─ POST /api/yu/send {type:'voice', url, dur}
+            └─ 成功后 __voiceDone(true) → 页面关弹层
+关弹层 / 点遮罩
+  └─ window.HappyNav.voiceCancel() → 停录并删文件，不发
+```
+
+**音频数据不经过 JS 桥**：原生录完自己上传，页面不会拿到几 MB 的 base64。
+发出去以后，页面靠**它自己的 SSE** 收到这条消息（和收到别人发的一样），所以气泡会自动出现。
+
+### 页面怎么判断走哪条路
+
+不看 UA，看原生有没有注入方法：
+
+```js
+if (window.HappyNav && window.HappyNav.voiceStart) {  /* 壳里：原生录 */ }
+else { /* 浏览器：getUserMedia，原有逻辑 */ }
+```
+
+所以同一个 `yu.html` 在两个环境里都能用：浏览器（https）走网页录音，壳里走原生录音。
+`voiceStart()` 返回 `false` 只有一种情况——正在向系统要麦克风权限，这时页面提示
+「允许后会自动开始」，原生拿到权限后会调 `__voiceStarted()` 让页面开始计时。
+
+### 权限与边界
+
+| 项 | 说明 |
+|---|---|
+| `RECORD_AUDIO` | 清单里早就有（网页录音也要它），但**运行时权限是点「开始录音」时才要**，不在启动时弹 |
+| 文件格式 | `MPEG_4` 容器 + AAC，扩展名 `.m4a`，服务端 `mimeFor('voice','m4a')` → `audio/mp4`，WebView 与手机浏览器都能直接播 |
+| 体积 | 64kbps，60 秒约 480KB；受服务端 `MAX_UPLOAD` 限制 |
+| 停在后台 | 录音中切走会继续录（MediaRecorder 不跟 Activity 生命周期），回来还能发；不想要就点遮罩取消 |
+| 失败提示 | 上传/发送失败会显示具体原因（「先加入房间」「文件太大」等），并把「发送语音」重新点亮 |
 
 ## 自己构建
 

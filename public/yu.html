@@ -954,10 +954,51 @@ function stopRec(){
   if(rec&&rec.state!=='inactive'){try{rec.stop();}catch(e){}}
   $('recDot').classList.add('hidden');$('recStart').textContent='● 重新录音';
 }
-$('voiceBtn').onclick=function(){$('rMask').classList.remove('hidden');$('rOv').classList.remove('hidden');};
-function closeRec(){stopRec();$('rMask').classList.add('hidden');$('rOv').classList.add('hidden');}
+$('voiceBtn').onclick=function(){
+  nativeRec=false;recBlob=null;
+  if(recTimer)clearInterval(recTimer),recTimer=null;
+  $('recDot').classList.add('hidden');$('recStart').textContent='● 开始录音';
+  $('recSend').disabled=true;$('recTime').textContent='00:00';
+  $('recHint').textContent='点「开始录音」，说完再点「发送」';
+  $('rMask').classList.remove('hidden');$('rOv').classList.remove('hidden');
+};
+function closeRec(){
+  /* 关弹层等于放弃这次录音：原生那边也要停掉并删文件，不然会一直录下去 */
+  if(nativeRec&&window.HappyNav&&window.HappyNav.voiceCancel){try{window.HappyNav.voiceCancel();}catch(e){}nativeRec=false;}
+  stopRec();$('rMask').classList.add('hidden');$('rOv').classList.add('hidden');
+}
 $('rX').onclick=closeRec;$('rMask').onclick=closeRec;
+/* 录音有两种走法：
+   ① 浏览器（https / localhost）——getUserMedia + MediaRecorder，音频留在页面里上传；
+   ② 手机壳（easytier 的 http 地址）——WebView 根本不给麦克风（navigator.mediaDevices
+      直接是 undefined），改由原生录音、原生上传，页面只管计时和弹层。
+   判断依据看原生有没有注入 voiceStart，不看 UA。 */
+var nativeRec=false;
+function recUIStart(){
+  nativeRec=true;
+  recStart=Date.now();$('recDot').classList.remove('hidden');$('recSend').disabled=true;
+  $('recHint').textContent='正在录音…说完点「发送语音」';
+  $('recTime').textContent='00:00';
+  if(recTimer)clearInterval(recTimer);
+  recTimer=setInterval(function(){$('recTime').textContent=fmtSec((Date.now()-recStart)/1000);},200);
+}
+/* 原生拿到麦克风权限后会自动开录，再叫我们一声 */
+window.__voiceStarted=function(){recUIStart();};
+/* 原生发完了（或失败）的通知 */
+window.__voiceDone=function(ok,msg){
+  nativeRec=false;
+  if(recTimer)clearInterval(recTimer),recTimer=null;
+  $('recDot').classList.add('hidden');$('recStart').textContent='● 重新录音';
+  if(ok){closeRec();toast('语音已发出');}
+  else{$('recHint').textContent=msg||'发送失败，再试一次';$('recSend').disabled=false;}
+};
+
 $('recStart').onclick=async function(){
+  if(window.HappyNav&&window.HappyNav.voiceStart){
+    if(window.HappyNav.voiceStart(CODE,PID))recUIStart();
+    else $('recHint').textContent='第一次用要给麦克风权限，允许后会自动开始';
+    return;
+  }
   if(!navigator.mediaDevices||!window.MediaRecorder){$('recHint').textContent='这个环境不给录音，用「文件」直接发音频吧';return;}
   try{
     var stream=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -979,6 +1020,11 @@ $('recStart').onclick=async function(){
   }catch(e){$('recHint').textContent='拿不到麦克风权限；可以用「文件」发一段音频';}
 };
 $('recSend').onclick=async function(){
+  if(nativeRec&&window.HappyNav&&window.HappyNav.voiceSend){
+    $('recSend').disabled=true;$('recHint').textContent='语音传送中…';
+    if(!window.HappyNav.voiceSend()){$('recHint').textContent='发送失败，再试一次';$('recSend').disabled=false;}
+    return;
+  }
   if(!recBlob)return;
   stopRec();
   var dur=Math.max(1,Math.round((Date.now()-recStart)/1000));

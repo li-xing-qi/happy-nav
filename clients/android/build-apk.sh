@@ -13,7 +13,7 @@
 #   PLATFORM=$HOME/android-build/plat/android-34/android.jar \
 #   bash build-apk.sh
 #
-# 产物：build/happy-nav-1.4.apk（已签名，可直接安装）
+# 产物：build/happy-nav-1.4.1.apk（已签名，可直接安装）
 # ============================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -23,7 +23,7 @@ BT="${BT:-$HOME/android-build/bt/android-14}"
 PLATFORM="${PLATFORM:-$HOME/android-build/plat/android-34/android.jar}"
 
 OUT="build"
-APK_NAME="happy-nav-1.4.apk"
+APK_NAME="happy-nav-1.4.1.apk"
 
 export JAVA_HOME="$JDK"
 export PATH="$JDK/bin:$PATH"
