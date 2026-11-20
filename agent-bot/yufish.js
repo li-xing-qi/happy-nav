@@ -31,6 +31,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { execFile } = require('child_process');
 /* ws 优先从本目录依赖解析；如宿主机把 ws 装在别处，用 WS_MODULE 指向它 */
 let WebSocket;
 try {
@@ -757,8 +758,10 @@ async function poll() {
     // ★ 记进流水账（老板侧）。名字统一写「老板」，
     //   因为 chatlog.py 靠 name in ('老板','owner') 判断是不是老板本人说的，
     //   写游戏/房间昵称会导致不被标记重要（五子棋那边踩过同样的坑）。
-    logChat('user', msgText(m), '老板');
-    await forwardToDsh(m);
+    /* 先转发（语音在里面转写），再按「听到的话」记流水账——
+       原来先记 [语音]，转写出来的文字就进不了 chatlog 和判官。 */
+    const said = await forwardToDsh(m);
+    logChat('user', said || msgText(m), '老板');
   }
   if (seenIds.size > 500) {
     const keep = [...seenIds].slice(-200);
@@ -783,6 +786,32 @@ function yuFileToLocal(url) {
   const full = path.join(YU_FILES_DIR, id);
   if (!fs.existsSync(full)) return null;
   return full;
+}
+
+/* ---------- 语音转写 ----------
+ * 她没有耳朵：与鱼的语音消息只有一个 /yu-f/<id>，DSH 那边收到 record 段就只是
+ * 「[语音]」三个字，说了什么完全不知道。这里先用本机 whisper.cpp
+ * （pywhispercpp + ggml 模型）转成文字，再按「[语音] 文字」发过去。
+ * 2 核机器上 5 秒语音约 2~4 秒；超时/没模型/全是噪音一律返回空串，
+ * 退回原来的 record 段，绝不因为转写失败把消息丢掉。
+ */
+const STT_SCRIPT = process.env.YU_STT_SCRIPT || '/root/bin/stt.py';
+const STT_TIMEOUT = Number(process.env.YU_STT_TIMEOUT || 30000);
+const STT_ON = process.env.YU_STT !== '0';
+
+function transcribe(localPath) {
+  if (!STT_ON) return Promise.resolve('');
+  return new Promise((resolve) => {
+    execFile('python3', [STT_SCRIPT, localPath],
+      { timeout: STT_TIMEOUT, maxBuffer: 1 << 20 },
+      (err, stdout) => {
+        if (err) {
+          log(`语音转写失败（${path.basename(localPath)}）：${String(err.message || err).slice(0, 120)}`);
+          return resolve('');
+        }
+        resolve(String(stdout || '').replace(/\s+/g, ''));
+      });
+  });
 }
 
 /* 组一个 OneBot 私聊消息事件推给 DSH
@@ -817,8 +846,15 @@ async function forwardToDsh(m) {
   } else if (m.type === 'voice') {
     const localPath = yuFileToLocal(m.url);
     if (localPath) {
-      segs.push({ type: 'record', data: { file: localPath } });
-      raw = '[语音]';
+      /* 先转文字：她看不懂音频，只有文字才进得了这一轮对话 */
+      const heard = await transcribe(localPath);
+      if (heard) {
+        segs.push({ type: 'text', data: { text: `[语音] ${heard}` } });
+        raw = `[语音] ${heard}`;
+      } else {
+        segs.push({ type: 'record', data: { file: localPath } });
+        raw = '[语音]';
+      }
     } else {
       segs.push({ type: 'text', data: { text: '[语音]（读不到）' } });
       raw = '[语音]';
@@ -836,6 +872,8 @@ async function forwardToDsh(m) {
    * beginTurn 会把上一拍的 600ms 定时器清掉 —— 否则它会拿着这条新消息的空回复触发，
    * 既判不出东西，又会把上一条没被判的消息搅乱（QA 实测过的那个 0 次 bug）。 */
   beginTurn(raw);
+  /* 转写后的原话：后面 raw 会被拼上记忆快照，流水账和判官要的是这句 */
+  const said = raw;
 
   /* 四层记忆注入（只在文字消息上做，图片/语音段保持原样）
    * 节流：完整快照每 FULL_INJECTION_GAP 才注入一次；适配器块每次都给，
@@ -909,6 +947,7 @@ async function forwardToDsh(m) {
   const ok = sendEvent(ev);
   if (ok) log(`→ DSH  [${m.type}] ${raw.slice(0, 50).replace(/\n/g, ' ')}`);
   else log('DSH 未连接，消息丢掉:', raw.slice(0, 40));
+  return said;
 }
 
 /* ---------- 主循环 ---------- */

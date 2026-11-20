@@ -29,6 +29,7 @@
 | 背景音乐 | ⚠️ 要先下曲目 | 12 首免费曲目按场景轮播（白天/夜里/深夜/棋局），跑一次 `scripts/fetch-music.sh`；不下则退回内置合成器，见 [docs/背景音乐.md](docs/背景音乐.md) |
 | 手机壳：发语音（http 也行） | ⚠️ 要装 APK | 1.4 起用原生 `MediaRecorder` 录、原生上传，绕开「http 不是安全上下文、WebView 不给麦克风」的限制 |
 | 手机壳：退到后台也能收消息 | ⚠️ 要装 APK | Android 1.4 起带前台服务，退出应用后她说话会弹系统通知；源码在 `clients/android/`，见 [它的 README](clients/android/README.md) |
+| 她听懂你发的语音 | ⚠️ 要装本地转写 | whisper.cpp 把语音转成文字再交给她；不装就只有 `[语音]` 占位。装法与实测见 [docs/语音.md](docs/语音.md) |
 | 带情绪的语音 / 换嗓子 / 唱歌 | ⚠️ 要接 dsh + TTS 插件 | 链路、配置字段、Breeze/MiMo 的差别与额度、唱歌为什么必须另配 key，全在 **[docs/语音.md](docs/语音.md)** |
 | 手机 App（安卓壳） | ✅ 可选 | 21KB WebView 壳，无广告无开屏；只连你自己的地址，见 [`clients/android`](clients/android/README.md) |
 
@@ -457,6 +458,7 @@ node agent-bot/verify-tools.js            # 跑 30 项工具通道验收
 ├── bridge/                轻量桥接（只做与鱼 ↔ dsh，不含其他场景）
 ├── scripts/
 │   ├── tts.py             语音合成封装（可选，需要 edge-tts）
+│   ├── stt.py             语音转写封装（可选，需要 pywhispercpp + ggml 模型）
 │   ├── fetch-music.sh     下载 + 转码背景音乐（首次部署必跑）
 │   ├── smoke-test.sh      部署后冒烟
 │   ├── check-deps.sh      环境体检
