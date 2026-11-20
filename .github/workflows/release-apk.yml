@@ -1,0 +1,53 @@
+name: Release Android APK
+
+# 打 android-v* 的 tag 就自动发版：
+#   git tag android-v1.4.1 && git push origin android-v1.4.1
+# 仓库里放一个签好名的 apk（clients/android/artifacts/），这里只负责把它挂到 Releases。
+# 为什么不在 CI 里现构建：build-apk.sh 依赖本机的 JDK / build-tools / android.jar
+# 三件套，在 runner 上装齐要下载几百 MB，为 33KB 的包不值得。
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 找 apk
+        id: find
+        run: |
+          set -e
+          f=$(ls clients/android/artifacts/*.apk 2>/dev/null | sort | tail -1)
+          if [ -z "$f" ]; then
+            echo "clients/android/artifacts/ 里没有 apk" >&2
+            exit 1
+          fi
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          echo "找到 $f（$(stat -c%s "$f") 字节）"
+
+      - name: 建 Release 并上传
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          tag="$GITHUB_REF_NAME"
+          ver="${tag#android-}"
+          notes="clients/android/artifacts/release-notes.md"
+          if [ -f "$notes" ]; then
+            gh release create "$tag" \
+              --title "与鱼 · 手机壳 $ver（Android）" \
+              --notes-file "$notes" \
+              "${{ steps.find.outputs.file }}"
+          else
+            gh release create "$tag" \
+              --title "与鱼 · 手机壳 $ver（Android）" \
+              --generate-notes \
+              "${{ steps.find.outputs.file }}"
+          fi
