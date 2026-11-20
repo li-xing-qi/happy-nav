@@ -958,7 +958,7 @@ $('voiceBtn').onclick=function(){
   nativeRec=false;recBlob=null;
   if(recTimer)clearInterval(recTimer),recTimer=null;
   $('recDot').classList.add('hidden');$('recStart').textContent='● 开始录音';
-  $('recSend').disabled=true;$('recTime').textContent='00:00';
+  $('recSend').disabled=true;$('recSend').textContent='发送语音';$('recTime').textContent='00:00';
   $('recHint').textContent='点「开始录音」，说完再点「发送」';
   $('rMask').classList.remove('hidden');$('rOv').classList.remove('hidden');
 };
@@ -976,7 +976,8 @@ $('rX').onclick=closeRec;$('rMask').onclick=closeRec;
 var nativeRec=false;
 function recUIStart(){
   nativeRec=true;
-  recStart=Date.now();$('recDot').classList.remove('hidden');$('recSend').disabled=true;
+  recStart=Date.now();$('recDot').classList.remove('hidden');
+  $('recSend').disabled=false;$('recSend').textContent='■ 停止并发送';
   $('recHint').textContent='正在录音…说完点「发送语音」';
   $('recTime').textContent='00:00';
   if(recTimer)clearInterval(recTimer);
@@ -990,7 +991,8 @@ window.__voiceDone=function(ok,msg){
   if(recTimer)clearInterval(recTimer),recTimer=null;
   $('recDot').classList.add('hidden');$('recStart').textContent='● 重新录音';
   if(ok){closeRec();toast('语音已发出');}
-  else{$('recHint').textContent=msg||'发送失败，再试一次';$('recSend').disabled=false;}
+  else{$('recHint').textContent=msg||'发送失败，再试一次';
+       $('recSend').disabled=false;$('recSend').textContent='发送语音';}
 };
 
 $('recStart').onclick=async function(){
@@ -1011,22 +1013,34 @@ $('recStart').onclick=async function(){
     rec.onstop=function(){
       recBlob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});
       stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});
-      $('recSend').disabled=!recBlob.size;
+      $('recSend').disabled=!recBlob.size;$('recSend').textContent='发送语音';
       $('recHint').textContent=recBlob.size?'录好了，点「发送语音」':'没录到声音，再试一次';
     };
-    rec.start();recStart=Date.now();$('recDot').classList.remove('hidden');$('recSend').disabled=true;
+    rec.start();recStart=Date.now();$('recDot').classList.remove('hidden');
+    $('recSend').disabled=false;$('recSend').textContent='■ 停止并发送';
     $('recHint').textContent='正在录音…说完点「发送语音」';
     recTimer=setInterval(function(){$('recTime').textContent=fmtSec((Date.now()-recStart)/1000);},200);
   }catch(e){$('recHint').textContent='拿不到麦克风权限；可以用「文件」发一段音频';}
 };
+var recBusy=false;
 $('recSend').onclick=async function(){
   if(nativeRec&&window.HappyNav&&window.HappyNav.voiceSend){
     $('recSend').disabled=true;$('recHint').textContent='语音传送中…';
     if(!window.HappyNav.voiceSend()){$('recHint').textContent='发送失败，再试一次';$('recSend').disabled=false;}
     return;
   }
+  if(recBusy)return;
+  /* 还在录：先停，等 onstop 把 recBlob 填好，再走下面发送。
+     原来这一格是 disabled 的，录上以后没有任何办法停下来——死锁。 */
+  if(rec&&rec.state==='recording'){
+    recBusy=true;
+    $('recSend').disabled=true;$('recHint').textContent='收尾中…';
+    stopRec();
+    for(var w=0;w<2500&&!recBlob;w+=100)await new Promise(function(r){setTimeout(r,100);});
+    recBusy=false;
+    if(!recBlob){$('recHint').textContent='没录到声音，再试一次';$('recSend').disabled=false;return;}
+  }
   if(!recBlob)return;
-  stopRec();
   var dur=Math.max(1,Math.round((Date.now()-recStart)/1000));
   var f=new File([recBlob],'语音-'+Date.now()+'.'+recExt,{type:recBlob.type||'audio/webm'});
   toast('语音传送中…');
