@@ -18,6 +18,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
@@ -55,6 +56,7 @@ public class MainActivity extends Activity {
     private static final String UA_SUFFIX = " HappyNavShell/1.3";
     private static final int REQ_FILE = 1001;
     private static final int REQ_AUDIO = 1002;
+    private static final int REQ_NOTIF = 1003;
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingAudioRequest;
@@ -72,7 +74,30 @@ public class MainActivity extends Activity {
 
         String url = prefs().getString(KEY_URL, "");
         if (url == null || url.length() == 0) showSetup(null);
+        else if (wantsYu(getIntent())) openSite(yuUrl(url));   // 从通知点进来
         else openSite(url);
+    }
+
+    /** 通知带过来的意图：要直接进与鱼页（且得知道房间号） */
+    private boolean wantsYu(Intent it) {
+        if (it == null || !it.getBooleanExtra("openYu", false)) return false;
+        String room = prefs().getString("roomCode", "");
+        return room != null && room.length() > 0;
+    }
+
+    /** 把站点地址拼成「与鱼」页地址；地址栏里带了路径也只取根，免得拼出双斜杠 */
+    private String yuUrl(String base) {
+        String room = prefs().getString("roomCode", "");
+        if (room == null || room.isEmpty()) return base;
+        String root = base;
+        try {
+            Uri u = Uri.parse(base);
+            if (u.getScheme() != null && u.getHost() != null) {
+                root = u.getScheme() + "://" + u.getHost()
+                        + (u.getPort() > 0 ? ":" + u.getPort() : "");
+            }
+        } catch (Exception ignored) { }
+        return root + "/yu?room=" + Uri.encode(room);
     }
 
     private SharedPreferences prefs() {
@@ -191,6 +216,9 @@ public class MainActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setUserAgentString(s.getUserAgentString() + UA_SUFFIX);
 
+        /* 唯一的网页→原生通道。只暴露「守哪个房间」，见 JsBridge 的注释 */
+        web.addJavascriptInterface(new JsBridge(), "HappyNav");
+
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         web.setBackgroundColor(Color.parseColor("#F7F7F5"));
         web.setWebViewClient(new WebViewClient() {
@@ -300,6 +328,60 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         web.loadUrl(url);
+    }
+
+    /**
+     * 网页 → 原生的唯一通道，只暴露一个方法：告诉通知服务守哪个房间。
+     *
+     * 权限边界：即使页面被换成别的站，能做的也只有「启停一个只读订阅」——
+     * 碰不到文件、Cookie、也发不出消息。所以这里不用再做来源校验。
+     */
+    private class JsBridge {
+        @JavascriptInterface
+        public void watchRoom(final String code, final String pid, final int since) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (code == null || code.isEmpty()) return;
+                    prefs().edit()
+                            .putString("roomCode", code)
+                            .putString("roomPid", pid == null ? "" : pid)
+                            .apply();
+                    askNotifyPermission();
+                    NotifyService.start(MainActivity.this, code, pid, since);
+                }
+            });
+        }
+    }
+
+    /**
+     * 通知权限（Android 13 起是运行时的，不申请一条都弹不出来）。
+     * 只在「第一次真的要守房间」时问，不在启动时打断首屏；
+     * 问过被拒就不再重复弹系统框，改成提示去设置里开。
+     */
+    private void askNotifyPermission() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        if (prefs().getBoolean("notifAsked", false)) {
+            Toast.makeText(this, "通知权限没开，去系统设置里允许「与鱼」发通知", Toast.LENGTH_LONG).show();
+            return;
+        }
+        prefs().edit().putBoolean("notifAsked", true).apply();
+        requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_NOTIF);
+    }
+
+    /** singleTask：点通知时 Activity 还活着就走这里，不重载页面，只在不是与鱼页时跳过去 */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (!wantsYu(intent) || web == null) return;
+        String cur = web.getUrl();
+        if (cur == null || cur.indexOf("/yu") < 0) {
+            String base = prefs().getString(KEY_URL, "");
+            if (base != null && !base.isEmpty()) web.loadUrl(yuUrl(base));
+        }
     }
 
     /**
@@ -417,6 +499,15 @@ public class MainActivity extends Activity {
             }
             return;
         }
+        if (req == REQ_NOTIF) {
+            boolean granted = results.length > 0
+                    && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (!granted) {
+                Toast.makeText(this, "没给通知权限，退出应用后收不到她的消息",
+                        Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         super.onRequestPermissionsResult(req, perms, results);
     }
 
@@ -471,6 +562,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        NotifyService.foreground = false;   // 界面不可见了，她的消息可以弹
         if (web != null) web.onPause();
         super.onPause();
     }
@@ -478,6 +570,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        NotifyService.foreground = true;    // 正在看，就别弹通知了
         if (web != null) web.onResume();
     }
 

@@ -424,6 +424,7 @@ module.exports = function createYu(ctx) {
       me.lastSeen = Date.now();
       /* 逐个下发：peerOf 是「相对于收信人」算的，不能共用一个包 */
       for (const s of r.subs) {
+        if (!s.user) continue;   /* bg 订阅没有用户身份，不推 peer */
         try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {}
       }
       return json(res, { ok: true, act: me.act });
@@ -504,26 +505,34 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/stream') {
       const r = loadRoom(normCode(u.searchParams.get('code')));
-      const me = r.users.find(x => x.pid === cleanStr(u.searchParams.get('pid'), 40));
-      if (!me) return json(res, { needJoin: true });
+      /* bg=1：手机壳的原生通知服务用的只读订阅。
+       * 它不挂用户身份——不校验 pid、不参与在线状态、不推 peer，
+       * 只在有新消息时推 msgs。这样后台守着也不会把用户顶成两个人。 */
+      const bg = u.searchParams.get('bg') === '1';
+      const me = bg ? null : r.users.find(x => x.pid === cleanStr(u.searchParams.get('pid'), 40));
+      if (!bg && !me) return json(res, { needJoin: true });
+      const since = Number(u.searchParams.get('since') || 0);
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
-      me.lastSeen = Date.now();
-      const sub = { res, user: me, lastId: Number(u.searchParams.get('since') || 0) };
+      if (me) me.lastSeen = Date.now();
+      /* bg 且 since=0：从「现在」开始算，别把整屋子历史当新消息弹一遍 */
+      const sub = { res, user: me, bg, lastId: (bg && !since) ? r.seq : since };
       r.subs.add(sub);
-      res.write('event: hello\ndata: ' + JSON.stringify({
-        seat: me.seat, peer: peerOf(r, me), members: r.users.map(publicUser),
-        stickers: r.stickers, kaomojis: r.kaomojis }) + '\n\n');
+      res.write('event: hello\ndata: ' + JSON.stringify(me
+        ? { seat: me.seat, peer: peerOf(r, me), members: r.users.map(publicUser),
+            stickers: r.stickers, kaomojis: r.kaomojis }
+        : { bg: true, lastId: sub.lastId, code: r.code }) + '\n\n');
       /* msgs 事件由 push() 直接广播；这里只兜底补发断线期间漏掉的 */
       const tick = setInterval(() => {
         try {
-          me.lastSeen = Date.now();
           const missed = r.msgs.filter(m => m.id > (sub.lastId || 0));
           if (missed.length) {
             sub.lastId = missed[missed.length - 1].id;
             /* 只补 SSE 建立前 / 重连后的历史，实时消息已广播过，按 id 去重交给前端 */
             res.write('event: sync\ndata: ' + JSON.stringify({ msgs: missed }) + '\n\n');
           }
+          if (!me) return;
+          me.lastSeen = Date.now();
           const peer = peerOf(r, me), sig = JSON.stringify(peer);
           if (sig !== sub.peerSig) { sub.peerSig = sig; res.write('event: peer\ndata: ' + JSON.stringify({ peer }) + '\n\n'); }
         } catch (e) { /* 连接已断 */ }
@@ -532,7 +541,7 @@ module.exports = function createYu(ctx) {
       req.on('close', () => {
         clearInterval(tick); clearInterval(ping);
         r.subs.delete(sub);
-        me.lastSeen = Math.min(me.lastSeen, Date.now() - ONLINE_MS);
+        if (me) me.lastSeen = Math.min(me.lastSeen, Date.now() - ONLINE_MS);
       });
       return;
     }
@@ -547,7 +556,7 @@ module.exports = function createYu(ctx) {
       const sig = r.users.map(u => u.name + (now - u.lastSeen < ONLINE_MS ? '1' : '0')).join('|');
       if (sig !== r.peerSig) {
         r.peerSig = sig;
-        for (const s of r.subs) { try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {} }
+        for (const s of r.subs) { if (!s.user) continue; try { s.res.write('event: peer\ndata: ' + JSON.stringify({ peer: peerOf(r, s.user) }) + '\n\n'); } catch (e) {} }
       }
       if (r.users.length === 0 && now - r.lastAt > 12 * 3600 * 1000) rooms.delete(r.code);
     }

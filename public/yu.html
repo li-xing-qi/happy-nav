@@ -659,6 +659,11 @@ async function enterRoom(){
     lastId=(r.msgs&&r.msgs.length)?r.msgs[r.msgs.length-1].id:0;
     scrollBottom(true);
     connect();
+    /* [SHELL] 把房间号交给手机壳：退到后台后由原生前台服务守着这条流，
+       她说话就弹系统通知。浏览器里没有 window.HappyNav，这段自动跳过。 */
+    try{
+      if(window.HappyNav&&window.HappyNav.watchRoom)window.HappyNav.watchRoom(CODE,PID,lastId);
+    }catch(e){}
     pingT=setInterval(function(){fetch('/api/yu/ping',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code:CODE,pid:PID})}).catch(function(){});},8000);
   }catch(e){joinMsg('连不上服务器，稍后再试',true);$('enterBtn').disabled=false;}
