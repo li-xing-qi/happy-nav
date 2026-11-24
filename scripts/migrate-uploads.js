@@ -6,7 +6,7 @@
    用法（在站点根目录，建议先停服务 / pm2 stop wanxiang）：
      node scripts/migrate-uploads.js --dry-run     # 只看计划，不改动
      node scripts/migrate-uploads.js               # 真跑（会先备份整个 data/）
-     DATA_DIR=./data node scripts/migrate-uploads.js
+     DATA_DIR=/root/wanxiang/data node scripts/migrate-uploads.js
 
    幂等：已经是 <md5前16位>.<ext> 的文件不会重复处理；重复内容只保留一份。
    ============================================================ */

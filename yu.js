@@ -19,21 +19,19 @@ const { execFileSync } = require('child_process');
    所以前端拿到的是一个正常的 /yu-f/<id> 语音消息。
 
    外部依赖：
-     scripts/tts.py        —— edge-tts 的 Python 包装（stdin JSON → stdout JSON）
+     /root/bin/tts.py      —— edge-tts 的 Python 包装（stdin JSON → stdout JSON）
      pip3 install edge-tts —— 已装在服务器上
 
    环境变量：
-     TTS_PY     默认 站点目录下 scripts/tts.py
+     TTS_PY     默认 /root/bin/tts.py
      TTS_VOICE  默认 zh-CN-XiaoxiaoNeural（女声，活泼，最适合小鱼）
-     TTS_ENABLE 设成 1 才启用（默认关闭，因为是在线合成）
+     TTS_ENABLE 设成 0 可以整体关闭这个接口
 
    安全：不执行任意命令，只固定调 tts.py；文字上限 800 字；超时 30 秒。
    ============================================================ */
-const TTS_PY = process.env.TTS_PY || path.join(__dirname, 'scripts', 'tts.py');
+const TTS_PY = process.env.TTS_PY || '/root/bin/tts.py';
 const TTS_VOICE = process.env.TTS_VOICE || 'zh-CN-XiaoxiaoNeural';
-/* 默认关闭：语音合成调用微软 Edge 的在线服务，朗读文本会离开本机。
-   这和「所有数据都在本地」的口径冲突，所以默认不启用，需要的人自己开。 */
-const TTS_ENABLE = process.env.TTS_ENABLE === '1';
+const TTS_ENABLE = process.env.TTS_ENABLE !== '0';
 const TTS_MAX_CHARS = 800;
 
 function synthSpeech(text, voice) {

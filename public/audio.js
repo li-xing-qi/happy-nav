@@ -5,11 +5,16 @@
    · 浏览器要求先有用户交互，所以 AudioContext 只在点击 / 按键时创建或恢复
    · 音量、静音、点击音效开关统一存在 localStorage，四页共用同一套设置
    页面要放背景音乐只需调用 WNAV_AUDIO.startBgm()（可选场景：daily / night / love / focus）
-   静音 key：wnav_mute   音量 key：wnav_vol（0~1）   点击音效 key：wnav_sfx（'0' 为关） */
+   静音 key：wnav_mute   音量 key：wnav_vol（0~1）   点击音效 key：wnav_sfx（'0' 为关）
+   播放模式 key：wnav_mode（order / shuffle / repeat1） */
 (function () {
   'use strict';
-  var K_VOL = 'wnav_vol', K_MUTE = 'wnav_mute', K_SFX = 'wnav_sfx';
+  var K_VOL = 'wnav_vol', K_MUTE = 'wnav_mute', K_SFX = 'wnav_sfx', K_MODE = 'wnav_mode';
   function clamp(v, a, b) { v = Number(v); if (!isFinite(v)) return a; return Math.max(a, Math.min(b, v)); }
+
+  /* 播放模式：order 顺序 / shuffle 随机 / repeat1 单曲循环 */
+  function fixMode(m) { return (m === 'shuffle' || m === 'repeat1') ? m : 'order'; }
+  var playMode = fixMode(localStorage.getItem(K_MODE));
 
   /* 兼容 v3 的五子棋音量：老用户不用重新调 */
   var vol = (function () {
@@ -39,12 +44,14 @@
   var activeDeck = 0;
   var curIdx = -1;          // 此刻真正在放的那一副（ended 只认它）
   var errCount = 0;
+  var needsGesture = false; // 自动播放被浏览器拦了，需要用户点一下
 
   function state() {
     return {
       vol: vol, muted: muted, sfxOn: sfxOn, bgm: playing, wanted: wanted,
       scene: music.scene, title: music.title, id: usingFiles ? music.last : '',
-      source: usingFiles ? 'files' : (playing ? 'synth' : '')
+      source: usingFiles ? 'files' : (playing ? 'synth' : ''),
+      mode: playMode, needsGesture: needsGesture
     };
   }
   function emit() {
@@ -177,11 +184,13 @@
     var ids = j.scenes[scene] || j.scenes.daily || [];
     var q = [];
     for (var i = 0; i < ids.length; i++) if (music.tracks[ids[i]]) q.push(music.tracks[ids[i]]);
-    /* 洗牌，但别让同一首连着放 */
-    for (var k = q.length - 1; k > 0; k--) {
-      var r = Math.floor(Math.random() * (k + 1)); var t = q[k]; q[k] = q[r]; q[r] = t;
+    /* 顺序模式：保持清单原顺序；随机模式：洗牌，但别让同一首连着放 */
+    if (playMode === 'shuffle') {
+      for (var k = q.length - 1; k > 0; k--) {
+        var r = Math.floor(Math.random() * (k + 1)); var t = q[k]; q[k] = q[r]; q[r] = t;
+      }
+      if (q.length > 1 && q[0].id === music.last) { var t2 = q[0]; q[0] = q[1]; q[1] = t2; }
     }
-    if (q.length > 1 && q[0].id === music.last) { var t2 = q[0]; q[0] = q[1]; q[1] = t2; }
     return q;
   }
 
@@ -198,7 +207,7 @@
         src.connect(g); g.connect(bgmBus);
       }
     } catch (e) { g = null; }
-    return { el: el, gain: g };
+    return { el: el, gain: g, killTimer: null };
   }
 
   function fadeGain(g, el, to, sec) {
@@ -226,6 +235,9 @@
     var cur = deck[activeDeck];
     var old = deck[1 - activeDeck];
     curIdx = activeDeck;
+    /* 两副 deck 轮换：上一轮留给这一副的「清理定时器」必须取消，
+     * 否则快速切歌时 2.4 秒后会把刚起播的这首 pause 掉 → 表现成「点了没声」。 */
+    if (cur.killTimer) { clearTimeout(cur.killTimer); cur.killTimer = null; }
     try {
       cur.el.src = '/music/' + track.file;
       cur.el.load();
@@ -233,13 +245,22 @@
     var p = cur.el.play();
     if (p && p.catch) {
       p.catch(function (err) {
+        /* AbortError = 我们自己又 load() 打断了上一次 play()（快速切歌），
+         * 不是曲目坏，绝不能算进 errCount —— 否则连点几下就掉进合成器兜底，
+         * 而旧歌其实还在响，界面和声音就对不上了。 */
+        if (err && err.name === 'AbortError') return;
         /* 自动播放被拦不算文件坏；其他错误才跳过这首 */
         if (!err || err.name !== 'NotAllowedError') onTrackError();
+        else { needsGesture = true; emit(); }
       });
     }
+    if (p && p.then) p.then(function () { if (needsGesture) { needsGesture = false; emit(); } }, function () {});
     fadeGain(cur.gain, cur.el, 1, XFADE * 0.6);
     fadeGain(old.gain, old.el, 0.0001, XFADE);
-    setTimeout(function () { try { old.el.pause(); old.el.removeAttribute('src'); } catch (e) {} }, XFADE * 1000 + 200);
+    old.killTimer = setTimeout(function () {
+      old.killTimer = null;
+      try { old.el.pause(); old.el.removeAttribute('src'); } catch (e) {}
+    }, XFADE * 1000 + 200);
     activeDeck = 1 - activeDeck;
     music.title = track.title || track.id;
     music.last = track.id;
@@ -253,10 +274,53 @@
     if (!playing || muted) return;
     if (!music.queue.length) music.queue = buildQueue(music.scene);
     if (!music.queue.length) { fallbackSynth(); return; }
+    /* 单曲循环：重放当前这首，不前进 */
+    if (playMode === 'repeat1' && music.queue[music.idx]) {
+      if (!playTrack(music.queue[music.idx])) fallbackSynth();
+      return;
+    }
+    /* 随机：取一首和当前不同的（队列只有一首就重放它） */
+    if (playMode === 'shuffle') {
+      var n = music.queue.length;
+      if (n === 1) { music.idx = 0; }
+      else {
+        var curId = music.queue[music.idx] && music.queue[music.idx].id;
+        var ni = music.idx;
+        for (var k = 0; k < 12 && (ni === music.idx || music.queue[ni].id === curId); k++) {
+          ni = Math.floor(Math.random() * n);
+        }
+        if (ni === music.idx) ni = (music.idx + 1) % n;
+        music.idx = ni;
+      }
+      if (!playTrack(music.queue[music.idx])) fallbackSynth();
+      return;
+    }
     music.idx = (music.idx + 1) % music.queue.length;
     if (!playTrack(music.queue[music.idx])) fallbackSynth();
   }
 
+  /* ---- 播放模式 ---- */
+  function getPlayMode() { return playMode; }
+  function setPlayMode(m) {
+    var next = fixMode(m);
+    if (next === playMode) { emit(); return playMode; }
+    playMode = next;
+    try { localStorage.setItem(K_MODE, playMode); } catch (e) {}
+    /* 切回顺序：按清单原顺序重建队列，但不动正在放的那首 */
+    if (playMode === 'order' && music.manifest) {
+      var q = buildQueue(music.scene);
+      if (q.length) {
+        music.queue = q;
+        music.idx = 0;
+        for (var i = 0; i < q.length; i++) if (q[i].id === music.last) { music.idx = i; break; }
+      }
+    }
+    emit();
+    return playMode;
+  }
+
+  /* 只有真正的媒体错误（曲目 404 / 解码失败）才会走到这里。
+   * play() 被自己打断的 AbortError 已在 playTrack 里 return 掉，不会累加 errCount。 */
   function onTrackError() {
     errCount++;
     if (errCount >= 3) { fallbackSynth(); return; }
@@ -272,6 +336,16 @@
   }
 
   function fallbackSynth() {
+    /* 先把两副 deck 真正停掉：否则切进合成器后界面显示「合成器兜底 / 标题 —」，
+     * 耳朵里其实还是上一首文件在放（还会跟着静音状态一起漏音）。 */
+    if (deck) {
+      deck.forEach(function (d) {
+        if (d.killTimer) { clearTimeout(d.killTimer); d.killTimer = null; }
+        try { d.el.pause(); } catch (e) {}
+        try { d.el.removeAttribute('src'); } catch (e) {}
+      });
+      curIdx = -1;
+    }
     if (!ctx || muted || !playing) return;
     usingFiles = false;
     music.title = '';
@@ -360,6 +434,7 @@
     if (timer) { clearTimeout(timer); timer = null; }
     if (deck) {
       deck.forEach(function (d) {
+        if (d.killTimer) { clearTimeout(d.killTimer); d.killTimer = null; }
         fadeGain(d.gain, d.el, 0.0001, 0.4);
         try { d.el.pause(); d.el.removeAttribute('src'); } catch (e) {}
       });
@@ -426,6 +501,7 @@
     get bgmOn() { return playing; },
     get bgmTitle() { return music.title; },
     get clicks() { return clickCount; },
+    get mode() { return playMode; },
     state: state,
     ensure: ensure,
     startBgm: startBgm,
@@ -441,6 +517,8 @@
     setMuted: setMuted,
     toggleMute: toggleMute,
     setSfx: setSfx,
+    getPlayMode: getPlayMode,
+    setPlayMode: setPlayMode,
     onChange: onChange
   };
 })();
