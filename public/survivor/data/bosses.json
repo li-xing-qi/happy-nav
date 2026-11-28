@@ -1,0 +1,100 @@
+{
+  "_note": "Boss参数配置文件 —— 修改此处数值即可调整游戏平衡，无需改动逻辑代码",
+  "madnessWeatherHpBonus": 1.5,
+  "abyssLord": {
+    "baseHpMult": 30,
+    "attackCalc": { "baseMult": 3, "globalMult": 2.5, "damageReduction": 0.4 },
+    "baseRadius": 48,
+    "levelHpMult": { "1": 0.72, "2": 0.88 },
+    "levelAtkMult": [1.3, 1.6],
+    "enrageHpThreshold": 0.3,
+    "enrageCdMult": 1.43,
+    "moveSpeedMult": 0.6,
+    "attackCooldown": 60,
+    "attackRangeExtra": 30,
+    "pushDistanceExtra": 25,
+    "skills": {
+      "grow":       { "cd": 300, "charge": 120, "duration": 120, "scaleMult": 2, "scaleTimer": 300 },
+      "laser":      { "cd": 240, "charge": 120, "extraDuration": 50, "beamCount": 8, "beamLife": 55,
+                      "angleInterval": 0.4488, "mainDmgMult": 0.7, "sideDmgMult": 0.4 },
+      "teleport":   { "cd": 360, "charge": 120, "duration": 120, "safeDist": 120, "landingDamageRange": 80 },
+      "bomb":       { "cd": 300, "charge": 120, "extraDuration": 70, "bombLife": 75, "explosionRadius": 240, "dmgMult": 2 },
+      "summonElite":{ "cd": 360, "charge": 120, "duration": 120, "minCount": 1, "maxCount": 5, "spawnDist": 50 },
+      "timeFreeze": { "cd": 480, "charge": 120, "extraDuration": 130, "freezeDuration": 120, "flashTime": 40 }
+    }
+  },
+  "bladeMaster": {
+    "baseHpMult": 26.4,
+    "attackCalc": { "baseMult": 3, "globalMult": 2.5 },
+    "baseRadius": 42,
+    "enrageHpThreshold": 0.3,
+    "enrageCdMult": 1.625,
+    "moveSpeedMult": 1.0,
+    "chargeSpeedMult": 0.4,
+    "chaseDistThreshold": 80,
+    "attackCooldownNormal": 60,
+    "attackCooldownEnraged": 40,
+    "attackRangeExtra": 30,
+    "pushDistanceExtra": 25,
+    "skills": {
+      "fanBlades":  { "cd": 78,  "charge": 120, "durationExtra": 30,  "directionCount": 8, "speed": 14,
+                      "life": 600, "dmgMult": 1.8 },
+      "swordRain":  { "cd": 156, "charge": 120, "duration": 120, "circleCount": 15, "dmgMult": 1.8 },
+      "rangeBoost": { "cd": 234, "charge": 120, "duration": 120, "radiusMult": 3, "boostDuration": 120 },
+      "sharedBladeCooldown": 120,
+      "directBlade": { "dmgMult": 2.5 },
+      "summon":      { "minCount": 1, "maxCount": 10 }
+    }
+  },
+  "madEye": {
+    "baseHpMult": 14.5,
+    "attackCalc": { "baseMult": 2.5, "globalMult": 2.5 },
+    "baseRadius": 55,
+    "eyePhases": {
+      "openDurations": [300, 300, 600, 600],
+      "closedDurations": [0, 300, 600, 600],
+      "openCdBase": 120,
+      "closedCdBase": 90,
+      "closedCdSpeedMult": 1.33
+    },
+    "chargeSpeedMult": 0.3,
+    "openChaseSpeedMult": 1.0,
+    "closedChaseSpeedMult": 0.5,
+    "chaseDistThreshold": 150,
+    "attackCooldown": 70,
+    "attackRangeExtra": 30,
+    "attackDmgMult": 1.5,
+    "pushDistanceExtra": 25,
+    "skills": {
+      "laser":        { "cd": 120, "charge": 120, "durationExtra": 50, "directionCount": 8, "maxLength": 700, "laserLife": 45 },
+      "bomb":         { "cd": 150, "charge": 120, "durationExtra": 60, "extraBombCount": 9, "bombLife": 65 },
+      "summonNormal": { "eyeCd": 180, "minCount": 10, "maxCount": 20 },
+      "summonElite":  { "eyeCd": 240, "count": 5 },
+      "summonKing":   { "eyeCd": 360 }
+    }
+  },
+  "youBoss": {
+    "baseHpMult": 21.12,
+    "attackCalc": { "baseMult": 3, "globalMult": 2.5 },
+    "baseRadius": 46,
+    "enrageHpThreshold": 0.3,
+    "enrageCdMult": 2.14,
+    "selfBurn": { "tickInterval": 60, "hpPercent": 0.01 },
+    "chargeSpeedMult": 0.3,
+    "normalSpeedMult": 1.0,
+    "chaseDistThreshold": 70,
+    "attackCooldown": 50,
+    "attackRangeExtra": 28,
+    "pushDistanceExtra": 22,
+    "skills": {
+      "fireRain":    { "cd": 150, "charge": 100, "duration": 120, "fireCount": 35,
+                       "fireballLife": 120, "dmgMult": 1.2 },
+      "lasers":      { "cd": 180, "charge": 90,  "duration": 120, "directionCount": 10,
+                       "maxLength": 2500, "laserLife": 40, "laserWidth": 18 },
+      "combo":       { "cd": 240, "charge": 110, "fireCount": 20, "laserCount": 5 },
+      "fireAndLaser":{ "cd": 360, "charge": 120, "fireCount": 50, "laserCount": 10 },
+      "dash":        { "cd": 200, "resetCd": 140, "charge": 80, "duration": 120, "speed": 18,
+                       "maxReflects": 3, "hitCooldown": 25, "dmgMult": 2 }
+    }
+  }
+}

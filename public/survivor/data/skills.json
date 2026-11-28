@@ -1,0 +1,192 @@
+{
+  "_note": "英雄技能参数配置文件 —— 修改此处数值即可调整英雄平衡，无需改动逻辑代码",
+  "heroBaseStats": {
+    "hp": 100,
+    "attack": 15,
+    "skill1": 20,
+    "skill2": 5,
+    "skill3": 40,
+    "speed": 2.3
+  },
+  "heroes": {
+    "lubu": {
+      "name": "吕布", "title": "飞将 · 力量爆发", "color": "#ff4444",
+      "hp": 156, "attack": 20,
+      "skills": [
+        { "name": "无双横扫", "cd": 180, "dmg": 33, "desc": "范围AOE伤害" },
+        { "name": "霸王护体", "cd": 300, "dmg": 20, "desc": "反伤" },
+        { "name": "鬼神突袭", "cd": 180, "dmg": 59, "desc": "突进贯穿伤害" }
+      ]
+    },
+    "zhaoyun": {
+      "name": "赵云", "title": "龙胆 · 七进七出", "color": "#4488ff",
+      "hp": 300, "attack": 36,
+      "skills": [
+        { "name": "龙胆突刺", "cd": 150, "dmg": 120, "desc": "冲刺贯穿" },
+        { "name": "七进七出", "cd": 300, "dmg": 0, "desc": "回血+无敌" },
+        { "name": "百鸟朝凤", "cd": 210, "dmg": 105, "desc": "范围AOE" }
+      ]
+    },
+    "diaochan": {
+      "name": "貂蝉", "title": "闭月 · 魅惑之舞", "color": "#ff88cc",
+      "hp": 124, "attack": 16,
+      "skills": [
+        { "name": "魅惑之舞", "cd": 240, "dmg": 39, "desc": "范围魅惑+眩晕" },
+        { "name": "百花绽放", "cd": 300, "dmg": 20, "desc": "毒区dot" },
+        { "name": "月华分身", "cd": 360, "dmg": 33, "desc": "召唤分身" }
+      ]
+    },
+    "guanyu": {
+      "name": "关羽", "title": "武圣 · 青龙偃月", "color": "#22cc44",
+      "hp": 180, "attack": 80,
+      "skills": [
+        { "name": "青龙之威", "cd": 300, "dmg": 0, "desc": "范围增强+伤害" },
+        { "name": "武圣护体", "cd": 360, "dmg": 0, "desc": "无敌护盾3秒" },
+        { "name": "过五关", "cd": 360, "dmg": 0, "desc": "攻击增强+吸血" }
+      ]
+    },
+    "huangzhong": {
+      "name": "黄忠", "title": "神射手 · 百步穿杨", "color": "#ffaa00",
+      "hp": 190, "attack": 26,
+      "skills": [
+        { "name": "穿云箭", "cd": 150, "dmg": 90, "desc": "穿透射击" },
+        { "name": "百步穿杨", "cd": 240, "dmg": 240, "desc": "狙击+溅射" },
+        { "name": "箭雨风暴", "cd": 360, "dmg": 80, "desc": "全屏AOE箭雨" }
+      ]
+    },
+    "machao": {
+      "name": "马超", "title": "神威 · 雷霆万钧", "color": "#aaaaee",
+      "hp": 285, "attack": 39,
+      "skills": [
+        { "name": "雷霆突击", "cd": 160, "dmg": 105, "desc": "冲刺+震退" },
+        { "name": "西凉铁骑", "cd": 300, "dmg": 120, "desc": "召唤骑兵冲锋" },
+        { "name": "神威万里", "cd": 360, "dmg": 135, "desc": "闪电链AOE" }
+      ]
+    },
+    "zhugeliang": {
+      "name": "诸葛亮", "title": "卧龙 · 观星预言", "color": "#00cccc",
+      "hp": 200, "attack": 110,
+      "skills": [
+        { "name": "神行步", "cd": 270, "dmg": 0, "desc": "加速" },
+        { "name": "八卦阵", "cd": 240, "dmg": 0, "desc": "AOE光环" },
+        { "name": "观星术", "cd": 300, "dmg": 0, "desc": "普攻范围增强" }
+      ]
+    },
+    "zhangfei": {
+      "name": "张飞", "title": "万人敌 · 燕人之怒", "color": "#994422",
+      "hp": 350, "attack": 60,
+      "skills": [
+        { "name": "燕人咆哮", "cd": 240, "dmg": 80, "desc": "范围咆哮" },
+        { "name": "丈八蛇矛", "cd": 180, "dmg": 240, "desc": "贯穿攻击" },
+        { "name": "万人敌", "cd": 360, "dmg": 0, "desc": "无敌+护盾" }
+      ]
+    },
+    "zhouyu": {
+      "name": "周瑜", "title": "火神 · 焚天灭地", "color": "#ff6600",
+      "hp": 225, "attack": 30,
+      "skills": [
+        { "name": "焰冲斩", "cd": 120, "dmg": 105, "desc": "火焰冲刺" },
+        { "name": "炎突斩", "cd": 120, "dmg": 105, "desc": "火焰突进" },
+        { "name": "焚影刺", "cd": 120, "dmg": 105, "desc": "暗影火焰刺" }
+      ]
+    },
+    "lvmeng": {
+      "name": "吕蒙", "title": "白衣渡江 · 暗影突袭", "color": "#6677cc",
+      "hp": 156, "attack": 20,
+      "skills": [
+        { "name": "疾风步", "cd": 120, "dmg": 0, "desc": "加速" },
+        { "name": "暗影突袭", "cd": 180, "dmg": 59, "desc": "暗影突进" },
+        { "name": "天诛导弹", "cd": 300, "dmg": 300, "desc": "追踪导弹" }
+      ]
+    },
+    "mozi": {
+      "name": "墨子", "title": "光学机关师 · 光束实验", "color": "#88aacc",
+      "hp": 156, "attack": 20,
+      "skills": [
+        { "name": "光束", "cd": 150, "dmg": 100, "desc": "发射激光束" },
+        { "name": "聚束", "cd": 180, "dmg": 0, "desc": "激光宽度增强" },
+        { "name": "多镜面", "cd": 180, "dmg": 0, "desc": "额外折射" }
+      ]
+    },
+    "hanfei": {
+      "name": "韩非", "title": "法家 · 律令裁决", "color": "#7a7a7a",
+      "hp": 300, "attack": 36,
+      "skills": [
+        { "name": "雾隐", "cd": 360, "dmg": 0, "desc": "敌方静止3秒" },
+        { "name": "视线替换", "cd": 300, "dmg": 0, "desc": "回血+加速" },
+        { "name": "最终审判", "cd": 480, "dmg": 200, "desc": "全屏光束审判" }
+      ]
+    },
+    "cangqiong": {
+      "name": "司马懿", "title": "天空之主 · 风雷掌控", "color": "#aaccff",
+      "hp": 154, "attack": 25,
+      "skills": [
+        { "name": "旋风斩", "cd": 180, "dmg": 56, "desc": "范围旋风" },
+        { "name": "天空之眼", "cd": 240, "dmg": 70, "desc": "天雷+飞行" },
+        { "name": "天罚之雷", "cd": 240, "dmg": 21, "desc": "持续雷暴" }
+      ]
+    },
+    "dianwei": {
+      "name": "典韦", "title": "灰烬武者 · 烬燃之怒", "color": "#cc6633",
+      "hp": 280, "attack": 80,
+      "skills": [
+        { "name": "烬突刺", "cd": 180, "dmg": 90, "desc": "火焰刺击" },
+        { "name": "烬燃", "cd": 300, "dmg": 0, "desc": "强化状态" },
+        { "name": "灰飞烟灭", "cd": 210, "dmg": 120, "desc": "范围爆炸" }
+      ]
+    },
+    "lusu": {
+      "name": "鲁肃", "title": "碧海 · 潮汐掌控", "color": "#4488aa",
+      "hp": 200, "attack": 32,
+      "skills": [
+        { "name": "水柱", "cd": 180, "dmg": 75, "desc": "发射水柱" },
+        { "name": "潮汐护盾", "cd": 240, "dmg": 0, "desc": "护盾+回血" },
+        { "name": "深海怒涛", "cd": 480, "dmg": 100, "desc": "全屏海啸" }
+      ]
+    },
+    "zhi": {
+      "name": "左慈", "title": "时空术士 · 时间掌控", "color": "#9370DB",
+      "hp": 180, "attack": 30,
+      "skills": [
+        { "name": "时空裂隙", "cd": 180, "dmg": 80, "desc": "裂隙AOE" },
+        { "name": "时间停滞", "cd": 360, "dmg": 0, "desc": "冻结敌人" },
+        { "name": "时空崩塌", "cd": 240, "dmg": 150, "desc": "范围崩塌" }
+      ]
+    },
+    "luxun": {
+      "name": "陆逊", "title": "烈焰 · 永不熄灭", "color": "#ff5500",
+      "hp": 192, "attack": 30,
+      "skills": [
+        { "name": "烈焰冲击", "cd": 180, "dmg": 52, "desc": "火焰冲击" },
+        { "name": "焚身烈焰", "cd": 300, "dmg": 50, "desc": "自烧光环" },
+        { "name": "永不熄灭", "cd": 300, "dmg": 0, "desc": "持续火焰" }
+      ]
+    },
+    "zhenji": {
+      "name": "甄姬", "title": "冰霜女神 · 极地风暴", "color": "#44ccff",
+      "hp": 200, "attack": 34,
+      "skills": [
+        { "name": "寒冰箭", "cd": 180, "dmg": 100, "desc": "冰箭射击" },
+        { "name": "冰封领域", "cd": 300, "dmg": 80, "desc": "冰封AOE" },
+        { "name": "极地风暴", "cd": 480, "dmg": 30, "desc": "暴风雪" }
+      ]
+    },
+    "yuji": {
+      "name": "于吉", "title": "自然之怒 · 荆棘缠绕", "color": "#55ff55",
+      "hp": 260, "attack": 75,
+      "skills": [
+        { "name": "荆棘缠绕", "cd": 180, "dmg": 0, "desc": "减速+dot" },
+        { "name": "寄生藤蔓", "cd": 180, "dmg": 0, "desc": "吸血藤蔓" },
+        { "name": "自然之怒", "cd": 480, "dmg": 200, "desc": "全屏自然之力" }
+      ]
+    },
+    "guojia": {
+      "name": "黄盖", "title": "冰晶智者 · 棱镜折射", "color": "#66ccff",
+      "hp": 154, "attack": 56,
+      "skills": [
+        { "name": "水晶折射", "cd": 180, "dmg": 0, "desc": "折射光束" },
+        { "name": "棱镜阵列", "cd": 300, "dmg": 0, "desc": "多重棱镜" }
+      ]
+    }
+  }
+}

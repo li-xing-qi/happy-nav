@@ -1,0 +1,67 @@
+{
+  "_note": "游戏全局配置 —— 地图尺寸、难度倍率、基础数值等",
+  "canvas": {
+    "width": 1280,
+    "height": 770
+  },
+  "map": {
+    "width": 4000,
+    "height": 3080
+  },
+  "gridSize": 25,
+  "hero": {
+    "speed": 2.3,
+    "baseHp": 100,
+    "baseAttack": 15,
+    "baseSkillDamage": { "skill1": 20, "skill2": 5, "skill3": 40 },
+    "baseRevives": 1,
+    "meleeAttackRangeMult": 1.66,
+    "rangedAttackRangeMult": 5
+  },
+  "enemy": {
+    "baseHp": 50,
+    "baseAttack": 10
+  },
+  "comboTimeout": 180,
+  "skillCooldowns": {
+    "initial": [0, 180, 300, 180],
+    "max": [0, 180, 300, 180]
+  },
+  "difficulty": {
+    "easy": {
+      "label": "简单", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 1.7, "elite": 1.9, "archer": 0.7, "boss": 1.0 },
+      "hpMult": 0.45, "extraRevives": 0
+    },
+    "normal": {
+      "label": "普通", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 1.8, "elite": 2.0, "archer": 0.8, "boss": 1.4 },
+      "hpMult": 0.75, "extraRevives": 0
+    },
+    "hard": {
+      "label": "困难", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 1.9, "elite": 2.1, "archer": 0.9, "boss": 1.8 },
+      "hpMult": 1.0, "extraRevives": 0
+    },
+    "nightmare": {
+      "label": "噩梦", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 2.0, "elite": 2.2, "archer": 1.0, "boss": 2.0 },
+      "hpMult": 1.5, "extraRevives": 1
+    },
+    "end": {
+      "label": "终焉", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 2.15, "elite": 2.35, "archer": 1.5, "boss": 2.2 },
+      "hpMult": 2.0, "extraRevives": 3
+    },
+    "curse": {
+      "label": "诅咒之夜", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 2.15, "elite": 2.35, "archer": 1.5, "boss": 2.2 },
+      "hpMult": 3.0, "extraRevives": 5
+    },
+    "madness": {
+      "label": "疯狂之夜", "heroSpeed": 2.3,
+      "enemySpeed": { "normal": 2.15, "elite": 2.35, "archer": 1.5, "boss": 2.2 },
+      "hpMult": 5.0, "extraRevives": 5
+    }
+  }
+}

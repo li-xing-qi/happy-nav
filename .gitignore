@@ -18,6 +18,8 @@ secrets*
 data/
 workspace/*
 !workspace/.gitkeep
+# 例外：并肩割草的平衡数据是静态资源（游戏本体 data_config.js 的源），不是运行时数据
+!public/survivor/data/
 
 # ---------- 背景音乐（25MB 的 mp3 不进版本库，用 scripts/fetch-music.sh 重下）----------
 public/music/*.mp3
