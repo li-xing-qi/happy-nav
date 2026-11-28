@@ -31,42 +31,22 @@ html[data-bg="sea"]{--ink:#eaf4f6;--ink2:#b9d0d8;--ink3:#86a3ae;--line:rgba(255,
 html[data-yu="warm"]{--ink:#2c211c;--ink2:#6d5a50;--ink3:#9d887c;--line:#efe6df;--line2:#e0d2c7;
   --paper:#fff;--paper2:#fbf6f1;--paper3:#f5ece4;--accent:#b06f4e;--accent-soft:#f9eee6;--side:#fdf8f3;--bub:#f6ece3;--mine:#b06f4e;}
 html,body{height:100%;}
+/* 2026-11-28 背景底图（只换视觉，不动 data-bg/data-yu 切换逻辑） */
+html[data-bg="white"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(255,255,255,.48),rgba(255,255,255,.66)),url('/bg/white.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-bg="sky"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(242,248,252,.34),rgba(242,248,252,.48) 46%,rgba(255,255,255,.58)),url('/bg/sky.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-bg="sea"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(16,42,56,.50),rgba(16,42,56,.60) 55%,rgba(10,30,42,.70)),url('/bg/sea.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-yu="warm"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(251,246,241,.40),rgba(251,246,241,.58)),url('/bg/warm.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
 body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
   color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s,color .3s;}
 button,input,textarea{font-family:inherit;}button{cursor:pointer;color:inherit;}
 a{color:inherit;text-decoration:none;}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
 
-/* ============ 进门 ============ */
-#join{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;
-  background:radial-gradient(120% 80% at 50% -10%,var(--paper2),var(--paper) 62%);}
-.jcard{width:min(400px,100%);}
-.jbrand{display:flex;align-items:center;gap:11px;font-size:21px;font-weight:700;letter-spacing:.06em;}
 .seal{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;background:var(--accent);
   color:#fff;font-size:15px;font-family:"Songti SC","Noto Serif SC",serif;font-weight:700;box-shadow:0 6px 16px rgba(20,60,70,.16);}
-.jtag{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--accent);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;}
-.jlead{margin-top:14px;font-size:13px;line-height:1.85;color:var(--ink2);}
-.jfeats{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px;}
-.jfeats span{font-size:11px;color:var(--ink2);background:var(--paper2);border:1px solid var(--line);border-radius:99px;padding:4px 9px;}
-.jlabel{margin:22px 0 8px;font-size:11px;letter-spacing:.2em;color:var(--ink3);}
-.jinput{width:100%;padding:12px 14px;border:1px solid var(--line2);border-radius:11px;background:var(--paper);
-  color:var(--ink);font-size:15px;outline:none;transition:border-color .16s,box-shadow .16s;}
-.jinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
-#roomIn{letter-spacing:.22em;font-weight:700;text-transform:uppercase;}
-.jav{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;}
-.jav button{width:38px;height:38px;border-radius:11px;border:1px solid var(--line2);background:var(--paper);font-size:20px;
-  transition:transform .14s,border-color .14s,background .14s;}
-.jav button:hover{transform:translateY(-2px);}
-.jav button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent-soft);}
-.jbtn{margin-top:24px;width:100%;padding:14px;border:0;border-radius:11px;background:var(--accent);color:#fff;
-  font-size:15px;font-weight:600;letter-spacing:.06em;transition:opacity .16s,transform .1s;}
-.jbtn:hover{opacity:.92}.jbtn:active{transform:scale(.99)}.jbtn:disabled{opacity:.45;cursor:default;}
-.jrow{margin-top:14px;display:flex;justify-content:space-between;gap:10px;}
-.jlink{background:none;border:0;padding:0;font-size:12.5px;color:var(--ink2);}.jlink:hover{color:var(--accent);}
-.jmsg{margin-top:14px;font-size:12.5px;line-height:1.7;color:var(--accent-2);min-height:18px;}
-
+/* 进门卡片（房间号）已删除，2026-11-28 账号系统改成打开即进 */
 /* ============ 主框架 ============ */
-#app{position:fixed;inset:0;display:grid;grid-template-columns:248px minmax(0,1fr);background:var(--paper);}
+#app{position:fixed;inset:0;display:grid;grid-template-columns:248px minmax(0,1fr);background:transparent;}
 .side{border-right:1px solid var(--line);background:var(--side);display:flex;flex-direction:column;min-height:0;overflow-y:auto;}
 .side-top{padding:18px 16px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px;}
 .side-top .seal{width:26px;height:26px;font-size:13px;border-radius:8px;}
@@ -343,28 +323,16 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 </head>
 <body>
 
-<!-- ============ 进门 ============ -->
-<div id="join">
-  <div class="jcard">
-    <div class="jbrand"><span class="seal">和</span>与鱼 <span class="jtag">v5.001 · 加强版聊天室</span></div>
-    <p class="jlead">聊天室装不下的都放这儿：文件、语音、图片、表情包、颜文字，还有能改的头像昵称。<br>还是同一个房间号，两个人就能会合。</p>
-    <div class="jfeats"><span>📎 传文件</span><span>🎤 发语音</span><span>🖼 发图片</span><span>😀 黄豆表情</span><span>🐟 自定义表情</span><span>(｡◕‿◕｡) 颜文字</span><span>✎ 头像昵称</span></div>
-    <div class="jlabel">房间号</div>
-    <input class="jinput" id="roomIn" maxlength="12" placeholder="例如 7K2M9" autocomplete="off">
-    <div class="jlabel">你的昵称</div>
-    <input class="jinput" id="nameIn" maxlength="12" placeholder="随便起一个" autocomplete="off">
-    <div class="jlabel">挑个头像</div>
-    <div class="jav" id="javPick"></div>
-    <button class="jbtn" id="enterBtn">游进房间</button>
-    <div class="jrow">
-      <button class="jlink" id="randBtn">🎲 随机开一间</button>
-      <a class="jlink" href="/">← 回大厅</a>
-    </div>
-    <div class="jmsg" id="joinMsg"></div>
+<!-- ============ 启动占位：自动进房成功后移除 ============ -->
+<div id="boot" style="position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:#fff;color:#666;font-size:14px;text-align:center;line-height:1.9">
+  <div>
+    <div style="font-size:34px">🐟</div>
+    <div id="bootTxt">正在游进去…</div>
+    <button id="bootRetry" class="hidden" onclick="location.reload()" style="margin-top:10px;padding:7px 16px;border:1px solid #ddd;border-radius:9px;background:#fff;font-size:13px;color:#444">重试</button>
   </div>
 </div>
 
-<!-- ============ 主界面 ============ -->
+<!-- ============ 主界面（打开即进，不再有进门卡片） ============ -->
 <div id="app" class="hidden">
   <aside class="side" id="side">
     <div class="side-top"><span class="seal">和</span><b>与鱼</b><span class="v">v5.001</span></div>
@@ -389,12 +357,12 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
       </div>
     </div>
     <div class="side-sec">
-      <div class="side-h">房间里的小仓库</div>
+      <div class="side-h">我的小仓库</div>
       <div class="stat"><span id="stStk">自定义表情 0</span><span id="stKao">自定义颜文字 0</span></div>
     </div>
     <div class="side-foot">
       <a href="/">← 回大厅</a>
-      <button id="copyLink">🔗 复制邀请链接</button>
+      <button id="copyLink">🔗 复制本站链接</button>
       <button id="clearRoom">🧹 清空本地显示</button>
     </div>
   </aside>
@@ -404,7 +372,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
       <button class="hbtn" id="menuBtn" title="侧栏" aria-label="侧栏">☰</button>
       <a class="hbtn" href="/" title="回大厅" aria-label="回大厅">←</a>
       <div class="hmeta">
-        <div class="t">与鱼 · 房间 <b id="codeTxt">—</b></div>
+        <div class="t">与鱼 <b id="codeTxt">小鱼</b></div>
         <div class="s"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方游进来…</span></div>
       </div>
       <div class="hacts">
@@ -474,7 +442,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
     <div class="ov-sec"><label>字号</label><div class="chips" id="fontChips">
       <button class="chip" data-f="-1">小</button><button class="chip" data-f="0">标准</button><button class="chip" data-f="1">大</button>
     </div></div>
-    <p class="ov-note">昵称、头像、气泡和字号会同步给房间里的对方；背景在「外观」里，只保存在这台设备。</p>
+    <p class="ov-note">昵称、头像、气泡和字号会同步给对方；背景在「外观」里，只保存在这台设备。</p>
   </section>
 
   <!-- ===== tab 2 · 外观 ===== -->
@@ -611,7 +579,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
       </select>
       <button class="pri" id="ttsGo" style="padding:7px 14px">合成并发送</button>
     </div>
-    <div id="ttsHint" style="font-size:11px;color:var(--ink3);margin-top:6px">合成约 2 秒，生成后直接发到房间</div>
+    <div id="ttsHint" style="font-size:11px;color:var(--ink3);margin-top:6px">合成约 2 秒，生成后直接发出去</div>
   </div>
 </div>
 
@@ -690,43 +658,41 @@ function bubbleStyle(m){
   return s;
 }
 
-/* ---------------- 进门 ---------------- */
-(function initJoin(){
-  var box=$('javPick');
-  AVATARS.slice(0,12).forEach(function(a){
-    var b=document.createElement('button');b.type='button';b.textContent=a;b.dataset.av=a;
-    b.setAttribute('aria-pressed',a===PROFILE.avatar?'true':'false');
-    b.onclick=function(){PROFILE.avatar=a;save('yu_profile',PROFILE);
-      Array.prototype.forEach.call(box.children,function(x){x.setAttribute('aria-pressed',x.dataset.av===a?'true':'false');});};
-    box.appendChild(b);
-  });
-  $('nameIn').value=PROFILE.name||ls('wx_name','')||'';
+/* ---------------- 打开即进（2026-11-28：房间号 / 进门卡片已删） ----------------
+   房间归属由服务端决定：登录了用 uid，URL 带 ?code=xxx 的用 code，都没有用 local。
+   昵称头像优先取账号资料（/api/auth/me），没登录就沿用本地缓存 / 默认「老板」。 */
+var AUTO_CODE=(function(){
   var q=new URLSearchParams(location.search);
-  if(q.get('room'))$('roomIn').value=String(q.get('room')).toUpperCase();
-  $('roomIn').addEventListener('input',function(e){e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'');});
-  $('nameIn').addEventListener('keydown',function(e){if(e.key==='Enter')enterRoom();});
-  $('roomIn').addEventListener('keydown',function(e){if(e.key==='Enter')$('nameIn').focus();});
-  $('randBtn').onclick=function(){$('roomIn').value=Math.random().toString(36).slice(2,7).toUpperCase();};
-  $('enterBtn').onclick=enterRoom;
+  return (q.get('code')||q.get('room')||'').toUpperCase().replace(/[^A-Z0-9_-]/g,'');
 })();
-function joinMsg(t,bad){var el=$('joinMsg');el.textContent=t;el.style.color=bad?'#c0564b':'var(--accent)';}
+function joinMsg(t,bad){var el=$('joinMsg');if(!el)return;el.textContent=t;el.style.color=bad?'#c0564b':'var(--accent)';}
+function bootFail(t){
+  var el=$('bootTxt');if(el)el.textContent=t;
+  var b=$('bootRetry');if(b)b.classList.remove('hidden');
+}
+function loadAccountProfile(){
+  return fetch('/api/auth/me',{credentials:'same-origin'}).then(function(x){return x.json();}).then(function(me){
+    if(me&&me.ok){
+      PROFILE.name=me.name||PROFILE.name;
+      PROFILE.avatar=me.avatar||PROFILE.avatar||'🐟';
+      save('yu_profile',PROFILE);
+    }
+  }).catch(function(){});
+}
 
 async function enterRoom(){
-  var code=$('roomIn').value.trim().toUpperCase()||'YU';
-  PROFILE.name=$('nameIn').value.trim().slice(0,12)||'小鱼';
-  save('yu_profile',PROFILE);
-  $('enterBtn').disabled=true;joinMsg('正在游过去…');
   try{
+    var payload={pid:PID,name:PROFILE.name||'老板',avatar:PROFILE.avatar||'🐟',bubble:PROFILE.bubble||'',fontSize:PROFILE.fontSize||0};
+    if(AUTO_CODE)payload.code=AUTO_CODE;
     var r=await fetch('/api/yu/enter',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code:code,pid:PID,name:PROFILE.name,avatar:PROFILE.avatar,bubble:PROFILE.bubble,fontSize:PROFILE.fontSize})}).then(x=>x.json());
-    if(r.error){joinMsg(r.error,true);$('enterBtn').disabled=false;return;}
+      body:JSON.stringify(payload)}).then(x=>x.json());
+    if(r.error){bootFail(r.error);return;}
     CODE=r.code;SEAT=r.seat;ME=r.me;PEER=r.peer;MEMBERS=r.members;STICKERS=r.stickers||[];
     KAOMOJIS=r.kaomojis||[];MAX_UP=r.maxUpload||MAX_UP;
     PROFILE.name=r.me.name;PROFILE.avatar=r.me.avatar;PROFILE.bubble=r.me.bubble||'';PROFILE.fontSize=r.me.fontSize||0;
     save('yu_profile',PROFILE);
-    $('join').classList.add('hidden');$('app').classList.remove('hidden');
-    $('codeTxt').textContent=CODE;
-    try{history.replaceState(null,'','/yu?room='+encodeURIComponent(CODE));}catch(e){}
+    $('app').classList.remove('hidden');
+    var boot=$('boot');if(boot)boot.remove();
     paintMe();paintMembers();paintPeer();paintStats();
     $('msgs').innerHTML='';
     (r.msgs||[]).forEach(ingest);
@@ -740,7 +706,7 @@ async function enterRoom(){
     }catch(e){}
     pingT=setInterval(function(){fetch('/api/yu/ping',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code:CODE,pid:PID})}).catch(function(){});},8000);
-  }catch(e){joinMsg('连不上服务器，稍后再试',true);$('enterBtn').disabled=false;}
+  }catch(e){bootFail('连不上服务器，稍后再试');}
 }
 
 /* ---------------- 实时 ---------------- */
@@ -811,7 +777,7 @@ function loadMood(){
 function paintMe(){
   $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
   $('meName').textContent=PROFILE.name||'小鱼';
-  $('meSub').textContent='房间 '+CODE+' · 在线';
+  $('meSub').textContent='在线';
   loadMood();
   if(!window.__moodTimer)window.__moodTimer=setInterval(loadMood,60000);
   $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
@@ -1442,11 +1408,11 @@ function toggleSide(open){
 $('menuBtn').onclick=function(){toggleSide(!$('side').classList.contains('open'));};
 $('sideMask').onclick=function(){toggleSide(false);};
 function copyInvite(){
-  var url=location.origin+'/yu?room='+encodeURIComponent(CODE);
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('邀请链接已复制');},function(){toast(url);});
+  var url=location.origin+'/yu';
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('链接已复制');},function(){toast(url);});
   else toast(url);
 }
-/* 邀请只剩侧栏那一个入口（页头的 🔗 已删：老板嫌图标多） */
+/* 复制链接只剩侧栏那一个入口（页头的 🔗 已删：老板嫌图标多） */
 $('copyLink').onclick=copyInvite;
 $('clearRoom').onclick=function(){
   $('msgs').innerHTML='<div class="empty"><span class="big">🐟</span>本地显示已清空<br>刷新页面就能把聊天记录找回来</div>';
@@ -1498,6 +1464,8 @@ $('ttsGo').onclick=async function(){
   }catch(e){hint.textContent='合成失败：'+e.message;toast('合成失败');}
   finally{btn.disabled=false;btn.textContent='合成并发送';}
 };
+/* 打开页面就自动进（不再有进门按钮）：先取账号资料，再进房间 */
+loadAccountProfile().then(enterRoom);
 /* 关掉上面那个大闭包：这台「合成并发送」按钮要用 $ / toast / CODE / PID / closeRec，
    以前 })(); 摆在这段前面，一加载就 ReferenceError（按钮永远绑不上），现在挪到最后。 */
 })();

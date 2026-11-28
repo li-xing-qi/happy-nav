@@ -1,0 +1,21 @@
+# ---------- 构建产物（APK / dex / keystore / 中间文件）----------
+build/
+_stage/
+
+# ---------- 预编译依赖：体积太大，按 README 自行准备 ----------
+app/include/
+app/jniLibs/**/*.so
+
+# ---------- 背景音乐（25MB mp3，运行时装进 assets，不入库）----------
+app/assets/nodejs-project/public/music/*.mp3
+
+# ---------- 运行态数据（聊天记录 / 上传 / 记忆 / 心情，含隐私）----------
+app/assets/nodejs-project/data/
+app/assets/nodejs-project/workspace/memory/data/
+app/assets/nodejs-project/workspace/data/
+app/assets/nodejs-project/workspace/MEMORY.md
+app/assets/nodejs-project/workspace/chatlog.jsonl
+
+# ---------- 杂项 ----------
+*.keystore
+*.jks

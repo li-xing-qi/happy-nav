@@ -124,8 +124,15 @@ for (const d of [DATA, UPLOADS, CHATDIR, GODIR]) {
   try { fs.mkdirSync(d, { recursive: true }); } catch (e) { console.error('[data]', e.message); }
 }
 
+/* ============================================================
+   账号系统（2026-11-28 新增，零依赖）
+   账号 / 会话落在 data/auth/ 下，cookie hn_sid。
+   与鱼按 uid 隔离房间，其它板块不强制登录。
+   ============================================================ */
+const AUTH = require('./auth.js')({ DATA, json, send, readBody });
+
 /* 「与鱼」：独立房间与附件区，不改动原聊天室 */
-const YU = require('./yu.js')({ DATA, MAX_UPLOAD, json, send, readBody, readRaw, normCode });
+const YU = require('./yu.js')({ DATA, MAX_UPLOAD, json, send, readBody, readRaw, normCode, AUTH });
 
 /* 「心有灵犀」联机：独立房间服务；同屏玩法完全不走这里 */
 const LX = require('./lx.js')({ DATA, json, readBody, normCode });
@@ -1106,6 +1113,18 @@ const server = http.createServer(safe(async (req, res) => {
   if (p === '/game' || p === '/game/index.html') return serveStatic(res, path.join('game', 'index.html'));
   if (p === '/gomoku' || p === '/gomoku.html') return serveStatic(res, 'gomoku.html');
   if (p === '/yu' || p === '/yu.html') return serveStatic(res, 'yu.html');
+
+  /* ---------- 账号页（/account 与 /admin 需登录，/admin 还要管理员） ---------- */
+  if (p === '/login' || p === '/login.html') return serveStatic(res, 'login.html');
+  if (p === '/register' || p === '/register.html') return serveStatic(res, 'register.html');
+  if (p === '/account' || p === '/account.html') {
+    if (!AUTH.pageAccess(req, res, 'user')) return;
+    return serveStatic(res, 'account.html');
+  }
+  if (p === '/admin' || p === '/admin.html') {
+    if (!AUTH.pageAccess(req, res, 'admin')) return;
+    return serveStatic(res, 'admin.html');
+  }
   if (p === '/lingxi' || p === '/lingxi/index.html') return serveStatic(res, path.join('lingxi', 'index.html'));
 
   /* ---------- 背景音乐：单独给长缓存 ----------
@@ -1125,6 +1144,9 @@ const server = http.createServer(safe(async (req, res) => {
 
   /* ---------- 「与鱼」附件：图片 / 语音 inline，文件 attachment ---------- */
   if (p.startsWith('/yu-f/')) return YU.file(req, res, u, p);
+
+  /* ---------- 账号 / 管理员 API ---------- */
+  if (p.startsWith('/api/auth/') || p.startsWith('/api/admin/')) return AUTH.api(req, res, u, p);
 
   /* ---------- 「与鱼」API ---------- */
   if (p.startsWith('/api/yu/')) return YU.api(req, res, u, p);

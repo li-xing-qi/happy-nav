@@ -54,7 +54,7 @@ function synthSpeech(text, voice) {
 
 
 module.exports = function createYu(ctx) {
-  const { DATA, MAX_UPLOAD, json, send, readBody, readRaw, normCode } = ctx;
+  const { DATA, MAX_UPLOAD, json, send, readBody, readRaw, normCode, AUTH } = ctx;
   /* 心情存档：站点只读，不做任何判断（档位词由 agent-bot 写进文件）。
    * 路径按「仓库布局 → 分离部署」的顺序猜，和记忆层保持同一套约定。 */
   const WS_ROOT = process.env.WORKSPACE_DIR || process.env.MEM_DIR || process.env.QQ_WORKSPACE_ROOT
@@ -70,10 +70,41 @@ module.exports = function createYu(ctx) {
   const MSG_KEEP = 300;
   const STK_KEEP = 60;
   const KAO_KEEP = 80;
-  const MAX_MEMBERS = 2;
+  /* 个人房间（uid）：本人可能在手机 + 电脑同时在线，再给小鱼留位置 */
+  const MAX_MEMBERS = 4;
 
   const rooms = new Map();
   const saveTimers = new Map();
+
+  /* ============================================================
+     房间归属（2026-11-28 账号系统）
+     优先级：登录 session 的 uid > URL/body 里的 code > 'local'
+     · 登录用户各自一间屋，数据天然隔离（data/yu/<uid>.json）
+     · 没登录但显式传了 code 的（手机壳、旧链接、yufish.js）保持原样
+     · 兼容：小鱼桥 yufish.js 固定用 code=0000，老板登录后房间是 uid，
+       把 0000 指到管理员房间，两人还在同一间屋里说话；旧 0000.json 首次自动迁移。
+     ============================================================ */
+  const ADMIN_ROOM = '1661973546';
+  function canonCode(code) { return code === '0000' ? ADMIN_ROOM : code; }
+  function resolveCode(req, u, raw) {
+    let code = '';
+    try { if (AUTH && AUTH.uidOf) code = AUTH.uidOf(req) || ''; } catch (e) {}
+    if (!code) {
+      const fromInput = raw == null ? (u && u.searchParams ? u.searchParams.get('code') : '') : raw;
+      code = normCode(fromInput);
+    }
+    if (!code) code = 'local';
+    return canonCode(code);
+  }
+  (function migrateLegacyRoom() {
+    try {
+      const oldF = roomPath('0000'), newF = roomPath(ADMIN_ROOM);
+      if (fs.existsSync(oldF) && !fs.existsSync(newF)) {
+        fs.copyFileSync(oldF, newF);
+        console.log('     [yu] 已把旧房间 0000 的历史迁移到 ' + ADMIN_ROOM);
+      }
+    } catch (e) { console.error('[yu migrate]', e.message); }
+  })();
 
   function roomPath(code) { return path.join(DIR, code.replace(/[^A-Za-z0-9_-]/g, '') + '.json'); }
 
@@ -177,7 +208,7 @@ module.exports = function createYu(ctx) {
   }
 
   async function upload(req, res, u) {
-    const code = normCode(u.searchParams.get('code'));
+    const code = resolveCode(req, u);
     const pid = cleanStr(u.searchParams.get('pid'), 40);
     const kind = ['img', 'voice', 'file', 'sticker', 'avatar'].includes(u.searchParams.get('kind')) ? u.searchParams.get('kind') : 'file';
     const r = loadRoom(code);
@@ -254,7 +285,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/enter') {
       const b = await readBody(req);
-      const code = normCode(b.code);
+      const code = resolveCode(req, u, b.code);
       const pid = cleanStr(b.pid, 40);
       if (!CODE_RE.test(code)) return json(res, { error: '房间号只能是 1–12 位字母、数字、下划线或横杠' });
       if (!pid) return json(res, { error: '缺少客户端标识，刷新一下再试' });
@@ -272,7 +303,7 @@ module.exports = function createYu(ctx) {
           const alive = r.users.filter(x => now - x.lastSeen < 10 * 60 * 1000);
           if (alive.length < r.users.length) { r.users = alive; r.users.forEach((x, i) => x.seat = i); }
         }
-        if (r.users.length >= MAX_MEMBERS) return json(res, { error: `房间 ${code} 已经满了（最多 2 人）`, full: true });
+        if (r.users.length >= MAX_MEMBERS) return json(res, { error: '这间屋已经满了，等一下再进', full: true });
         me = { pid, name: cleanStr(b.name, 12) || '小鱼', avatar: cleanStr(b.avatar, 120) || '🐟',
           bubble: cleanStr(b.bubble, 24), fontSize: Number(b.fontSize) || 0,
           seat: r.users.length, lastSeen: Date.now(), hits: [] };
@@ -293,7 +324,7 @@ module.exports = function createYu(ctx) {
     if (p === '/api/yu/tts') {
       if (!TTS_ENABLE) return json(res, { error: '语音合成已关闭（TTS_ENABLE=0）' });
       const b = await readBody(req);
-      const code = normCode(b.code);
+      const code = resolveCode(req, u, b.code);
       const pid = cleanStr(b.pid, 40);
       const r = loadRoom(code);
       const me = r.users.find(x => x.pid === pid);
@@ -340,7 +371,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/profile') {
       const b = await readBody(req);
-      const r = loadRoom(normCode(b.code));
+      const r = loadRoom(resolveCode(req, u, b.code));
       const me = r.users.find(x => x.pid === cleanStr(b.pid, 40));
       if (!me) return json(res, { error: '先加入房间' });
       const old = me.name;
@@ -356,7 +387,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/send') {
       const b = await readBody(req);
-      const r = loadRoom(normCode(b.code));
+      const r = loadRoom(resolveCode(req, u, b.code));
       const me = r.users.find(x => x.pid === cleanStr(b.pid, 40));
       if (!me) return json(res, { error: '先加入房间' });
       me.lastSeen = Date.now();
@@ -393,7 +424,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/kaomoji') {
       const b = await readBody(req);
-      const r = loadRoom(normCode(b.code));
+      const r = loadRoom(resolveCode(req, u, b.code));
       const me = r.users.find(x => x.pid === cleanStr(b.pid, 40));
       if (!me) return json(res, { error: '先加入房间' });
       const text = cleanStr(b.text, 60).trim();
@@ -411,7 +442,7 @@ module.exports = function createYu(ctx) {
        只改 act 字段，不落任何消息，失败也不影响聊天。 */
     if (p === '/api/yu/act') {
       const b = await readBody(req);
-      const code = normCode(b.code);
+      const code = resolveCode(req, u, b.code);
       const pid = cleanStr(b.pid, 40);
       if (!CODE_RE.test(code)) return json(res, { error: '房间号不合法' });
       const r = loadRoom(code);
@@ -444,7 +475,7 @@ module.exports = function createYu(ctx) {
     }
 
     if (p === '/api/yu/state') {
-      const r = loadRoom(normCode(u.searchParams.get('code')));
+      const r = loadRoom(resolveCode(req, u));
       const me = r.users.find(x => x.pid === cleanStr(u.searchParams.get('pid'), 40));
       if (!me) return json(res, { needJoin: true });
       me.lastSeen = Date.now();
@@ -455,7 +486,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/ping') {
       const b = await readBody(req);
-      const r = loadRoom(normCode(b.code));
+      const r = loadRoom(resolveCode(req, u, b.code));
       const me = r.users.find(x => x.pid === cleanStr(b.pid, 40));
       if (me) me.lastSeen = Date.now();
       return json(res, { ok: true, peer: me ? peerOf(r, me) : null });
@@ -469,7 +500,7 @@ module.exports = function createYu(ctx) {
      */
     if (p === '/api/yu/recall') {
       const b = await readBody(req);
-      const code = normCode(b.code);
+      const code = resolveCode(req, u, b.code);
       const pid = cleanStr(b.pid, 40);
       const r = loadRoom(code);
       const me = r.users.find(x => x.pid === pid);
@@ -490,7 +521,7 @@ module.exports = function createYu(ctx) {
 
     if (p === '/api/yu/leave') {
       const b = await readBody(req);
-      const r = loadRoom(normCode(b.code));
+      const r = loadRoom(resolveCode(req, u, b.code));
       const i = r.users.findIndex(x => x.pid === cleanStr(b.pid, 40));
       if (i >= 0) {
         const [me] = r.users.splice(i, 1);
@@ -502,7 +533,7 @@ module.exports = function createYu(ctx) {
     }
 
     if (p === '/api/yu/stream') {
-      const r = loadRoom(normCode(u.searchParams.get('code')));
+      const r = loadRoom(resolveCode(req, u));
       /* bg=1：手机壳的原生通知服务用的只读订阅。
        * 它不挂用户身份——不校验 pid、不参与在线状态、不推 peer，
        * 只在有新消息时推 msgs。这样后台守着也不会把用户顶成两个人。 */

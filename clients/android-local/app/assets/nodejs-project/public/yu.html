@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bg="white">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="与鱼 · 加强版聊天室：文件、语音、图片、表情包、颜文字、头像昵称">
+<title>与鱼 · 和鱼的开心导航 v5.001</title>
+<script>
+  try{var _b=localStorage.getItem('wnav_bg');if(_b==='sky'||_b==='sea')document.documentElement.dataset.bg=_b;}catch(e){}
+  /* yu_theme 是 save() 写的 JSON 串（带引号），wnav_bg 是原始串 —— 两种都得认。
+     只比原始串的话这条预上色永远不命中，刷新时会先闪一下白再跳成深海。 */
+  try{var _t=localStorage.getItem('yu_theme');
+    if(_t&&_t.charAt(0)==='"'){try{_t=JSON.parse(_t);}catch(e2){}}
+    if(_t==='white'||_t==='sky'||_t==='sea'||_t==='warm')document.documentElement.dataset.bg=(_t==='warm'?'white':_t),document.documentElement.dataset.yu=_t;}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+.hidden{display:none!important}
+:root{
+  --ink:#17232a;--ink2:#5a6a72;--ink3:#93a2aa;--line:#e8ecec;--line2:#d6dedd;
+  --paper:#fff;--paper2:#f6f8f8;--paper3:#eef3f3;
+  --accent:#2f7f8c;--accent-soft:#e9f5f5;--accent-2:#e08a63;
+  --mine:#2f7f8c;--bub:#f1f5f5;--side:#fafcfc;
+  --shadow:0 10px 30px rgba(20,40,45,.06);--r:14px;
+}
+html[data-bg="sky"]{--ink:#142b3a;--ink2:#4b6b7e;--ink3:#7795a7;--line:rgba(28,78,110,.13);--line2:rgba(28,78,110,.22);
+  --paper:#fff;--paper2:#f2f8fc;--paper3:#e8f3fa;--accent:#2f7196;--accent-soft:#e7f2fa;--side:#f4f9fc;--bub:#eaf3fa;}
+html[data-bg="sea"]{--ink:#eaf4f6;--ink2:#b9d0d8;--ink3:#86a3ae;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.24);
+  --paper:#102a38;--paper2:#163342;--paper3:#1d3c4c;--accent:#7fd3c4;--accent-soft:rgba(127,211,196,.14);--side:#0e2633;--bub:#1c3c4b;--mine:#2d7b80;--shadow:0 14px 40px rgba(0,10,20,.3);}
+html[data-yu="warm"]{--ink:#2c211c;--ink2:#6d5a50;--ink3:#9d887c;--line:#efe6df;--line2:#e0d2c7;
+  --paper:#fff;--paper2:#fbf6f1;--paper3:#f5ece4;--accent:#b06f4e;--accent-soft:#f9eee6;--side:#fdf8f3;--bub:#f6ece3;--mine:#b06f4e;}
+html,body{height:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s,color .3s;}
+button,input,textarea{font-family:inherit;}button{cursor:pointer;color:inherit;}
+a{color:inherit;text-decoration:none;}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+
+/* ============ 启动占位：自动进房成功后移除 ============ */
+.seal{width:30px;height:30px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center;background:var(--accent);
+  color:#fff;font-size:15px;font-family:"Songti SC","Noto Serif SC",serif;font-weight:700;box-shadow:0 6px 16px rgba(20,60,70,.16);}
+#boot{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;text-align:center;
+  background:var(--paper);color:var(--ink2);font-size:14px;line-height:1.9;}
+#boot .bfish{font-size:34px;}
+
+/* ============ 主框架 ============ */
+#app{position:fixed;inset:0;display:grid;grid-template-columns:248px minmax(0,1fr);background:var(--paper);}
+.side{border-right:1px solid var(--line);background:var(--side);display:flex;flex-direction:column;min-height:0;overflow-y:auto;}
+.side-top{padding:18px 16px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px;}
+.side-top .seal{width:26px;height:26px;font-size:13px;border-radius:8px;}
+.side-top b{font-size:14px;letter-spacing:.06em;}
+.side-top .v{font-size:10px;color:var(--accent);border:1px solid var(--line2);border-radius:5px;padding:1px 5px;}
+.side-sec{padding:15px 16px;border-bottom:1px solid var(--line);}
+.side-h{font-size:10.5px;letter-spacing:.18em;color:var(--ink3);margin-bottom:11px;display:flex;align-items:center;justify-content:space-between;}
+.side-h button{background:none;border:0;font-size:11px;color:var(--accent);letter-spacing:0;}
+.me{display:flex;align-items:center;gap:11px;}
+.av{width:40px;height:40px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;overflow:hidden;
+  background:var(--accent-soft);color:var(--accent);font-size:22px;border:1px solid var(--line);}
+.av img{width:100%;height:100%;object-fit:cover;}
+.me .n{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.me .s{font-size:11px;color:var(--ink3);margin-top:3px;}
+.members{display:flex;flex-direction:column;gap:9px;}
+.mrow{display:flex;align-items:center;gap:9px;font-size:12.5px;}
+.mrow .av{width:30px;height:30px;border-radius:10px;font-size:16px;}
+.mrow .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dot{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:#cbd5d7;}
+.dot.on{background:#3ec08a;box-shadow:0 0 0 3px rgba(62,192,138,.16);}
+.mood{border:1px solid var(--line);border-radius:11px;padding:9px 11px;background:var(--card);cursor:default;}
+.mood .top{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);}
+.mood .nm{font-weight:600;}
+.mood .hint{margin-top:5px;font-size:11px;color:var(--ink3);line-height:1.5;}
+.mdot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#cbd5d7;}
+.stat{display:flex;gap:8px;flex-wrap:wrap;}
+.stat span{font-size:11px;color:var(--ink2);background:var(--paper2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;}
+.side-foot{margin-top:auto;padding:14px 16px;display:flex;flex-direction:column;gap:9px;}
+.side-foot a,.side-foot button{font-size:12px;color:var(--ink2);background:none;border:0;text-align:left;padding:4px 0;}
+.side-foot a:hover,.side-foot button:hover{color:var(--accent);}
+.themes{display:flex;gap:7px;flex-wrap:wrap;}
+.themes button{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);}
+.themes button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px;}
+.t-white{background:linear-gradient(180deg,#fff,#f2f4f4)}.t-sky{background:linear-gradient(180deg,#e6f3ff,#fff)}
+.t-sea{background:linear-gradient(180deg,#123c58,#071e2d)}.t-warm{background:linear-gradient(180deg,#fbf0e6,#fff)}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;}
+header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper);}
+.hbtn{width:34px;height:32px;flex:0 0 auto;border-radius:9px;border:1px solid var(--line);background:var(--paper);
+  display:grid;place-items:center;font-size:15px;color:var(--ink2);transition:background .15s,color .15s;}
+.hbtn:hover{background:var(--paper2);color:var(--accent);}
+.hmeta{flex:1 1 auto;min-width:0;}
+.hmeta .t{font-size:14px;font-weight:700;letter-spacing:.03em;display:flex;align-items:center;gap:8px;}
+.hmeta .t b{font-variant-numeric:tabular-nums;letter-spacing:.14em;}
+.hmeta .s{font-size:11px;color:var(--ink3);margin-top:2px;display:flex;align-items:center;gap:5px;}
+.hacts{display:flex;gap:6px;}
+
+#msgs{flex:1 1 auto;min-height:0;overflow-y:auto;padding:20px clamp(14px,4vw,44px) 14px;
+  background:radial-gradient(900px 420px at 50% -12%,var(--paper2),transparent 72%);}
+.msg{display:flex;gap:9px;margin-bottom:16px;align-items:flex-start;animation:msgIn .24s ease both;}
+@keyframes msgIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.msg .av{width:34px;height:34px;border-radius:11px;font-size:18px;}
+.msg .col{min-width:0;max-width:min(72%,620px);display:flex;flex-direction:column;gap:4px;}
+.msg .who{font-size:11px;color:var(--ink3);padding:0 3px;display:flex;gap:7px;align-items:center;}
+.msg .who time{font-size:10px;color:var(--ink3);opacity:.8;}
+.bub{padding:10px 13px;border-radius:14px;border-bottom-left-radius:5px;background:var(--bub);border:1px solid var(--line);
+  font-size:14px;line-height:1.7;word-break:break-word;white-space:pre-wrap;}
+.msg.me{flex-direction:row-reverse;}
+.msg.me .col{align-items:flex-end;}
+.msg.me .who{flex-direction:row-reverse;}
+.msg.me .bub{background:var(--mine);color:#fff;border-color:transparent;border-bottom-left-radius:14px;border-bottom-right-radius:5px;}
+.msg.me .bub a{color:#fff;text-decoration:underline;}
+.bub.kao{font-size:18px;letter-spacing:.02em;font-family:"PingFang SC","Microsoft YaHei",monospace;}
+.bub.emo{font-size:44px;line-height:1.15;padding:8px 14px;background:transparent;border:0;}
+.bub.emo small{display:block;font-size:10.5px;color:var(--ink3);text-align:center;letter-spacing:.1em;}
+.msg.me .bub.emo small{color:var(--ink3);}
+.bub.pic{padding:4px;background:transparent;border:0;overflow:hidden;}
+.bub.pic img{max-width:min(280px,60vw);max-height:300px;display:block;border-radius:11px;cursor:zoom-in;object-fit:cover;}
+.bub.stk{padding:0;background:transparent;border:0;}
+.bub.stk img{max-width:150px;max-height:150px;display:block;border-radius:10px;cursor:zoom-in;}
+.bub.file{display:flex;align-items:center;gap:11px;min-width:200px;}
+.bub.file .fi{width:36px;height:36px;flex:0 0 auto;border-radius:10px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:18px;}
+.bub.file .fn{flex:1 1 auto;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bub.file .fs{font-size:10.5px;opacity:.75;margin-top:2px;}
+.bub.file a{font-size:11px;padding:5px 9px;border-radius:8px;background:rgba(255,255,255,.2);white-space:nowrap;}
+.msg.me .bub.file .fi{background:rgba(255,255,255,.2);}
+.bub.voice{display:flex;align-items:center;gap:9px;min-width:190px;}
+.bub.voice audio{height:34px;max-width:min(230px,52vw);}
+.bub.voice .dur{font-size:10.5px;opacity:.8;white-space:nowrap;}
+.sys{text-align:center;font-size:11px;color:var(--ink3);margin:12px 0 18px;}
+.sys span{background:var(--paper2);border:1px solid var(--line);border-radius:99px;padding:4px 11px;}
+.empty{text-align:center;color:var(--ink3);font-size:12.5px;line-height:2;padding:40px 10px;}
+.empty .big{display:block;font-size:36px;margin-bottom:8px;}
+.jump{position:absolute;right:22px;bottom:112px;border:1px solid var(--line2);background:var(--paper);color:var(--accent);
+  border-radius:99px;padding:7px 13px;font-size:12px;box-shadow:var(--shadow);z-index:5;}
+
+/* ============ 输入区 ============ */
+.composer{position:relative;flex:0 0 auto;border-top:1px solid var(--line);background:var(--paper);padding:9px 14px calc(9px + env(safe-area-inset-bottom));}
+.tools{display:flex;align-items:center;gap:4px;margin-bottom:7px;flex-wrap:wrap;}
+.tbtn{display:flex;align-items:center;gap:5px;border:1px solid transparent;background:none;border-radius:9px;
+  padding:6px 9px;font-size:12px;color:var(--ink2);transition:background .15s,color .15s,border-color .15s;}
+.tbtn:hover{background:var(--paper2);color:var(--accent);}
+.tbtn.on{background:var(--accent-soft);color:var(--accent);border-color:var(--line2);}
+.tbtn .ic{font-size:16px;line-height:1;}
+.tbtn.rec{color:#c0564b;background:rgba(192,86,75,.1);}
+.tip{margin-left:auto;font-size:10.5px;color:var(--ink3);}
+.crow{display:flex;align-items:flex-end;gap:9px;}
+#inp{flex:1 1 auto;min-width:0;resize:none;border:1px solid var(--line2);border-radius:12px;background:var(--paper2);
+  color:var(--ink);padding:10px 12px;font-size:14px;line-height:1.6;max-height:120px;outline:none;transition:border-color .15s,box-shadow .15s;}
+#inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+#send{flex:0 0 auto;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:13.5px;font-weight:600;
+  padding:11px 20px;transition:opacity .15s,transform .1s;}
+#send:hover{opacity:.92}#send:active{transform:scale(.98)}#send:disabled{opacity:.4;cursor:default;}
+
+/* ============ 抽屉 / 弹层 ============ */
+#tray{position:absolute;left:14px;right:14px;bottom:calc(100% - 1px);z-index:12;background:var(--paper);
+  border:1px solid var(--line2);border-radius:14px 14px 0 0;box-shadow:0 -12px 34px rgba(20,40,45,.1);
+  display:flex;flex-direction:column;max-height:min(340px,52vh);}
+.tray-h{display:flex;align-items:center;gap:8px;padding:10px 12px 6px;border-bottom:1px solid var(--line);}
+.tray-tabs{display:flex;gap:5px;flex:1 1 auto;flex-wrap:wrap;}
+.tray-tabs button{font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid transparent;background:var(--paper2);color:var(--ink2);}
+.tray-tabs button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--line2);font-weight:600;}
+.tray-x{border:0;background:none;color:var(--ink3);font-size:15px;padding:2px 5px;}
+.tray-body{flex:1 1 auto;overflow-y:auto;padding:11px 12px 14px;}
+.yellow-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:5px;}
+.yel{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px;border-radius:9px;border:1px solid transparent;background:none;}
+.yel:hover{background:var(--paper2);border-color:var(--line);}
+.yel .face{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:23px;
+  background:radial-gradient(circle at 34% 28%,#ffe675,#f5c02f 72%);box-shadow:inset 0 -2px 4px rgba(160,110,0,.18);}
+.yel .lb{font-size:9.5px;color:var(--ink3);white-space:nowrap;}
+.stk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;}
+.stk-grid img{width:100%;height:78px;object-fit:contain;background:var(--paper2);border:1px solid var(--line);border-radius:10px;}
+.stk-grid button{border:0;background:none;padding:0;border-radius:10px;transition:transform .14s;}
+.stk-grid button:hover{transform:translateY(-2px);}
+.add-stk{display:flex;align-items:center;justify-content:center;gap:5px;height:78px;border:1px dashed var(--line2)!important;
+  background:var(--paper2)!important;border-radius:10px;font-size:11.5px;color:var(--ink2);}
+.kao-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.kao-grid button{font-size:13px;padding:6px 9px;border-radius:9px;border:1px solid var(--line);background:var(--paper2);color:var(--ink);
+  white-space:nowrap;transition:background .14s,transform .14s;}
+.kao-grid button:hover{background:var(--accent-soft);transform:translateY(-1px);}
+.kao-grid button.mine{border-color:var(--accent);color:var(--accent);}
+.kao-add{display:flex;gap:7px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);}
+.kao-add input{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--paper2);
+  color:var(--ink);font-size:13px;outline:none;}
+.kao-add input:focus{border-color:var(--accent);}
+.kao-add button{flex:0 0 auto;padding:8px 13px;border:0;border-radius:9px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;}
+.tray-tip{font-size:10.5px;color:var(--ink3);line-height:1.7;margin-top:9px;}
+
+.mask{position:fixed;inset:0;background:rgba(14,26,30,.38);z-index:30;}
+.ov{position:fixed;z-index:31;top:50%;left:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 28px));
+  max-height:min(86vh,680px);overflow-y:auto;background:var(--paper);border:1px solid var(--line2);border-radius:16px;
+  padding:18px;box-shadow:0 24px 70px rgba(10,25,30,.28);}
+.ov h2{font-size:15px;letter-spacing:.05em;display:flex;align-items:center;gap:8px;}
+.ov .x{margin-left:auto;border:0;background:none;color:var(--ink3);font-size:16px;}
+.ov-sec{margin-top:15px;}
+.ov-sec>label{display:block;font-size:11px;letter-spacing:.12em;color:var(--ink3);margin-bottom:8px;}
+.avatar-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;}
+.avatar-grid button{aspect-ratio:1;border-radius:10px;border:1px solid var(--line2);background:var(--paper2);font-size:20px;}
+.avatar-grid button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);}
+.ov-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+.ov-row input[type=text],.ov-row input[type=password]{flex:1 1 auto;min-width:140px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;
+  background:var(--paper2);color:var(--ink);font-size:14px;outline:none;}
+.chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{padding:6px 11px;border-radius:9px;border:1px solid var(--line2);background:var(--paper2);font-size:12px;}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.chip.sw{width:30px;height:30px;padding:0;border-radius:9px;}
+.ov-done{margin-top:18px;width:100%;padding:12px;border:0;border-radius:11px;background:var(--accent);color:#fff;
+  font-size:13.5px;font-weight:600;letter-spacing:.05em;}
+.ov-note{font-size:11px;color:var(--ink3);line-height:1.8;margin-top:12px;}
+/* 设置面板里的「已配置 / 未配置」小徽章与保存提示 */
+.tts-state{font-size:11px;padding:2px 9px;border-radius:99px;border:1px solid var(--line2);color:var(--ink3);}
+.tts-state.on{color:var(--accent);border-color:var(--accent);}
+.smsg{margin-top:8px;text-align:center;font-size:11.5px;color:var(--ink3);min-height:16px;}
+/* 设置面板的 tab 条：窄屏不换行（nowrap + 横向滚动兜底，滚条本身藏起来） */
+.set-tabs{display:flex;gap:6px;margin-top:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scrollbar-width:none;padding-bottom:2px;}
+.set-tabs::-webkit-scrollbar{display:none;}
+.set-tabs button{flex:1 1 0;min-width:0;white-space:nowrap;padding:8px 10px;border:1px solid var(--line2);
+  border-radius:9px;background:var(--paper2);color:var(--ink2);font-size:12.5px;}
+.set-tabs button[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.set-pane{margin-top:2px;}
+/* 音乐 tab：音量 / 当前曲目 / 曲目列表 */
+.mpane-vol{display:flex;align-items:center;gap:10px;}
+.mpane-vol input[type=range]{flex:1 1 auto;min-width:0;height:20px;accent-color:var(--accent);}
+.mpane-vol span{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink3);min-width:38px;text-align:right;}
+.mpane-cur{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.mpane-cur b{flex:1 1 auto;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mpane-cur button{flex:0 0 auto;width:34px;height:30px;border:1px solid var(--line2);border-radius:9px;
+  background:var(--paper2);color:var(--ink2);font-size:12px;}
+.mpane-list{margin-top:8px;max-height:190px;overflow-y:auto;border:1px solid var(--line2);border-radius:10px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.mpane-list button{display:flex;width:100%;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:9px 11px;border:0;border-bottom:1px solid var(--line);background:var(--paper2);
+  color:var(--ink);font-size:12.5px;text-align:left;}
+.mpane-list button:last-child{border-bottom:0;}
+.mpane-list button.on{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.mpane-list button i{font-style:normal;font-size:10.5px;color:var(--ink3);flex:0 0 auto;}
+.mpane-list .empty{padding:11px;font-size:11.5px;color:var(--ink3);}
+/* 语音 tab 的音色下拉 */
+.sel{flex:1 1 auto;min-width:140px;padding:9px 11px;border:1px solid var(--line2);border-radius:9px;
+  background:var(--paper2);color:var(--ink);font-size:13.5px;}
+/* 刷新音色失败时的提示：要说清是 key 错了还是没建音色，所以让它显眼一点 */
+.vnote-err{color:#c0392b;}
+/* 侧栏那张「我的资料」卡片本身就是设置入口，不再另挂编辑按钮 */
+.me-card{width:100%;text-align:left;font:inherit;color:inherit;background:none;border:1px solid transparent;
+  border-radius:12px;padding:7px;margin:-7px;cursor:pointer;}
+.me-card:hover{border-color:var(--line);background:var(--paper2);}
+.me-card .chev{margin-left:auto;color:var(--ink3);font-size:13px;}
+.rec-box{display:flex;align-items:center;gap:12px;padding:12px 0;}
+.rec-dot{width:13px;height:13px;border-radius:50%;background:#c0564b;animation:blink 1s infinite;}
+@keyframes blink{50%{opacity:.25}}
+.rec-time{font-variant-numeric:tabular-nums;font-size:16px;font-weight:700;}
+.rec-btns{display:flex;gap:8px;margin-top:6px;}
+.rec-btns button{flex:1 1 auto;padding:10px;border:1px solid var(--line2);border-radius:10px;background:var(--paper2);font-size:13px;}
+.rec-btns button.pri{background:var(--accent);color:#fff;border-color:transparent;font-weight:600;}
+#lightbox{position:fixed;inset:0;z-index:50;background:rgba(8,16,20,.9);display:grid;place-items:center;padding:20px;}
+#lightbox img{max-width:100%;max-height:90vh;border-radius:10px;}
+#lightbox .lx{position:absolute;top:18px;right:20px;border:0;background:none;color:#fff;font-size:24px;}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:60;background:rgba(20,34,38,.92);color:#fff;
+  font-size:12.5px;padding:9px 15px;border-radius:99px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:86vw;text-align:center;}
+#toast.on{opacity:1;}
+
+@media(min-width:861px){#menuBtn{display:none;}}
+@media(max-width:860px){
+  #app{grid-template-columns:minmax(0,1fr);}
+  .side{position:fixed;z-index:24;left:0;top:0;bottom:0;width:min(280px,84vw);transform:translateX(-102%);
+    transition:transform .24s ease;box-shadow:14px 0 40px rgba(0,0,0,.12);}
+  .side.open{transform:none;}
+  /* 侧栏打开时不再压暗页面：只留一层透明可点区域，点空白处收起抽屉。
+     以前是 rgba(10,20,25,.35)，看起来像整屏亮度被调低，老板明确不想要。 */
+  .side-mask{position:fixed;inset:0;background:transparent;z-index:23;}
+  .tip{display:none;}
+  .msg .col{max-width:82%;}
+  #tray{left:8px;right:8px;}
+  .avatar-grid{grid-template-columns:repeat(6,1fr);}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+<style>
+/* v5 patch2 · 手机端资料 / 外观 / 录音弹层完整可见（纯增量覆盖） */
+@media(max-width:720px){
+  .ov{
+    max-height:86vh;
+    max-height:86dvh;
+    padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  .tray{max-height:min(340px,52vh);max-height:min(340px,52dvh);}
+}
+</style>
+<style>
+/* ============================================================
+   v5.001 · 触屏弹层统一加固（教训：别贴底、别只靠宽度断点）
+   真机上 CSS 布局视口可能大于可视区域（iOS 地址栏 / 工具栏），
+   贴 bottom:0 或垂直居中的弹层会把底部控件推进被遮挡区；
+   内容没超高时 maxScroll=0，用户连滚都滚不动。横屏 / 折叠屏
+   宽度超过 640px 又会整体漏掉 max-width 断点。
+   统一做法：从视口顶部开始、外层是唯一滚动容器、底部留足余量，
+   并用 (pointer:coarse) 覆盖所有触屏设备，与布局视口宽度无关。
+   ============================================================ */
+@media (max-width:900px), (pointer:coarse){
+  .ov{
+    position:fixed!important;top:0!important;right:0!important;bottom:auto!important;left:0!important;
+    width:auto!important;margin:0!important;max-height:none!important;
+    height:100vh!important;height:100dvh!important;
+    transform:none!important;animation:none!important;
+    overflow-y:auto!important;overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    border-radius:0!important;border:0!important;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 16px
+            calc(96px + env(safe-area-inset-bottom,0px))!important;
+  }
+  .ov > *{max-width:560px;margin-left:auto;margin-right:auto;}
+    .tray{max-height:none!important;}
+}
+/* 外部系统依赖，勿删：图片失效占位 */
+.imgerr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  min-width:140px;height:96px;padding:12px;border-radius:11px;font-size:12.5px;color:var(--ink2);
+  background:repeating-linear-gradient(45deg,var(--bub),var(--bub) 8px,var(--line) 8px,var(--line) 9px);}
+.imgerr span{font-size:10.5px;opacity:.7;}
+</style>
+</head>
+<body>
+
+<!-- ============ 启动占位：自动进房成功后移除 ============ -->
+<div id="boot">
+  <div>
+    <div class="bfish">🐟</div>
+    <div id="bootTxt">正在游进去…</div>
+    <button id="bootRetry" class="hidden" onclick="location.reload()" style="margin-top:10px;padding:7px 16px;border:1px solid var(--line2);border-radius:9px;background:var(--paper);font-size:13px;color:var(--ink2)">重试</button>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div id="app" class="hidden">
+  <aside class="side" id="side">
+    <div class="side-top"><span class="seal">和</span><b>与鱼</b><span class="v">v5.001</span></div>
+    <div class="side-sec">
+      <div class="side-h">我的资料</div>
+      <!-- 卡片本身就是入口：点一下打开设置面板的「资料」页 -->
+      <button class="me me-card" id="meCard" title="点头像改资料">
+        <div class="av" id="meAv">🐟</div>
+        <div><div class="n" id="meName">—</div><div class="s" id="meSub">在线</div></div>
+        <span class="chev">›</span>
+      </button>
+    </div>
+    <div class="side-sec">
+      <div class="side-h">这间房里</div>
+      <div class="members" id="members"></div>
+    </div>
+    <div class="side-sec">
+      <div class="side-h">小鱼现在</div>
+      <div class="mood" id="moodRow" title="">
+        <div class="top"><span class="mdot" id="moodDot"></span><span class="nm" id="moodBand">还没见过</span></div>
+        <div class="hint" id="moodHint">她的心情变了她自己会说</div>
+      </div>
+    </div>
+    <div class="side-sec">
+      <div class="side-h">房间里的小仓库</div>
+      <div class="stat"><span id="stStk">自定义表情 0</span><span id="stKao">自定义颜文字 0</span></div>
+    </div>
+    <div class="side-foot">
+      <a href="/">← 回大厅</a>
+      <button id="copyLink">🔗 复制链接</button>
+      <button id="clearRoom">🧹 清空本地显示</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header>
+      <button class="hbtn" id="menuBtn" title="侧栏" aria-label="侧栏">☰</button>
+      <a class="hbtn" href="/" title="回大厅" aria-label="回大厅">←</a>
+      <div class="hmeta">
+        <div class="t">与鱼</div>
+        <div class="s"><span class="dot" id="peerDot"></span><span id="peerTxt">等待对方游进来…</span></div>
+      </div>
+      <div class="hacts">
+        <button class="hbtn" id="hSetup" title="设置（资料 · 外观 · 语音）" aria-label="设置">⚙</button>
+      </div>
+    </header>
+
+    <div id="msgs"></div>
+    <button class="jump hidden" id="jump">↓ 有新消息</button>
+
+    <div class="composer">
+      <div id="tray" class="hidden">
+        <div class="tray-h">
+          <div class="tray-tabs" id="trayTabs">
+            <button data-tab="yellow" class="on">😀 黄豆表情</button>
+            <button data-tab="custom">🐟 自定义</button>
+            <button data-tab="kao">(｡◕‿◕｡) 颜文字</button>
+          </div>
+          <button class="tray-x" id="trayX">✕</button>
+        </div>
+        <div class="tray-body" id="trayBody"></div>
+      </div>
+
+      <div class="tools">
+        <button class="tbtn" id="imgBtn" title="发送图片 / GIF"><span class="ic">🖼</span><span>图片</span></button>
+        <button class="tbtn" id="fileBtn" title="发送任意文件"><span class="ic">📎</span><span>文件</span></button>
+        <button class="tbtn" id="voiceBtn" title="录一段语音"><span class="ic">🎤</span><span>语音</span></button>
+        <button class="tbtn" id="trayBtn" title="表情包与颜文字"><span class="ic">😀</span><span>表情</span></button>
+        <button class="tbtn" id="kaoBtn" title="颜文字"><span class="ic">(｡◕‿◕｡)</span><span>颜文字</span></button>
+        <span class="tip">Enter 发送 · Shift+Enter 换行 · 支持粘贴 / 拖拽图片</span>
+      </div>
+      <div class="crow">
+        <textarea id="inp" rows="1" placeholder="说点什么…" enterkeyhint="send"></textarea>
+        <button id="send" disabled>发送</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="side-mask hidden" id="sideMask"></div>
+
+<!-- 设置：一个弹层、四个 tab（页头只留一个 ⚙ 入口）
+     tab 1 资料 ← 原 #pOv 的控件
+     tab 2 外观 ← 原侧栏「外观」分区
+     tab 3 语音 ← 原 #sOv 的 Key 面板 + 按 apiStyle 切换的音色下拉
+     tab 4 音乐 ← 全站音频（WNAV_AUDIO）：音量/开关/模式/场景/曲目，和首页共用同一套设置
+     「连接」（改地址/刷新/清缓存）不在这一页：在首页设置的「手机壳」里。 -->
+<div class="mask hidden" id="sMask"></div>
+<div class="ov hidden" id="sOv" role="dialog" aria-modal="true" aria-label="设置">
+  <h2>⚙ 设置 <button class="x" id="sX">✕</button></h2>
+
+  <div class="set-tabs" id="setTabs" role="tablist">
+    <button data-pane="profile" class="on" role="tab" aria-selected="true">资料</button>
+    <button data-pane="look" role="tab" aria-selected="false">外观</button>
+    <button data-pane="voice" role="tab" aria-selected="false">语音</button>
+    <button data-pane="music" role="tab" aria-selected="false">音乐</button>
+    <button data-pane="ai" role="tab" aria-selected="false">AI 设置</button>
+  </div>
+
+  <!-- ===== tab 1 · 资料 ===== -->
+  <section class="set-pane" id="paneProfile" role="tabpanel" aria-label="资料">
+    <div class="ov-sec"><label>头像</label>
+      <div class="avatar-grid" id="avatarGrid"></div>
+      <div class="ov-row"><button class="chip" id="uploadAv">＋ 上传图片当头像</button><span style="font-size:11px;color:var(--ink3)" id="avNow">当前：🐟</span></div>
+    </div>
+    <div class="ov-sec"><label>昵称</label><div class="ov-row"><input type="text" id="pName" maxlength="12" placeholder="最多 12 个字"></div></div>
+    <div class="ov-sec"><label>我的气泡颜色</label><div class="chips" id="bubChips"></div></div>
+    <div class="ov-sec"><label>字号</label><div class="chips" id="fontChips">
+      <button class="chip" data-f="-1">小</button><button class="chip" data-f="0">标准</button><button class="chip" data-f="1">大</button>
+    </div></div>
+    <p class="ov-note">昵称、头像、气泡和字号会同步给房间里的对方；背景在「外观」里，只保存在这台设备。</p>
+  </section>
+
+  <!-- ===== tab 2 · 外观 ===== -->
+  <section class="set-pane hidden" id="paneLook" role="tabpanel" aria-label="外观">
+    <div class="ov-sec"><label>背景主题</label>
+      <div class="themes" id="themes">
+        <button class="t-white" data-t="white" title="纯白" aria-pressed="true"></button>
+        <button class="t-sky" data-t="sky" title="天空" aria-pressed="false"></button>
+        <button class="t-sea" data-t="sea" title="深海" aria-pressed="false"></button>
+        <button class="t-warm" data-t="warm" title="暖纸" aria-pressed="false"></button>
+      </div>
+      <p class="ov-note" style="margin-top:10px">纯白 / 天空 / 深海 / 暖纸。点一下立刻生效，只保存在这台设备，也和首页共用同一套主题。</p>
+    </div>
+  </section>
+
+  <!-- ===== tab 3 · 语音 ===== -->
+  <section class="set-pane hidden" id="paneVoice" role="tabpanel" aria-label="语音">
+    <div class="ov-sec">
+      <label>用哪家合成</label>
+      <div class="chips" id="styleChips">
+        <button class="chip" data-s="breeze" aria-pressed="true">Breeze（推荐）</button>
+        <button class="chip" data-s="openai" aria-pressed="false">小米 MiMo</button>
+      </div>
+      <p class="ov-note" style="margin-top:8px">选中的这家就是她说话时用的通道；另一家的 Key 留着也不会被删。</p>
+    </div>
+
+    <div class="ov-sec">
+      <label>Breeze</label>
+      <div class="ov-row"><span class="tts-state" id="breezeState">未配置</span></div>
+      <div class="ov-row"><input type="text" id="breezeKey" placeholder="粘贴 Breeze 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="text" id="breezeModel" placeholder="模型 id（必填，ElevenLabs 风格）" autocomplete="off" spellcheck="false"></div>
+    </div>
+
+    <div class="ov-sec">
+      <label>小米 MiMo</label>
+      <div class="ov-row"><span class="tts-state" id="mimoState">未配置</span></div>
+      <div class="ov-row"><input type="text" id="mimoKey" placeholder="粘贴 MiMo 的 API Key（留空 = 不改）" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="text" id="mimoModel" placeholder="模型，默认 mimo-v2.5-tts" autocomplete="off" spellcheck="false"></div>
+    </div>
+
+    <div class="ov-sec">
+      <label>音色 <span id="voiceWhich" style="font-weight:400;letter-spacing:0;color:var(--ink3)">Breeze</span></label>
+      <div class="ov-row" id="voiceSelRow">
+        <select id="voiceSel" class="sel"></select>
+        <button class="chip" id="voiceRefresh" style="flex:0 0 auto;white-space:nowrap">🔄 刷新音色</button>
+      </div>
+      <div class="ov-note" id="voiceTip">下拉里是这个账号能用的音色；保存后她就用这个嗓子说话。</div>
+    </div>
+
+    <p class="ov-note">已保存的 Key 只显示前后四位，输入框留空表示不改动。</p>
+  </section>
+
+  <!-- ===== tab 4 · 音乐（全站音频，和首页共用同一套开关） ===== -->
+  <section class="set-pane hidden" id="paneMusic" role="tabpanel" aria-label="音乐">
+    <div class="ov-sec">
+      <label>音量</label>
+      <div class="mpane-vol">
+        <input type="range" id="yuVol" min="0" max="100" step="5" value="70" aria-label="音量">
+        <span id="yuVolTxt">70%</span>
+      </div>
+    </div>
+
+    <div class="ov-sec">
+      <label>背景音乐</label>
+      <div class="chips">
+        <button class="chip" id="yuMusicBtn" aria-pressed="false">关</button>
+      </div>
+      <p class="ov-note" style="margin-top:8px">打开后按场景轻缓循环；关掉就是静音。</p>
+    </div>
+
+    <div class="ov-sec">
+      <label>播放模式</label>
+      <div class="chips" id="yuModeChips">
+        <button class="chip" data-mode="order" aria-pressed="true">顺序</button>
+        <button class="chip" data-mode="shuffle" aria-pressed="false">随机</button>
+        <button class="chip" data-mode="repeat1" aria-pressed="false">单曲循环</button>
+      </div>
+    </div>
+
+    <div class="ov-sec">
+      <label>场景</label>
+      <div class="chips" id="yuSceneChips">
+        <button class="chip" data-scene="daily" aria-pressed="false">日常</button>
+        <button class="chip" data-scene="love" aria-pressed="false">傍晚</button>
+        <button class="chip" data-scene="night" aria-pressed="false">深夜</button>
+        <button class="chip" data-scene="focus" aria-pressed="false">棋局</button>
+      </div>
+    </div>
+
+    <div class="ov-sec">
+      <label>正在放</label>
+      <div class="mpane-cur">
+        <b id="yuNowTitle">—</b>
+        <button id="yuPrev" aria-label="上一首">⏮</button>
+        <button id="yuNext" aria-label="下一首">⏭</button>
+      </div>
+      <p class="ov-note" id="yuNowMeta" style="margin-top:6px">还没开始</p>
+    </div>
+
+    <div class="ov-sec">
+      <label>曲目</label>
+      <div class="mpane-list" id="yuTrackList"><div class="empty">加载中…</div></div>
+    </div>
+
+    <p class="ov-note">音乐是全站的：在这里改，首页播的也是同一首、同一个音量。</p>
+  </section>
+
+  <!-- ===== tab 5 · AI 设置（聊天机器人的 LLM 配置，存 Node 侧 config.json）
+       GET  /api/settings/llm → { llmBase, llmModel, hasKey, keyTail }
+       POST /api/settings/llm ← { llmBase, llmKey, llmModel }，llmKey 空串 = 保留原 Key ===== -->
+  <section class="set-pane hidden" id="paneAI" role="tabpanel" aria-label="AI 设置">
+    <div class="ov-sec">
+      <label>机器人（LLM）</label>
+      <div class="ov-row"><span class="tts-state" id="llmState">未配置</span></div>
+      <div class="ov-row"><input type="text" id="llmBase" placeholder="接口地址，默认 https://api.deepseek.com/v1" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="text" id="llmModel" placeholder="模型名，默认 deepseek-chat" autocomplete="off" spellcheck="false"></div>
+      <div class="ov-row"><input type="password" id="llmKey" placeholder="填你自己的 DeepSeek sk-key，留空则机器人不说话" autocomplete="new-password" spellcheck="false"></div>
+      <p class="ov-note" style="margin-top:8px">Key 只存在你自己的服务器上，页面永远不回显完整 Key，只显示后四位；输入框留空再保存 = 不改动现有 Key。</p>
+    </div>
+    <p class="ov-note">机器人的回复由这个接口驱动；没配 Key 时她只做动作、不说话。</p>
+  </section>
+
+  <button class="ov-done" id="sDone">保存</button>
+  <div class="smsg" id="sMsg"></div>
+</div>
+
+<!-- 录音 -->
+<div class="mask hidden" id="rMask"></div>
+<div class="ov hidden" id="rOv" role="dialog" aria-modal="true" aria-label="录一段语音" style="width:min(360px,calc(100vw - 28px))">
+  <h2>🎤 录一段语音 <button class="x" id="rX">✕</button></h2>
+  <div class="rec-box"><span class="rec-dot hidden" id="recDot"></span><span class="rec-time" id="recTime">00:00</span>
+    <span style="font-size:11.5px;color:var(--ink3)" id="recHint">点「开始录音」，说完再点「发送」</span></div>
+  <div class="rec-btns"><button id="recStart">● 开始录音</button><button class="pri" id="recSend" disabled>发送语音</button></div>
+  <p class="ov-note">录音只在本机完成，上传后对方点一下就能播放。浏览器若不给麦克风权限，可以用「文件」直接发一段音频。</p>
+  <!-- [EXTERNAL-DEP · TTS] 文字转语音：服务器用 edge-tts 合成，不占浏览器 -->
+  <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:7px">🔊 或者让它念一段文字：</div>
+    <textarea id="ttsText" rows="2" maxlength="800" placeholder="输入要念的内容，比如「老板，该吃饭啦」"
+      style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:10px;
+             background:var(--bub);color:var(--ink);font:inherit;font-size:13px;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <select id="ttsVoice" style="flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:9px;
+              background:var(--bub);color:var(--ink);font-size:12.5px">
+        <option value="zh-CN-XiaoxiaoNeural">晓晓（女声·活泼）</option>
+        <option value="zh-CN-XiaoyiNeural">晓伊（女声·可爱）</option>
+        <option value="zh-CN-YunxiNeural">云希（男声·年轻）</option>
+        <option value="zh-CN-YunjianNeural">云健（男声·沉稳）</option>
+        <option value="zh-CN-liaoning-XiaobeiNeural">晓北（东北话）</option>
+      </select>
+      <button class="pri" id="ttsGo" style="padding:7px 14px">合成并发送</button>
+    </div>
+    <div id="ttsHint" style="font-size:11px;color:var(--ink3);margin-top:6px">合成约 2 秒，生成后直接发到房间</div>
+  </div>
+</div>
+
+<div id="lightbox" class="hidden"><img id="lbImg" alt=""><button class="lx" id="lbX">✕</button></div>
+<div id="toast"></div>
+
+<input type="file" id="imgFile" accept="image/*" multiple hidden>
+<input type="file" id="stkFile" accept="image/*" hidden>
+<input type="file" id="avFile" accept="image/*" hidden>
+<input type="file" id="anyFile" multiple hidden>
+
+<script src="/audio.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function hhmm(t){var d=new Date(t||Date.now());return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+function fsize(n){n=Number(n)||0;return n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';}
+var toastT;
+function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('on');},2200);}
+function ls(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+
+/* ---------------- 内置数据 ---------------- */
+var AVATARS=['🐟','🐳','🐬','🦊','🐻','🐼','🐰','🐱','🌙','⭐','🍀','🎐','🫧','🌊','🐚','🪸'];
+var BUBBLES=[['','默认'],['#2f7f8c','青碧'],['#b06f4e','暖橘'],['#6f5b9e','藕紫'],['#3d7d55','松绿'],['#4a668f','远山']];
+var YELLOW=[
+ ['😀','微笑'],['😄','开心'],['😁','呲牙'],['😂','笑哭'],['🤣','狂笑'],['😊','害羞'],['🥰','爱你'],['😍','色'],
+ ['😘','亲亲'],['😗','嘟嘴'],['🤪','搞怪'],['😎','得意'],['🤔','思考'],['😳','惊讶'],['😭','大哭'],['😢','难过'],
+ ['😡','发怒'],['😤','生气'],['🥺','委屈'],['😴','睡觉'],['😪','困'],['🤯','抓狂'],['😱','惊恐'],['😇','天使'],
+ ['🤭','偷笑'],['😏','坏笑'],['🙄','白眼'],['😒','不屑'],['😬','尴尬'],['🥴','晕'],['🤒','生病'],['🤧','感冒'],
+ ['😵','晕头'],['🫠','融化'],['🥹','感动'],['😶','无语'],['🤐','闭嘴'],['🤨','疑问'],['😯','噢'],['😲','震惊'],
+ ['👍','赞'],['👏','鼓掌'],['🙏','拜托'],['💪','加油'],['🤝','握手'],['✌️','耶'],['👌','好的'],['🤟','爱你哟'],
+ ['❤️','爱心'],['💔','心碎'],['🎉','庆祝'],['🌹','玫瑰'],['🥀','凋谢'],['🍉','西瓜'],['☕','咖啡'],['🍰','蛋糕'],
+ ['🍺','啤酒'],['🐟','摸鱼'],['💤','睡了'],['🌙','晚安'],['☀️','早安'],['🧧','红包'],['💣','炸弹'],['✅','收到']
+];
+var KAO=[
+ '(｡◕‿◕｡)','(*/ω＼*)','(￣▽￣)"','QAQ','T_T','orz','(╯°□°）╯︵ ┻━┻','╭(╯^╰)╮',
+ '(=ﾟωﾟ)ﾉ','(｡•́︿•̀｡)','(*´∀`)~♥','(๑•̀ㅂ•́)و✧','(～￣▽￣)～','(￣┰￣*)','○|￣|_',
+ '(;´༎ຶД༎ຶ`)','(*꒦ິ⌓꒦ີ)','(ノ°ο°)ノ','_(´ཀ`」 ∠)_','(ｷ｀ﾟДﾟ´)!!','(´･_･`)',
+ 'ヽ(´▽`)/','(づ｡◕‿‿◕｡)づ','(๑´•ᴗ•̀๑)','(=^･ω･^=)','(つ﹏⊂)','(◞‸◟ )',
+ 'ʕ •ᴥ•ʔ','(•̀ᴗ•́)و','(　ﾟдﾟ)','(°ー°〃)','ヽ(￣д￣;)ノ','(｡ŏ﹏ŏ)','( ˘ ³˘)♥',
+ '( •́ ⌒ •̀)','(oﾟvﾟ)ノ','Σ(っ °Д °;)っ','(／。＼)','(´；ω；`)','(*≧▽≦)','(＾▽＾)',
+ '(=・ω・=)','(*・∀・)ノ','(・∀・)つ','(=￣ ρ￣=)','(｡･ω･｡)ﾉ♡','(◍•ᴗ•◍)','ヽ(；▽；)ノ',
+ '(つ ◕‿◕ )つ','(≧∇≦)ﾉ','(´▽`ʃ♡ƪ)','(｀・ω・´)','(ㆆᴗㆆ)','(°∀°)ﾉ','(；一_一)'
+];
+
+/* ---------------- 状态 ---------------- */
+var PID=ls('yu_pid','');
+if(!PID){PID='yu'+Math.random().toString(36).slice(2)+Date.now().toString(36);save('yu_pid',PID);}
+var PROFILE=ls('yu_profile',{name:'',avatar:'🐟',bubble:'',fontSize:0});
+var CODE='',SEAT=-1,ME=null,PEER=null,MEMBERS=[],STICKERS=[],KAOMOJIS=[],CUSTOMKAO=ls('yu_kao',[]);
+var lastId=0,seen={},es=null,pollT=null,pingT=null,MAX_UP=10*1048576,atBottom=true;
+var TAB='yellow',trayOpen=false,theme=ls('yu_theme','')|| (localStorage.getItem('wnav_bg')||'white');
+if(['white','sky','sea','warm'].indexOf(theme)<0)theme='white';
+
+function applyTheme(t){
+  theme=t;save('yu_theme',t);
+  document.documentElement.dataset.yu=t;
+  document.documentElement.dataset.bg=(t==='warm'?'white':t);
+  try{localStorage.setItem('wnav_bg',(t==='warm'?'white':t));}catch(e){}
+  Array.prototype.forEach.call(document.querySelectorAll('[data-t]'),function(b){b.setAttribute('aria-pressed',b.dataset.t===t?'true':'false');});
+}
+applyTheme(theme);
+
+function avHTML(v,cls){
+  v=String(v||'🐟');
+  var inner=/^\/yu-f\//.test(v)?'<img src="'+esc(v)+'" alt="">':esc(v);
+  return '<div class="av '+(cls||'')+'">'+inner+'</div>';
+}
+function bubbleStyle(m){
+  var s='';
+  if(m.bubble)s+='background:'+esc(m.bubble)+';border-color:transparent;color:#fff;';
+  if(m.fontSize)s+='font-size:'+(m.fontSize>0?16:m.fontSize<0?12.5:14)+'px;';
+  return s;
+}
+
+/* ---------------- 打开即进（2026-11-28：房间号 / 进门卡片已删） ----------------
+   手机端没有账号系统，也没有 /api/auth/me；房间固定用 local，
+   服务端会把 code 转大写，落到 data/yu/LOCAL.json。昵称固定「老板」，头像沿用本地缓存或默认 🐟。 */
+var CODE='local';
+function bootFail(t){
+  var el=$('bootTxt');if(el)el.textContent=t;
+  var b=$('bootRetry');if(b)b.classList.remove('hidden');
+}
+
+async function enterRoom(){
+  try{
+    var payload={code:CODE,pid:PID,name:PROFILE.name||'老板',avatar:PROFILE.avatar||'🐟',bubble:PROFILE.bubble||'',fontSize:PROFILE.fontSize||0};
+    var r=await fetch('/api/yu/enter',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)}).then(x=>x.json());
+    if(r.error){bootFail(r.error);return;}
+    CODE=r.code;SEAT=r.seat;ME=r.me;PEER=r.peer;MEMBERS=r.members;STICKERS=r.stickers||[];
+    KAOMOJIS=r.kaomojis||[];MAX_UP=r.maxUpload||MAX_UP;
+    PROFILE.name=r.me.name;PROFILE.avatar=r.me.avatar;PROFILE.bubble=r.me.bubble||'';PROFILE.fontSize=r.me.fontSize||0;
+    save('yu_profile',PROFILE);
+    $('app').classList.remove('hidden');
+    var boot=$('boot');if(boot)boot.remove();
+    paintMe();paintMembers();paintPeer();paintStats();
+    $('msgs').innerHTML='';
+    (r.msgs||[]).forEach(ingest);
+    lastId=(r.msgs&&r.msgs.length)?r.msgs[r.msgs.length-1].id:0;
+    scrollBottom(true);
+    connect();
+    /* [SHELL] 把房间号交给手机壳：退到后台后由原生前台服务守着这条流，
+       她说话就弹系统通知。浏览器里没有 window.HappyNav，这段自动跳过。 */
+    try{
+      if(window.HappyNav&&window.HappyNav.watchRoom)window.HappyNav.watchRoom(CODE,PID,lastId);
+    }catch(e){}
+    pingT=setInterval(function(){fetch('/api/yu/ping',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:CODE,pid:PID})}).catch(function(){});},8000);
+  }catch(e){bootFail('连不上服务，稍后再试');}
+}
+enterRoom();
+
+/* ---------------- 实时 ---------------- */
+function connect(){
+  if(es)try{es.close();}catch(e){}
+  es=new EventSource('/api/yu/stream?code='+encodeURIComponent(CODE)+'&pid='+encodeURIComponent(PID)+'&since='+lastId);
+  es.addEventListener('hello',function(e){var d=JSON.parse(e.data);PEER=d.peer;MEMBERS=d.members||MEMBERS;
+    STICKERS=d.stickers||STICKERS;KAOMOJIS=d.kaomojis||KAOMOJIS;paintPeer();paintMembers();paintStats();if(trayOpen)drawTray();});
+  es.addEventListener('msgs',function(e){var d=JSON.parse(e.data);(d.msgs||[]).forEach(ingest);loadMood();});
+  /* [BRIDGE] 撤回：DSH 发了中间态又撤回时会推这个事件。
+     原来前端不认，中间态就永远留在页面上 → 看起来像重复。 */
+  es.addEventListener('recall',function(e){
+    try{
+      var d=JSON.parse(e.data);
+      var id=d.id;
+      if(!id) return;
+      var box=$('msgs');
+      var el=box.querySelector('[data-mid="'+id+'"]');
+      if(el){
+        el.style.transition='opacity .18s'; el.style.opacity='0';
+        setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },180);
+      }
+    }catch(err){}
+  });
+  es.addEventListener('sync',function(e){var d=JSON.parse(e.data);(d.msgs||[]).forEach(ingest);});
+  es.addEventListener('peer',function(e){PEER=JSON.parse(e.data).peer;paintPeer();});
+  es.addEventListener('members',function(e){MEMBERS=JSON.parse(e.data).members||[];paintMembers();
+    var mine=MEMBERS.filter(function(x){return x.seat===SEAT;})[0];if(mine){ME=mine;paintMe();}});
+  es.addEventListener('stickers',function(e){STICKERS=JSON.parse(e.data).stickers||[];paintStats();if(trayOpen&&TAB==='custom')drawTray();});
+  es.addEventListener('kaomojis',function(e){KAOMOJIS=JSON.parse(e.data).kaomojis||[];paintStats();if(trayOpen&&TAB==='kao')drawTray();});
+  es.onerror=function(){/* 轮询兜底 */};
+  clearInterval(pollT);
+  pollT=setInterval(async function(){
+    try{
+      var d=await fetch('/api/yu/state?code='+encodeURIComponent(CODE)+'&pid='+encodeURIComponent(PID)+'&since='+lastId).then(x=>x.json());
+      if(d.needJoin)return;
+      (d.msgs||[]).forEach(ingest);
+      if(d.stickers&&JSON.stringify(d.stickers)!==JSON.stringify(STICKERS)){STICKERS=d.stickers;paintStats();if(trayOpen&&TAB==='custom')drawTray();}
+      if(d.kaomojis&&JSON.stringify(d.kaomojis)!==JSON.stringify(KAOMOJIS)){KAOMOJIS=d.kaomojis;paintStats();if(trayOpen&&TAB==='kao')drawTray();}
+      PEER=d.peer;paintPeer();
+    }catch(e){}
+  },3000);
+}
+
+/* ---------------- 渲染 ---------------- */
+/* 她现在的档位词：只显示「亲近 / 还算熟」这种词，不显示分数（分数只在文件里）。
+ * 鼠标停上去能看到她最近为什么变——那句是她自己写的一小段理由。 */
+function moodColor(b){
+  if(/黏|很亲近/.test(b))return '#e2688a';
+  if(/亲近|挺黏/.test(b))return '#e59a4b';
+  if(/还算熟|平常/.test(b))return '#8aa0a6';
+  if(/客气|有点疏/.test(b))return '#6b8fb3';
+  if(/冷淡|冷透/.test(b))return '#7d8fa8';
+  return '#cbd5d7';
+}
+function paintMood(m){
+  var row=$('moodRow'),band=$('moodBand'),dot=$('moodDot'),hint=$('moodHint');
+  if(!row)return;
+  if(!m||!m.band){band.textContent='还没见过';hint.textContent='她的心情变了她自己会说';row.title='';dot.style.background='#cbd5d7';return;}
+  band.textContent=m.band;
+  hint.textContent=m.why?('刚因为「'+m.why+'」'):'她的心情变了她自己会说';
+  row.title=m.why||'';
+  dot.style.background=moodColor(m.band);
+}
+function loadMood(){
+  fetch('/api/yu/mood').then(function(r){return r.json();}).then(paintMood).catch(function(){});
+}
+function paintMe(){
+  $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
+  $('meName').textContent=PROFILE.name||'小鱼';
+  $('meSub').textContent='在线';
+  loadMood();
+  if(!window.__moodTimer)window.__moodTimer=setInterval(loadMood,60000);
+  $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
+}
+function paintMembers(){
+  var box=$('members');
+  box.innerHTML=MEMBERS.map(function(u){
+    return '<div class="mrow">'+avHTML(u.avatar)+'<span class="nm">'+esc(u.name)+(u.seat===SEAT?'（我）':'')+'</span>'+
+      '<span class="dot '+(u.online?'on':'')+'"></span></div>';
+  }).join('')||'<div class="mrow"><span class="nm" style="color:var(--ink3)">只有你一个人</span></div>';
+}
+function paintPeer(){
+  /* act 由对方自己上报（说话中 / 巡视领地中 / 打盹中…），45 秒内有效。
+     没有 act 就退回原来的「在线 / 暂时离开」。 */
+  var act=PEER&&PEER.act?PEER.act:'';
+  $('peerDot').className='dot '+(PEER&&(PEER.online||act)?'on':'');
+  $('peerTxt').textContent=PEER?(PEER.name+' · '+(act||(PEER.online?'在线':'暂时离开'))):'等待对方游进来…';
+}
+function paintStats(){
+  $('stStk').textContent='自定义表情 '+STICKERS.length;
+  $('stKao').textContent='自定义颜文字 '+KAOMOJIS.length;
+}
+function scrollBottom(force){
+  var el=$('msgs');
+  if(force||atBottom)el.scrollTop=el.scrollHeight;
+  if(force){atBottom=true;$('jump').classList.add('hidden');}
+}
+$('msgs').addEventListener('scroll',function(){
+  var el=$('msgs');atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<70;
+  if(atBottom)$('jump').classList.add('hidden');
+});
+$('jump').onclick=function(){scrollBottom(true);};
+
+function renderMsg(m){
+  if(m.type==='sys')return '<div class="sys"><span>'+esc(m.text)+' · '+hhmm(m.at)+'</span></div>';
+  var me=m.pid===PID,inner='';
+  if(m.type==='text'){
+    inner='<div class="bub '+(m.sub==='kaomoji'?'kao':'')+'" style="'+bubbleStyle(m)+'">'+esc(m.text)+'</div>';
+  }else if(m.type==='emoji'){
+    inner='<div class="bub emo" title="'+esc(m.label||'')+'">'+esc(m.emoji||'😀')+'<small>'+esc(m.label||'')+'</small></div>';
+  }else if(m.type==='img'||m.type==='sticker'){
+    /* 外部系统依赖，勿删：图挂了要说明白，别留空框。
+       onerror 用内联写法（这个页面是 insertAdjacentHTML 插入的，绑不了事件） */
+    inner='<div class="bub '+(m.type==='sticker'?'stk':'pic')+'"><img src="'+esc(m.url)+'" alt="'+esc(m.fileName||'图片')+'" loading="lazy" data-full="'+esc(m.url)+'" onerror="this.parentNode.innerHTML=\'<div class=&quot;imgerr&quot;>图片已失效<br><span>文件可能被清理了</span></div>\'"></div>';
+  }else if(m.type==='file'){
+    inner='<div class="bub file" style="'+bubbleStyle(m)+'"><span class="fi">📎</span><span style="flex:1 1 auto;min-width:0">'+
+      '<span class="fn">'+esc(m.fileName||'文件')+'</span><div class="fs">'+fsize(m.size)+'</div></span>'+
+      '<a href="'+esc(m.url)+'" download="'+esc(m.fileName||'file')+'">下载</a></div>';
+  }else if(m.type==='voice'){
+    inner='<div class="bub voice" style="'+bubbleStyle(m)+'"><span>🎤</span><audio controls preload="metadata" src="'+esc(m.url)+'"></audio>'+
+      '<span class="dur">'+(m.dur?m.dur+'″':'语音')+'</span></div>';
+  }else inner='<div class="bub">'+esc(m.text||'')+'</div>';
+  return '<div class="msg'+(me?' me':'')+'" data-mid="'+esc(m.id)+'">'+avHTML(m.avatar)+
+    '<div class="col"><div class="who">'+esc(m.name||'')+'<time>'+hhmm(m.at)+'</time></div>'+inner+'</div></div>';
+}
+function ingest(m){
+  if(!m||!m.id||seen[m.id])return;
+  seen[m.id]=1;
+  if(m.id>lastId)lastId=m.id;
+  var box=$('msgs'),empty=box.querySelector('.empty');if(empty)empty.remove();
+  var stick=atBottom;
+  box.insertAdjacentHTML('beforeend',renderMsg(m));
+  if(stick)scrollBottom(true);else $('jump').classList.remove('hidden');
+}
+function linkify(s){return esc(s).replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');}
+
+/* 把表情/颜文字插到输入框光标处 —— 微信、QQ、Slack 都是这个行为：
+   文字类的表情是句子的一部分（能接着打字、能删），只有图片贴纸才点了就发。 */
+function insertAtCursor(text){
+  var el=$('inp');
+  if(!el)return;
+  var s=(el.selectionStart==null?el.value.length:el.selectionStart);
+  var e=(el.selectionEnd==null?s:el.selectionEnd);
+  el.value=el.value.slice(0,s)+text+el.value.slice(e);
+  var pos=s+text.length;
+  el.selectionStart=el.selectionEnd=pos;
+  el.focus();
+}
+async function send(obj){
+  obj.code=CODE;obj.pid=PID;
+  try{
+    var r=await fetch('/api/yu/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)}).then(x=>x.json());
+    if(r.error){toast(r.error);return false;}
+    if(r.msg)ingest(r.msg);
+    return true;
+  }catch(e){toast('发送失败，检查一下网络');return false;}
+}
+async function upload(file,kind,extra){
+  var q='/api/yu/upload?code='+encodeURIComponent(CODE)+'&pid='+encodeURIComponent(PID)+'&kind='+encodeURIComponent(kind)+
+    '&name='+encodeURIComponent(file.name||('file.'+(kind==='voice'?'webm':'bin')));
+  try{
+    var r=await fetch(q,{method:'POST',body:file,headers:{'X-File-Name':encodeURIComponent(file.name||'file')}}).then(x=>x.json());
+    if(r.error){toast(r.error);return null;}
+    return r;
+  }catch(e){toast('上传失败');return null;}
+}
+
+/* ---------------- 输入 ---------------- */
+var inp=$('inp');
+function autoGrow(){inp.style.height='auto';inp.style.height=Math.min(120,inp.scrollHeight)+'px';$('send').disabled=!inp.value.trim();}
+inp.addEventListener('input',autoGrow);
+inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendText();}});
+$('send').onclick=sendText;
+async function sendText(){
+  var t=inp.value.replace(/\s+$/,'');if(!t.trim())return;
+  inp.value='';autoGrow();
+  var ok=await send({type:'text',text:t});
+  if(!ok)inp.value=t,autoGrow();
+}
+
+/* 图片 / 文件 */
+$('imgBtn').onclick=function(){$('imgFile').click();};
+$('fileBtn').onclick=function(){$('anyFile').click();};
+$('imgFile').addEventListener('change',async function(e){
+  var files=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
+  for(var i=0;i<files.length;i++){
+    if(files[i].size>MAX_UP){toast(files[i].name+' 超过 '+Math.round(MAX_UP/1048576)+'MB');continue;}
+    toast('图片上传中…');var r=await upload(files[i],'img');if(r)await send({type:'img',url:r.url});
+  }
+});
+$('anyFile').addEventListener('change',async function(e){
+  var files=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
+  for(var i=0;i<files.length;i++){
+    if(files[i].size>MAX_UP){toast(files[i].name+' 超过 '+Math.round(MAX_UP/1048576)+'MB');continue;}
+    toast('文件传送中…');var r=await upload(files[i],'file');if(r)await send({type:'file',url:r.url});
+  }
+});
+document.addEventListener('paste',function(e){
+  if(CODE===''||!e.clipboardData)return;
+  var f=Array.prototype.slice.call(e.clipboardData.files||[]).filter(function(x){return /^image\//.test(x.type);})[0];
+  if(!f)return;e.preventDefault();toast('正在发送粘贴的图片…');
+  upload(f,'img').then(function(r){if(r)send({type:'img',url:r.url});});
+});
+['dragover','drop'].forEach(function(ev){document.addEventListener(ev,function(e){
+  if(CODE==='')return;e.preventDefault();
+  if(ev==='drop'){
+    var f=Array.prototype.slice.call(e.dataTransfer.files||[]);
+    f.forEach(function(x){
+      if(x.size>MAX_UP){toast(x.name+' 太大了');return;}
+      var kind=/^image\//.test(x.type)?'img':/^audio\//.test(x.type)?'voice':'file';
+      upload(x,kind).then(function(r){if(r)send({type:kind,url:r.url});});
+    });
+  }
+});});
+
+/* ---------------- 表情抽屉 ---------------- */
+function openTray(tab){
+  TAB=tab||TAB;trayOpen=true;$('tray').classList.remove('hidden');$('trayBtn').classList.add('on');
+  Array.prototype.forEach.call($('trayTabs').children,function(b){b.classList.toggle('on',b.dataset.tab===TAB);});
+  drawTray();
+}
+function closeTray(){trayOpen=false;$('tray').classList.add('hidden');$('trayBtn').classList.remove('on');}
+$('trayBtn').onclick=function(){trayOpen?closeTray():openTray('yellow');};
+$('kaoBtn').onclick=function(){openTray('kao');};
+$('trayX').onclick=closeTray;
+$('trayTabs').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-tab]');if(!b)return;TAB=b.dataset.tab;
+  Array.prototype.forEach.call($('trayTabs').children,function(x){x.classList.toggle('on',x.dataset.tab===TAB);});
+  drawTray();
+});
+function drawTray(){
+  var b=$('trayBody');
+  if(TAB==='yellow'){
+    b.innerHTML='<div class="yellow-grid">'+YELLOW.map(function(x,i){
+      return '<button class="yel" data-i="'+i+'" title="'+esc(x[1])+'"><span class="face">'+x[0]+'</span><span class="lb">'+esc(x[1])+'</span></button>';
+    }).join('')+'</div><div class="tray-tip">小黄豆点一下是插到输入框里，可以接着打字、跟句子一起发出去（和微信 QQ 一样）；想单独发就打完直接回车。</div>';
+    b.querySelectorAll('.yel').forEach(function(el){
+      el.onclick=function(){var x=YELLOW[+el.dataset.i];insertAtCursor(x[0]);};
+    });
+  }else if(TAB==='custom'){
+    b.innerHTML='<div class="stk-grid">'+(STICKERS.length?STICKERS.map(function(u){
+      return '<button data-u="'+esc(u)+'"><img src="'+esc(u)+'" alt="自定义表情"></button>';
+    }).join(''):'')+'<button class="add-stk" id="addStk">＋ 上传图片<br>当表情</button></div>'+
+      '<div class="tray-tip">上传的表情存在这间房里，两个人都能用；PNG / JPG / GIF / WEBP 都行，GIF 会动。</div>';
+    b.querySelectorAll('button[data-u]').forEach(function(el){el.onclick=function(){send({type:'sticker',url:el.dataset.u});};});
+    $('addStk').onclick=function(){$('stkFile').click();};
+  }else{
+    var custom=KAOMOJIS.concat(CUSTOMKAO.filter(function(x){return KAOMOJIS.indexOf(x)<0;}));
+    var all=KAO.slice();
+    custom.forEach(function(k){if(all.indexOf(k)<0)all.push(k);});
+    b.innerHTML='<div class="kao-grid">'+all.map(function(k,i){
+      return '<button data-k="'+esc(k)+'" class="'+(custom.indexOf(k)>=0?'mine':'')+'" title="'+(custom.indexOf(k)>=0?'自定义':'初始')+'">'+esc(k)+'</button>';
+    }).join('')+'</div>'+
+      '<div class="kao-add"><input id="kaoIn" maxlength="60" placeholder="贴一个颜文字，比如 (｡◕‿◕｡)"><button id="kaoAdd">＋ 添加自定义</button></div>'+
+      '<div class="tray-tip">点一下插到输入框里，能跟句子一起发；「＋ 添加自定义」会把新颜文字存进这间房，两个人共用，也会备份在这台设备。深色描边的就是自定义的。</div>';
+    b.querySelectorAll('button[data-k]').forEach(function(el){el.onclick=function(){insertAtCursor(el.dataset.k);};});
+    $('kaoAdd').onclick=addKao;
+    $('kaoIn').addEventListener('keydown',function(e){if(e.key==='Enter')addKao();});
+  }
+}
+async function addKao(){
+  var el=$('kaoIn'),t=(el.value||'').trim().slice(0,60);
+  if(!t){toast('先写一个颜文字');return;}
+  CUSTOMKAO.push(t);CUSTOMKAO=CUSTOMKAO.slice(-80);save('yu_kao',CUSTOMKAO);
+  try{
+    var r=await fetch('/api/yu/kaomoji',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:CODE,pid:PID,text:t})}).then(x=>x.json());
+    if(r.error){toast(r.error);return;}
+    KAOMOJIS=r.kaomojis||KAOMOJIS;paintStats();
+  }catch(e){}
+  el.value='';drawTray();toast('已添加：'+t);
+}
+$('stkFile').addEventListener('change',async function(e){
+  var f=(e.target.files||[])[0];e.target.value='';if(!f)return;
+  toast('表情上传中…');var r=await upload(f,'sticker');
+  if(r){STICKERS.push(r.url);paintStats();if(trayOpen)drawTray();toast('表情已收进库里，点一下就能发');}
+});
+
+/* ---------------- 语音 ---------------- */
+var rec=null,chunks=[],recStart=0,recTimer=null,recBlob=null,recExt='webm';
+function fmtSec(s){return ('0'+Math.floor(s/60)).slice(-2)+':'+('0'+Math.floor(s%60)).slice(-2);}
+function stopRec(){
+  if(recTimer)clearInterval(recTimer),recTimer=null;
+  if(rec&&rec.state!=='inactive'){try{rec.stop();}catch(e){}}
+  $('recDot').classList.add('hidden');$('recStart').textContent='● 重新录音';
+}
+$('voiceBtn').onclick=function(){
+  nativeRec=false;recBlob=null;
+  if(recTimer)clearInterval(recTimer),recTimer=null;
+  $('recDot').classList.add('hidden');$('recStart').textContent='● 开始录音';
+  $('recSend').disabled=true;$('recSend').textContent='发送语音';$('recTime').textContent='00:00';
+  $('recHint').textContent='点「开始录音」，说完再点「发送」';
+  $('rMask').classList.remove('hidden');$('rOv').classList.remove('hidden');
+};
+function closeRec(){
+  /* 关弹层等于放弃这次录音：原生那边也要停掉并删文件，不然会一直录下去 */
+  if(nativeRec&&window.HappyNav&&window.HappyNav.voiceCancel){try{window.HappyNav.voiceCancel();}catch(e){}nativeRec=false;}
+  stopRec();$('rMask').classList.add('hidden');$('rOv').classList.add('hidden');
+}
+$('rX').onclick=closeRec;$('rMask').onclick=closeRec;
+/* 录音有两种走法：
+   ① 浏览器（https / localhost）——getUserMedia + MediaRecorder，音频留在页面里上传；
+   ② 手机壳（easytier 的 http 地址）——WebView 根本不给麦克风（navigator.mediaDevices
+      直接是 undefined），改由原生录音、原生上传，页面只管计时和弹层。
+   判断依据看原生有没有注入 voiceStart，不看 UA。 */
+var nativeRec=false;
+function recUIStart(){
+  nativeRec=true;
+  recStart=Date.now();$('recDot').classList.remove('hidden');
+  $('recSend').disabled=false;$('recSend').textContent='■ 停止并发送';
+  $('recHint').textContent='正在录音…说完点「发送语音」';
+  $('recTime').textContent='00:00';
+  if(recTimer)clearInterval(recTimer);
+  recTimer=setInterval(function(){$('recTime').textContent=fmtSec((Date.now()-recStart)/1000);},200);
+}
+/* 原生拿到麦克风权限后会自动开录，再叫我们一声 */
+window.__voiceStarted=function(){recUIStart();};
+/* 原生发完了（或失败）的通知 */
+window.__voiceDone=function(ok,msg){
+  nativeRec=false;
+  if(recTimer)clearInterval(recTimer),recTimer=null;
+  $('recDot').classList.add('hidden');$('recStart').textContent='● 重新录音';
+  if(ok){closeRec();toast('语音已发出');}
+  else{$('recHint').textContent=msg||'发送失败，再试一次';
+       $('recSend').disabled=false;$('recSend').textContent='发送语音';}
+};
+
+$('recStart').onclick=async function(){
+  if(window.HappyNav&&window.HappyNav.voiceStart){
+    if(window.HappyNav.voiceStart(CODE,PID))recUIStart();
+    else $('recHint').textContent='第一次用要给麦克风权限，允许后会自动开始';
+    return;
+  }
+  if(!navigator.mediaDevices||!window.MediaRecorder){$('recHint').textContent='这个环境不给录音，用「文件」直接发音频吧';return;}
+  try{
+    var stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    var opts=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'];
+    var mime='';for(var i=0;i<opts.length;i++){if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(opts[i])){mime=opts[i];break;}}
+    recExt=mime.indexOf('mp4')>=0?'m4a':mime.indexOf('ogg')>=0?'ogg':'webm';
+    rec=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+    chunks=[];recBlob=null;
+    rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data);};
+    rec.onstop=function(){
+      recBlob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});
+      stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});
+      $('recSend').disabled=!recBlob.size;$('recSend').textContent='发送语音';
+      $('recHint').textContent=recBlob.size?'录好了，点「发送语音」':'没录到声音，再试一次';
+    };
+    rec.start();recStart=Date.now();$('recDot').classList.remove('hidden');
+    $('recSend').disabled=false;$('recSend').textContent='■ 停止并发送';
+    $('recHint').textContent='正在录音…说完点「发送语音」';
+    recTimer=setInterval(function(){$('recTime').textContent=fmtSec((Date.now()-recStart)/1000);},200);
+  }catch(e){$('recHint').textContent='拿不到麦克风权限；可以用「文件」发一段音频';}
+};
+var recBusy=false;
+$('recSend').onclick=async function(){
+  if(nativeRec&&window.HappyNav&&window.HappyNav.voiceSend){
+    $('recSend').disabled=true;$('recHint').textContent='语音传送中…';
+    if(!window.HappyNav.voiceSend()){$('recHint').textContent='发送失败，再试一次';$('recSend').disabled=false;}
+    return;
+  }
+  if(recBusy)return;
+  /* 还在录：先停，等 onstop 把 recBlob 填好，再走下面发送。
+     原来这一格是 disabled 的，录上以后没有任何办法停下来——死锁。 */
+  if(rec&&rec.state==='recording'){
+    recBusy=true;
+    $('recSend').disabled=true;$('recHint').textContent='收尾中…';
+    stopRec();
+    for(var w=0;w<2500&&!recBlob;w+=100)await new Promise(function(r){setTimeout(r,100);});
+    recBusy=false;
+    if(!recBlob){$('recHint').textContent='没录到声音，再试一次';$('recSend').disabled=false;return;}
+  }
+  if(!recBlob)return;
+  var dur=Math.max(1,Math.round((Date.now()-recStart)/1000));
+  var f=new File([recBlob],'语音-'+Date.now()+'.'+recExt,{type:recBlob.type||'audio/webm'});
+  toast('语音传送中…');
+  var r=await upload(f,'voice');
+  if(r){await send({type:'voice',url:r.url,dur:dur});closeRec();toast('语音已发出');}
+};
+
+/* ---------------- 设置面板：资料 / 外观 / 语音 三个 tab ----------------
+ * 为什么合成一个：以前页头有 ✎ 和 ⚙、侧栏还有「编辑」和「外观」分区，
+ * 同一批设置散在四处，手机上还容易点错。现在页头只留一个 ⚙，进来用 tab 分。
+ *
+ * 保存按钮按当前 tab 决定提交什么——几件事不能混在一次提交里：
+ *   资料 → localStorage + POST /api/yu/profile
+ *   语音 → POST /api/settings/tts（config.json 的 key / 模型 / 音色）
+ *   外观 → 点色块就生效（applyTheme 自己写 localStorage），没有后端可提交，按钮只是「完成」
+ * 音乐 → 不提交，直接改全站音频（WNAV_AUDIO），按钮只是「完成」
+ * 音乐以前只在首页设置里，老板说在与鱼里也想调，所以又加回第 4 个 tab：
+ *   两处读写同一套 localStorage / 同一个 WNAV_AUDIO，谁改谁生效。
+ * 「连接（改地址 / 刷新 / 清缓存）」仍然只在首页设置的「手机壳」里（壳能力是全站的）。
+ */var SET_TAB='profile';
+var SET_BTN={profile:'保存',look:'完成',voice:'保存',music:'完成',ai:'保存'};
+/* 语音 tab 的本地状态：GET 回来的 apiStyle + 两家的音色列表 + 各自当前选中的 voice */
+var TTS={apiStyle:'breeze',voices:{breeze:[],mimo:[]},picked:{breeze:'',openai:''}};
+
+function profilePaneFill(){
+  $('pName').value=PROFILE.name||'';
+  var g=$('avatarGrid');
+  g.innerHTML=AVATARS.map(function(a){return '<button data-av="'+esc(a)+'" aria-pressed="'+(a===PROFILE.avatar?'true':'false')+'">'+a+'</button>';}).join('');
+  g.querySelectorAll('button').forEach(function(b){b.onclick=function(){
+    PROFILE.avatar=b.dataset.av;g.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.av===PROFILE.avatar?'true':'false');});
+    $('avNow').textContent='当前：'+PROFILE.avatar;};});
+  $('bubChips').innerHTML=BUBBLES.map(function(x){return '<button class="chip'+(x[0]?' sw':'')+'" data-b="'+esc(x[0])+'" '+
+    (x[0]?'style="background:'+esc(x[0])+'" ':'')+'aria-pressed="'+(x[0]===PROFILE.bubble?'true':'false')+'" title="'+esc(x[1])+'">'+(x[0]?'':esc(x[1]))+'</button>';}).join('');
+  $('bubChips').querySelectorAll('button').forEach(function(b){b.onclick=function(){
+    PROFILE.bubble=b.dataset.b;$('bubChips').querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.b===PROFILE.bubble?'true':'false');});};});
+  $('fontChips').querySelectorAll('button').forEach(function(b){b.onclick=function(){
+    PROFILE.fontSize=+b.dataset.f;$('fontChips').querySelectorAll('button').forEach(function(x){x.setAttribute('aria-pressed',x.dataset.f==String(PROFILE.fontSize)?'true':'false');});};
+    b.setAttribute('aria-pressed',b.dataset.f==String(PROFILE.fontSize)?'true':'false');});
+  $('avNow').textContent='当前：'+(/^\/yu-f\//.test(PROFILE.avatar)?'自定义图片':PROFILE.avatar);
+}
+/** 切 tab：只管显隐和按钮文案，不碰数据 */
+function showPane(tab){
+  SET_TAB=SET_BTN[tab]?tab:'profile';
+  $('setTabs').querySelectorAll('button').forEach(function(b){
+    b.setAttribute('aria-selected',b.dataset.pane===SET_TAB?'true':'false');
+  });
+  $('paneProfile').classList.toggle('hidden',SET_TAB!=='profile');
+  $('paneLook').classList.toggle('hidden',SET_TAB!=='look');
+  $('paneVoice').classList.toggle('hidden',SET_TAB!=='voice');
+  $('paneMusic').classList.toggle('hidden',SET_TAB!=='music');
+  $('paneAI').classList.toggle('hidden',SET_TAB!=='ai');
+  $('sDone').textContent=SET_BTN[SET_TAB];
+  $('sMsg').textContent='';
+  if(SET_TAB==='voice')loadTts();
+  if(SET_TAB==='ai')loadLlm();
+  if(SET_TAB==='music')paintMusicPane();
+}
+/* 音乐 tab：全站音频的第二个入口（首页设置里也有一套，读写同一个 WNAV_AUDIO）
+   paintMusicPane 负责回填；事件只在第一次调用时绑一次，之后每次 emit 只重画。 */
+var MP_BUILT=false;
+function paintMusicPane(){
+  var A=window.WNAV_AUDIO;
+  if(!A)return;
+  var st=A.state();
+  var pct=Math.round(st.vol*100);
+  $('yuVol').value=pct;
+  $('yuVolTxt').textContent=pct+'%';
+  var mb=$('yuMusicBtn');
+  mb.textContent=(st.bgm&&!st.muted)?'开':'关';
+  mb.setAttribute('aria-pressed',(st.bgm&&!st.muted)?'true':'false');
+  var mode=st.mode||'order';
+  $('yuModeChips').querySelectorAll('button[data-mode]').forEach(function(b){
+    b.setAttribute('aria-pressed',b.dataset.mode===mode?'true':'false');
+  });
+  $('yuSceneChips').querySelectorAll('button[data-scene]').forEach(function(b){
+    b.setAttribute('aria-pressed',b.dataset.scene===(st.scene||'')?'true':'false');
+  });
+  $('yuNowTitle').textContent=st.title||'—';
+  $('yuNowMeta').textContent=st.needsGesture?'浏览器拦住了自动播放：点一下页面任意处再试。'
+    :(st.bgm?(st.source==='files'?'播放中':'合成器兜底'):'还没开始');
+  $('yuTrackList').querySelectorAll('button[data-id]').forEach(function(b){
+    b.classList.toggle('on',b.dataset.id===(st.id||''));
+  });
+  if(MP_BUILT)return;
+  MP_BUILT=true;
+
+  $('yuVol').addEventListener('input',function(){A.setVol(Number($('yuVol').value)/100);});
+  mb.onclick=function(){
+    var s=A.state();
+    if(s.bgm&&!s.muted){A.setMuted(true);}
+    else{if(s.muted)A.setMuted(false);A.startBgm();}
+    paintMusicPane();
+  };
+  $('yuModeChips').onclick=function(e){
+    var b=e.target.closest('button[data-mode]');
+    if(!b||!A.setPlayMode)return;
+    A.setPlayMode(b.dataset.mode);paintMusicPane();
+  };
+  $('yuSceneChips').onclick=function(e){
+    var b=e.target.closest('button[data-scene]');
+    if(!b)return;
+    if(A.state().bgm)A.setScene(b.dataset.scene);else A.startBgm(b.dataset.scene);
+    paintMusicPane();
+  };
+  $('yuPrev').onclick=function(){A.prev();paintMusicPane();};
+  $('yuNext').onclick=function(){
+    if(!A.state().bgm){A.startBgm();}else{A.next();}
+    paintMusicPane();
+  };
+  $('yuTrackList').onclick=function(e){
+    var b=e.target.closest('button[data-id]');
+    if(!b)return;
+    A.playById(b.dataset.id);paintMusicPane();
+  };
+
+  buildMusicList();
+  /* 音频状态变化时刷新（只在这个 pane 可见时动 DOM） */
+  if(A.onChange)A.onChange(function(){
+    if(SET_TAB==='music'&&!$('sOv').classList.contains('hidden'))paintMusicPane();
+  });
+}
+function buildMusicList(){
+  var A=window.WNAV_AUDIO;
+  if(!A||!A.loadManifest)return;
+  A.loadManifest().then(function(){
+    var list=(A.tracks&&A.tracks())||[];
+    var box=$('yuTrackList');
+    box.innerHTML='';
+    if(!list.length){
+      box.innerHTML='<div class="empty">曲目没加载出来（看 /music/manifest.json 在不在）</div>';
+      return;
+    }
+    box.innerHTML=list.map(function(t){
+      return '<button data-id="'+esc(t.id)+'"><span>'+esc(t.title||t.id)+'</span><i>'+esc(t.mood||'')+'</i></button>';
+    }).join('');
+    paintMusicPane();
+  });
+}
+
+function openSetup(tab){
+  $('sMsg').textContent='';
+  profilePaneFill();
+  $('sMask').classList.remove('hidden');
+  $('sOv').classList.remove('hidden');
+  /* 默认打开「资料」：改名换头像是最常用的一件 */
+  showPane(tab||'profile');
+  $('sOv').scrollTop=0;
+}
+function closeSetup(){
+  $('sMask').classList.add('hidden');
+  $('sOv').classList.add('hidden');
+}
+/** 资料 tab 的提交：原 pDone 那段逻辑原样保留，只是从「完成」按钮挪到按 tab 分发的保存里 */
+async function saveProfile(){
+  PROFILE.name=$('pName').value.trim().slice(0,12)||'小鱼';
+  save('yu_profile',PROFILE);paintMe();
+  try{await fetch('/api/yu/profile',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:CODE,pid:PID,name:PROFILE.name,avatar:PROFILE.avatar,bubble:PROFILE.bubble,fontSize:PROFILE.fontSize})});}catch(e){}
+  $('meAv').innerHTML=/^\/yu-f\//.test(PROFILE.avatar)?'<img src="'+esc(PROFILE.avatar)+'" alt="">':esc(PROFILE.avatar);
+  closeSetup();toast('资料已更新');
+}
+$('hSetup').onclick=function(){openSetup('profile');};
+$('meCard').onclick=function(){openSetup('profile');};
+$('setTabs').onclick=function(e){
+  var b=e.target.closest('button[data-pane]');
+  if(!b)return;
+  showPane(b.dataset.pane);
+};
+$('sX').onclick=closeSetup;
+$('sMask').onclick=closeSetup;
+$('uploadAv').onclick=function(){$('avFile').click();};
+$('sDone').onclick=function(){
+  if(SET_TAB==='voice')return saveTts();
+  if(SET_TAB==='ai')return saveLlm();
+  if(SET_TAB==='look'){closeSetup();toast('外观已切换');return;}
+  if(SET_TAB==='music'){closeSetup();return;}
+  if(SET_TAB==='profile')return saveProfile();
+};
+
+/* ---------------- 语音 tab：Key / 模型 / 音色 ---------------- */
+/* 为什么放在与鱼页面而不是 dsh 后台：dsh web 只监听内网，手机上打不开。
+   这里只改 config.json 里跟 apiStyle / key / 模型 / 音色有关的几项，插件其他配置原样保留。 */
+function setTtsBadge(id,o){
+  var el=$(id);if(!el)return;
+  if(o&&o.hasKey){el.textContent='已配置 '+o.hint;el.className='tts-state on';}
+  else{el.textContent='未配置';el.className='tts-state';}
+}
+function paintStyleChips(){
+  $('styleChips').querySelectorAll('button').forEach(function(b){
+    b.setAttribute('aria-pressed',b.dataset.s===TTS.apiStyle?'true':'false');
+  });
+}
+/* 服务端返回的是 voices:{breeze,mimo}，而 apiStyle 的值是 breeze/openai ——
+ * 两边名字对不上，这里统一映射一次，别在到处写三元。 */
+function voicesFor(style){return TTS.voices[style==='openai'?'mimo':'breeze']||[];}
+function currentVoiceValue(){return $('voiceSel').value||'';}
+/** 音色下拉：第一项永远是「默认（用插件当前配置）」，后面是列表。
+ *  列表来自进面板时的 GET，或点「🔄 刷新音色」现拉的那一份。 */
+function paintVoiceControl(){
+  var list=voicesFor(TTS.apiStyle);
+  var cur=TTS.picked[TTS.apiStyle]||'';
+  $('voiceWhich').textContent=(TTS.apiStyle==='breeze')?'Breeze':'MiMo';
+  var opts=['<option value="">默认（用插件当前配置）</option>'];
+  list.forEach(function(v){
+    opts.push('<option value="'+esc(v.id)+'">'+esc(v.name||v.id)+(v.note?'（'+esc(v.note)+'）':'')+'</option>');
+  });
+  $('voiceSel').innerHTML=opts.join('');
+  /* 存着的 voice_id 如果不在列表里（比如刚刷新、后台删了那个音色），也要能看见它、
+   * 别让保存时悄悄换成第一项。 */
+  if(cur && !list.some(function(v){return v.id===cur;})){
+    var o=document.createElement('option');
+    o.value=cur;o.textContent=cur+'（已保存）';
+    $('voiceSel').appendChild(o);
+  }
+  $('voiceSel').value=cur;
+}
+async function loadTts(){
+  try{
+    var d=await fetch('/api/settings/tts').then(function(r){return r.json();});
+    if(!d.ok){$('sMsg').textContent=d.error||'读不到配置';return;}
+    TTS.apiStyle=(d.apiStyle==='openai')?'openai':'breeze';
+    var v=d.voices||{};
+    TTS.voices={breeze:(v.breeze||[]),mimo:(v.mimo||[])};
+    /* 两家的 voice 各存在各的分支里（breeze.voice / tts.voice），读的时候别串 */
+    TTS.picked.breeze=(d.breeze&&d.breeze.voice)||'';
+    TTS.picked.openai=d.voice||'';
+    setTtsBadge('mimoState',d.mimo);
+    setTtsBadge('breezeState',d.breeze);
+    $('mimoModel').value=d.model||'';
+    $('breezeModel').value=(d.breeze&&d.breeze.model)||'';
+    paintStyleChips();
+    paintVoiceControl();
+    var n=voicesFor(TTS.apiStyle).length;
+    $('voiceTip').className='ov-note';
+    $('voiceTip').textContent=n?('已存 '+n+' 个音色，选一个再点保存。')
+      :'还没有音色列表，点「🔄 刷新音色」从后台拉一次。';
+  }catch(e){$('sMsg').textContent='读不到配置，检查网络';}
+}
+
+/* 「🔄 刷新音色」：现问一次插件（浏览器直连会跨域/够不到内网，走我们服务端代理）。
+ * 带上输入框里现在的 key —— 老板常常是刚粘完 key、还没保存就想先看看有哪些嗓子。 */
+$('voiceRefresh').onclick=async function(){
+  var btn=$('voiceRefresh');
+  var tip=$('voiceTip');
+  var label=btn.textContent;
+  var key=String($((TTS.apiStyle==='breeze'?'breezeKey':'mimoKey')).value||'').trim();
+  btn.disabled=true;btn.textContent='刷新中…';
+  tip.className='ov-note';tip.textContent='';
+  try{
+    var r=await fetch('/api/settings/tts/voices',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({apiStyle:TTS.apiStyle,apiKey:key})}).then(function(x){return x.json();});
+    if(!r||r.ok===false){
+      /* 失败要原样显示：401 就是 key 错，超时就是插件没起来，别吞成一句“失败” */
+      tip.className='ov-note vnote-err';
+      tip.textContent='拉不到音色：'+((r&&r.error)||'未知错误');
+      return;
+    }
+    var list=(r.voices||[]).filter(function(v){return v&&v.id;});
+    TTS.voices[TTS.apiStyle==='openai'?'mimo':'breeze']=list;
+    paintVoiceControl();
+    if(!list.length){
+      tip.className='ov-note vnote-err';
+      tip.textContent='这个账号里还没有音色。去 Breeze 官网建一个（克隆一段 10~30 秒音频，'
+        +'或用它自带的音色库挑一个），再回来点刷新。';
+    }else{
+      tip.className='ov-note';
+      tip.textContent='拉到 '+list.length+' 个音色，选一个再点保存。'+(r.note?('（'+r.note+'）'):'');
+      toast('拉到 '+list.length+' 个音色');
+    }
+  }catch(e){
+    tip.className='ov-note vnote-err';
+    tip.textContent='拉不到音色：'+((e&&e.message)||'网络错误');
+  }finally{
+    btn.disabled=false;btn.textContent=label;
+  }
+};
+async function saveTts(){
+  $('sMsg').textContent='保存中…';
+  var body={
+    apiStyle:TTS.apiStyle,
+    mimoKey:$('mimoKey').value.trim(),
+    breezeKey:$('breezeKey').value.trim(),
+    model:$('mimoModel').value.trim(),
+    breezeModel:$('breezeModel').value.trim(),
+    /* 只提交当前这一家的音色；服务端按 apiStyle 写到对应分支，另一家原样留着。
+     * 选「默认」时 voice 是空串，得用 voiceDefault 明确说「要清掉」——空串在别处表示「这次不改」。 */
+    voice:currentVoiceValue(),
+    voiceDefault:!currentVoiceValue()
+  };
+  try{
+    var r=await fetch('/api/settings/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)}).then(function(x){return x.json();});
+    if(r.ok){
+      /* 保存成功后清空输入框：key 不在页面上留着，需要改再贴一次 */
+      $('mimoKey').value='';$('breezeKey').value='';
+      setTtsBadge('mimoState',r.mimo);setTtsBadge('breezeState',r.breeze);
+      TTS.apiStyle=(r.apiStyle==='openai')?'openai':'breeze';
+      var v=r.voices||{};
+      TTS.voices={breeze:(v.breeze||[]),mimo:(v.mimo||[])};
+      TTS.picked.breeze=(r.breeze&&typeof r.breeze.voice==='string')?r.breeze.voice:TTS.picked.breeze;
+      TTS.picked.openai=(typeof r.voice==='string')?r.voice:TTS.picked.openai;
+      paintStyleChips();paintVoiceControl();
+      $('sMsg').textContent='已保存，她下次说话就按新的来';
+    }else{$('sMsg').textContent=r.error||'保存失败';}
+  }catch(e){$('sMsg').textContent='保存失败，检查网络';}
+}
+$('styleChips').onclick=function(e){
+  var b=e.target.closest('button[data-s]');
+  if(!b)return;
+  /* 先记住这一家刚才选的音色，切过去之后还能还原回来 */
+  TTS.picked[TTS.apiStyle]=currentVoiceValue()||TTS.picked[TTS.apiStyle];
+  TTS.apiStyle=(b.dataset.s==='openai')?'openai':'breeze';
+  paintStyleChips();paintVoiceControl();
+  $('sMsg').textContent='';
+};
+
+/* ---------------- AI 设置 tab：LLM 接口地址 / 模型 / Key ----------------
+ * GET  /api/settings/llm → { llmBase, llmModel, hasKey, keyTail }
+ * POST /api/settings/llm ← { llmBase, llmKey, llmModel }，llmKey 空串 = 保留原 Key。
+ * Key 永不回显完整值，只显示后四位（keyTail）。 */
+async function loadLlm(){
+  var st=$('llmState');
+  try{
+    var d=await fetch('/api/settings/llm').then(function(r){return r.json();});
+    if(!d||d.ok===false){st.textContent=(d&&d.error)||'读不到配置';st.className='tts-state';return;}
+    $('llmBase').value=d.llmBase||'';
+    $('llmModel').value=d.llmModel||'';
+    $('llmKey').value='';
+    if(d.hasKey){st.textContent='已配置 key：···'+(d.keyTail||'');st.className='tts-state on';}
+    else{st.textContent='未配置';st.className='tts-state';}
+  }catch(e){st.textContent='读不到配置，检查网络';st.className='tts-state';}
+}
+async function saveLlm(){
+  $('sMsg').textContent='保存中…';
+  try{
+    var r=await fetch('/api/settings/llm',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({llmBase:$('llmBase').value.trim(),llmKey:$('llmKey').value.trim(),llmModel:$('llmModel').value.trim()})
+    }).then(function(x){return x.json();});
+    if(r&&r.ok){
+      $('llmKey').value='';
+      await loadLlm();
+      $('sMsg').textContent='已保存';
+    }else{$('sMsg').textContent=(r&&r.error)||'保存失败';}
+  }catch(e){$('sMsg').textContent='保存失败，检查网络';}
+}
+
+$('avFile').addEventListener('change',async function(e){
+  var f=(e.target.files||[])[0];e.target.value='';if(!f)return;
+  toast('头像上传中…');var r=await upload(f,'avatar');
+  if(r){PROFILE.avatar=r.url;save('yu_profile',PROFILE);$('avNow').textContent='当前：自定义图片';paintMe();toast('头像换好了，记得点保存');}
+});
+
+/* ---------------- 其它交互 ---------------- */
+function toggleSide(open){
+  $('side').classList.toggle('open',open);
+  $('sideMask').classList.toggle('hidden',!open);
+}
+$('menuBtn').onclick=function(){toggleSide(!$('side').classList.contains('open'));};
+$('sideMask').onclick=function(){toggleSide(false);};
+function copyInvite(){
+  /* 手机端没有别人能连进来，邀请链接没意义：只复制当前页面地址备查。 */
+  var url=location.origin+'/yu.html';
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('链接已复制');},function(){toast(url);});
+  else toast(url);
+}
+/* 侧栏保留一个复制入口（文案已从「邀请链接」改成「复制链接」） */
+$('copyLink').onclick=copyInvite;
+$('clearRoom').onclick=function(){
+  $('msgs').innerHTML='<div class="empty"><span class="big">🐟</span>本地显示已清空<br>刷新页面就能把聊天记录找回来</div>';
+  toggleSide(false);toast('只是清了这台设备的显示，服务器记录还在');
+};
+$('themes').addEventListener('click',function(e){var b=e.target.closest('button[data-t]');if(b)applyTheme(b.dataset.t);});
+document.addEventListener('click',function(e){
+  var im=e.target.closest('img[data-full]');
+  if(im){$('lbImg').src=im.dataset.full;$('lightbox').classList.remove('hidden');}
+});
+$('lbX').onclick=function(){$('lightbox').classList.add('hidden');};
+$('lightbox').onclick=function(e){if(e.target.id==='lightbox')$('lightbox').classList.add('hidden');};
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape')return;
+  $('lightbox').classList.add('hidden');
+  if(trayOpen)closeTray();
+  if(!$('sOv').classList.contains('hidden'))closeSetup();
+  if(!$('rOv').classList.contains('hidden'))closeRec();
+  toggleSide(false);
+});
+window.addEventListener('beforeunload',function(){if(es)try{es.close();}catch(e){}});
+/* 首屏音频：沿用全站设置，第一次点击才启动 */
+(function(){var A=window.WNAV_AUDIO;if(!A)return;
+  var once=function(){A.startBgm();['pointerdown','click','keydown'].forEach(function(ev){document.removeEventListener(ev,once,true);});};
+  ['pointerdown','click','keydown'].forEach(function(ev){document.addEventListener(ev,once,true);});
+})();
+
+
+/* [EXTERNAL-DEP · TTS] 文字转语音：调 /api/yu/tts，服务器用 edge-tts 合成后直接发进房间
+   ★ 2026-11-11 教训：这段必须放在 script 末尾当独立语句，
+     不能插进 renderMsg 之类的函数中间，否则会把 if 链切断，整页 JS 全挂（踩过）。
+   ★ 它要用 $ / toast / CODE / PID / closeRec，所以必须留在下面那个大闭包里执行
+     —— 闭包的 })(); 已经挪到这段后面。 */
+$('ttsGo').onclick=async function(){
+  var txt=($('ttsText').value||'').trim();
+  if(!txt){toast('先写点要念的内容');return;}
+  var btn=$('ttsGo'),hint=$('ttsHint');
+  btn.disabled=true;btn.textContent='合成中…';hint.textContent='正在生成，大概 2 秒';
+  try{
+    var r=await fetch('/api/yu/tts?direct=1',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({code:CODE,pid:PID,text:txt,voice:$('ttsVoice').value})
+    });
+    var d=await r.json();
+    if(d.error){hint.textContent=d.error;toast(d.error);return;}
+    hint.textContent='已发送（'+(d.size?Math.round(d.size/1024)+'KB':'')+'）';
+    $('ttsText').value='';
+    closeRec();
+  }catch(e){hint.textContent='合成失败：'+e.message;toast('合成失败');}
+  finally{btn.disabled=false;btn.textContent='合成并发送';}
+};
+/* 关掉上面那个大闭包：这台「合成并发送」按钮要用 $ / toast / CODE / PID / closeRec，
+   以前 })(); 摆在这段前面，一加载就 ReferenceError（按钮永远绑不上），现在挪到最后。 */
+})();
+</script>
+</body>
+</html>

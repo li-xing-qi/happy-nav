@@ -1,0 +1,6 @@
+{
+  "llmBase": "https://api.deepseek.com/v1",
+  "llmKey": "",
+  "llmModel": "deepseek-chat",
+  "tts": {}
+}

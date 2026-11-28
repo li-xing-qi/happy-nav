@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>注册 · 和鱼的开心导航</title>
+<link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <span class="logo">和</span><b>和鱼的开心导航</b>
+    <a class="back" href="/">← 回大厅</a>
+  </div>
+
+  <div class="card">
+    <h1>注册</h1>
+    <p class="lead">起个昵称、设个密码就行。系统会从 0001 开始分配一个 ID，登录时 ID 和昵称都能用。</p>
+
+    <label class="f" for="name">昵称</label>
+    <input class="f" id="name" maxlength="16" placeholder="2–16 个字" autocomplete="nickname" autofocus>
+
+    <label class="f" for="pass">密码</label>
+    <input class="f" id="pass" type="password" placeholder="至少 4 位" autocomplete="new-password">
+
+    <label class="f" for="pass2">确认密码</label>
+    <input class="f" id="pass2" type="password" placeholder="再输一遍" autocomplete="new-password">
+
+    <button class="btn" id="go">注册并进入</button>
+    <div class="msg" id="msg"></div>
+
+    <div class="foot-note">已经有账号？<a href="/login.html">去登录</a></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  function msg(t,bad){var el=$('msg');el.textContent=t;el.className='msg'+(bad?' bad':'');}
+  async function go(){
+    var name=$('name').value.trim(), pass=$('pass').value, pass2=$('pass2').value;
+    if(!name){msg('昵称不能为空',1);return;}
+    if(pass.length<4){msg('密码至少 4 位',1);return;}
+    if(pass!==pass2){msg('两次密码不一样',1);return;}
+    $('go').disabled=true;msg('正在注册…');
+    try{
+      var r=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',body:JSON.stringify({name:name,pass:pass})}).then(function(x){return x.json();});
+      if(r.error){msg(r.error,1);$('go').disabled=false;return;}
+      msg('注册好了，ID 是 '+r.uid+'，正在进入与鱼…');
+      setTimeout(function(){location.href='/yu';},600);
+    }catch(e){msg('连不上服务器，稍后再试',1);$('go').disabled=false;}
+  }
+  $('go').onclick=go;
+  $('pass2').addEventListener('keydown',function(e){if(e.key==='Enter')go();});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.happynav.local">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+
+    <!-- 注意：Android 的 paranoid networking 连 127.0.0.1 也要求 INTERNET 权限，
+         没有它 Node 的 listen() 会 EACCES、WebView 也打不开本地端口 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="与鱼·本地"
+        android:extractNativeLibs="true"
+        android:largeHeap="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

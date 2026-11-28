@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>我的账号 · 和鱼的开心导航</title>
+<link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <span class="logo">和</span><b>我的账号</b>
+    <a class="back" href="/">← 回大厅</a>
+  </div>
+
+  <div class="card">
+    <h1>我的账号</h1>
+    <p class="lead">昵称和头像会带到「与鱼」里。ID 是系统分配的，改不了。</p>
+
+    <label class="f">ID</label>
+    <div class="uid-box" id="uid">—</div>
+    <div class="hint" id="uidHint">登录时 ID 和昵称都能用</div>
+
+    <label class="f" for="name">昵称</label>
+    <input class="f" id="name" maxlength="16" placeholder="昵称">
+
+    <label class="f">头像</label>
+    <div class="avs" id="avs"></div>
+
+    <button class="btn" id="save">保存资料</button>
+    <div class="msg" id="msg"></div>
+
+    <div class="sec-t">改密码</div>
+    <label class="f" for="old">原密码</label>
+    <input class="f" id="old" type="password" autocomplete="current-password">
+    <label class="f" for="np">新密码</label>
+    <input class="f" id="np" type="password" placeholder="至少 4 位" autocomplete="new-password">
+    <button class="btn ghost" id="chpass">改密码</button>
+    <div class="msg" id="pmsg"></div>
+
+    <div class="sec-t">其它</div>
+    <div class="row" style="margin-top:12px">
+      <a class="btn ghost sm" href="/yu" style="text-decoration:none;text-align:center">去与鱼</a>
+      <a class="btn ghost sm hidden" id="adminLink" href="/admin.html" style="text-decoration:none;text-align:center">用户管理</a>
+      <button class="btn danger sm" id="logout">退出登录</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var AVATARS=['🐟','🐠','🐳','🐬','🦭','🐙','🦀','🐚','🌊','☀️','🌙','⭐','🍀','🌸','🍑','🐣','🦊','🐼'];
+  var $=function(id){return document.getElementById(id);};
+  var ME=null, AV='';
+  function msg(el,t,bad){var e=$(el);e.textContent=t;e.className='msg'+(bad?' bad':'');}
+
+  function paintAvs(){
+    var box=$('avs');box.innerHTML='';
+    AVATARS.forEach(function(a){
+      var b=document.createElement('button');b.type='button';b.textContent=a;
+      b.setAttribute('aria-pressed',a===AV?'true':'false');
+      b.onclick=function(){AV=a;paintAvs();};
+      box.appendChild(b);
+    });
+  }
+
+  async function load(){
+    var me=await fetch('/api/auth/me',{credentials:'same-origin'}).then(function(x){return x.json();}).catch(function(){return {ok:false};});
+    if(!me||!me.ok){location.replace('/login.html?next=/account.html');return;}
+    ME=me;
+    $('uid').textContent=me.uid;
+    $('name').value=me.name||'';
+    AV=me.avatar||'';
+    if(me.isAdmin)$('adminLink').classList.remove('hidden');
+    paintAvs();
+  }
+
+  $('save').onclick=async function(){
+    var name=$('name').value.trim();
+    if(!name){msg('msg','昵称不能为空',1);return;}
+    $('save').disabled=true;msg('msg','正在保存…');
+    try{
+      var r=await fetch('/api/auth/profile',{method:'POST',headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',body:JSON.stringify({name:name,avatar:AV})}).then(function(x){return x.json();});
+      if(r.error){msg('msg',r.error,1);}
+      else{msg('msg','已保存');ME=r;}
+    }catch(e){msg('msg','连不上服务器',1);}
+    $('save').disabled=false;
+  };
+
+  $('chpass').onclick=async function(){
+    var o=$('old').value, n=$('np').value;
+    if(!o||!n){msg('pmsg','原密码和新密码都要填',1);return;}
+    if(n.length<4){msg('pmsg','新密码至少 4 位',1);return;}
+    $('chpass').disabled=true;msg('pmsg','正在改…');
+    try{
+      var r=await fetch('/api/auth/pass',{method:'POST',headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',body:JSON.stringify({old:o,new:n})}).then(function(x){return x.json();});
+      if(r.error){msg('pmsg',r.error,1);}
+      else{$('old').value='';$('np').value='';msg('pmsg','密码已改，下次用新密码登录');}
+    }catch(e){msg('pmsg','连不上服务器',1);}
+    $('chpass').disabled=false;
+  };
+
+  $('logout').onclick=async function(){
+    try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}catch(e){}
+    location.href='/';
+  };
+
+  load();
+})();
+</script>
+</body>
+</html>
