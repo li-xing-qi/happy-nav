@@ -55,7 +55,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { URL } = require('url');
-const { Room, MAX_PLAYERS } = require('./engine.js');
+const { Room, MAX_PLAYERS, previewCardDesc } = require('./engine.js');
 const CONTENT = require('./content.js');
 
 /* ============================================================
@@ -137,6 +137,15 @@ const YU = require('./yu.js')({ DATA, MAX_UPLOAD, json, send, readBody, readRaw,
 /* 「心有灵犀」联机：独立房间服务；同屏玩法完全不走这里 */
 const LX = require('./lx.js')({ DATA, json, readBody, normCode });
 
+/* 「海龟汤」联机：主持人 + 多参与者；题库与判定协议见 soup-content.js */
+const SOUP = require('./soup.js')({ DATA, json, readBody, normCode });
+
+/* 「并肩割草」：AI 驾驶适配层（游戏本体在 public/survivor/，不改其源码） */
+const SURVIVOR = require('./survivor.js')({ DATA, json, readBody });
+
+/* 「并肩割草」联机房间：房间码 + SSE 画面/输入中继 + 聊天（两人各自设备） */
+const SURVIVOR_ROOM = require('./survivor_coop.js')({ DATA, json, readBody });
+
 /* ================= 图鉴只读快照 ================= */
 let CODEX = null;
 function buildCodex() {
@@ -144,7 +153,8 @@ function buildCodex() {
   const cards = Object.keys(C.POOL).map(id => {
     const c = C.POOL[id];
     return { id, name: c.name, cat: c.cat || '', kind: c.kind || '', cost: c.cost == null ? 0 : c.cost,
-      desc: c.desc || '', word: c.word || '', school: c.school || '',
+      desc: previewCardDesc(id) || c.desc || '', word: c.word || '', school: c.school || '',
+      scaleText: c.scale ? ('每 ' + c.scale.per + ' 张：' + Object.keys(c.scale).filter(k => k !== 'per' && k !== 'cap').map(k => ({ dmg: '伤害', block: '格挡', heal: '回复', gold: '金币', poison: '中毒', draw: '抽牌', vuln: '易伤' }[k] || k) + '+' + c.scale[k]).join('、') + (c.scale.cap != null ? ('（上限 +' + c.scale.cap + '）') : '')) : '',
       shopPrice: c.shopPrice == null ? null : c.shopPrice };
   });
   const talents = Object.keys(C.TALENTS).map(id => {
@@ -1103,9 +1113,119 @@ function serveStatic(res, rel) {
 }
 
 /* ================= 路由 ================= */
+/* ============================================================
+   全局登录守卫（2026-11-28）
+   ------------------------------------------------------------
+   页面：未登录 → 302 到 /login.html?next=<原路径>
+   接口：未登录 → 401 {error:'请先登录'}
+   本机回环（127.0.0.1 / ::1 / ::ffff:127.0.0.1）一律放行：
+     yufish.js 常驻本机，固定用 code=0000、不带 cookie 调 /api/yu/*，
+     拦了它「与鱼」就哑了 —— 这是硬约束。
+   静态资源（css / js / 音乐 / 上传文件 / yu-f 附件）不拦：
+     反正页面本身已经 302，资源拦了只会让登录页自己加载不出来。
+   ============================================================ */
+function isLocalReq(req) {
+  const a = req.socket && req.socket.remoteAddress;
+  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+}
+const GUARD_PAGES = new Set([
+  '/', '/index.html',
+  '/yu', '/yu.html',
+  '/chat', '/chat.html',
+  '/gomoku', '/gomoku.html',
+  '/game', '/game/', '/game/index.html',
+  '/lingxi', '/lingxi/', '/lingxi/index.html',
+  /* 2026-11-28 新增小游戏：与其它板块一致，未登录一律回登录页 */
+  '/survivor', '/survivor/', '/survivor/index.html',
+  '/soup', '/soup/', '/soup/index.html'
+]);
+const GUARD_API_PREFIX = [
+  '/api/yu/', '/api/room/', '/api/go/', '/api/lx/',
+  '/api/chat', '/api/mood', '/api/action', '/api/state', '/api/upload', '/api/settings/',
+  /* 同一类「用起来」的接口，一并拦住，避免未登录还能从控制台踢馆 */
+  '/api/join', '/api/act', '/api/restart', '/api/stream',
+  /* 新增小游戏的接口 */
+  '/api/survivor/', '/api/soup/'
+];
+
+/* ============================================================
+   功能权限守卫（2026-11-28）
+   ------------------------------------------------------------
+   accounts.json 里每个账号有 perms { yu, chat, games }，管理员可关。
+   · 页面：302 到 /account.html?denied=<key>，那里会说明原因
+   · 接口：403 {error:'没有与鱼权限'} / '没有聊天室权限' / '没有小游戏权限'
+   · 127.0.0.1 一律放行（yufish 不带 cookie 调 /api/yu/*，这条最硬）
+   · 管理员不受限
+   接在登录守卫之后、路由分发之前，未登录的情况上面已经处理完。
+   ============================================================ */
+const PERM_PAGE_MAP = new Map([
+  ['/yu', 'yu'], ['/yu.html', 'yu'],
+  ['/chat', 'chat'], ['/chat.html', 'chat'],
+  ['/gomoku', 'games'], ['/gomoku.html', 'games'],
+  ['/game', 'games'], ['/game/index.html', 'games'],
+  ['/lingxi', 'games'], ['/lingxi/index.html', 'games'],
+  /* 2026-11-28 新增小游戏：games 开关统一管 */
+  ['/survivor', 'games'], ['/survivor/index.html', 'games'],
+  ['/soup', 'games'], ['/soup/index.html', 'games']
+]);
+const PERM_API_MAP = [
+  ['/api/yu/', 'yu'],
+  ['/api/room/', 'chat'],
+  ['/api/go/', 'games'], ['/api/lx/', 'games'],
+  /* 万象牌（/game）自己的一套接口：首页不用这些，不会误伤 */
+  ['/api/action', 'games'], ['/api/join', 'games'], ['/api/act', 'games'],
+  ['/api/state', 'games'], ['/api/restart', 'games'], ['/api/stream', 'games'],
+  ['/api/chat', 'chat'], ['/api/codex', 'games'],
+  ['/api/survivor/', 'games'], ['/api/soup/', 'games']
+];
+function permNeedOf(p) {
+  const pageKey = PERM_PAGE_MAP.get(p);
+  if (pageKey) return pageKey;
+  if (!p.startsWith('/api/')) return '';
+  for (const rule of PERM_API_MAP) {
+    if (p === rule[0] || p.startsWith(rule[0])) return rule[1];
+  }
+  return '';
+}
+
 const server = http.createServer(safe(async (req, res) => {
   const u = new URL(req.url, 'http://' + (req.headers.host || 'x'));
   const p = u.pathname.replace(/\/+$/, '') || '/';
+
+  /* ---------- 登录守卫 ---------- */
+  if (GUARD_PAGES.has(p) || GUARD_PAGES.has(u.pathname)) {
+    if (!AUTH.userOf(req)) {
+      const next = encodeURIComponent(u.pathname + (u.search || ''));
+      return AUTH.redirect(res, '/login.html?next=' + next);
+    }
+  } else if (p.startsWith('/api/') && !p.startsWith('/api/auth/')) {
+    const guarded = GUARD_API_PREFIX.some(pre => p === pre || p.startsWith(pre));
+    if (guarded && !isLocalReq(req) && !AUTH.userOf(req)) {
+      return send(res, 401, JSON.stringify({ error: '请先登录' }), 'application/json; charset=utf-8');
+    }
+  }
+
+  /* ---------- 功能权限守卫 ---------- */
+  if (!isLocalReq(req)) {
+    const need = permNeedOf(p);
+    if (need) {
+      const acc = AUTH.userOf(req);
+      if (acc && !AUTH.isAdminAccount(acc) && !AUTH.permAllowed(acc, need)) {
+        if (p.startsWith('/api/')) {
+          return send(res, 403, JSON.stringify({ error: '没有' + AUTH.PERM_LABEL[need] + '权限' }),
+            'application/json; charset=utf-8');
+        }
+        return AUTH.redirect(res, '/account.html?denied=' + need);
+      }
+    }
+  }
+
+  /* 「并肩割草」是目录式页面：必须带尾斜杠，否则 index.html 里的相对路径
+   * （src/…、vendor/…、assets/…）会按 /survivor 这个「文件」解析到站点根。 */
+  if (u.pathname === '/survivor') {
+    res.writeHead(301, { Location: '/survivor/' });
+    return res.end();
+  }
 
   /* ---------- 页面 ---------- */
   if (p === '/' || p === '/index.html') return serveStatic(res, 'index.html');
@@ -1126,6 +1246,8 @@ const server = http.createServer(safe(async (req, res) => {
     return serveStatic(res, 'admin.html');
   }
   if (p === '/lingxi' || p === '/lingxi/index.html') return serveStatic(res, path.join('lingxi', 'index.html'));
+  if (p === '/soup' || p === '/soup/index.html') return serveStatic(res, path.join('soup', 'index.html'));
+  if (p === '/survivor' || p === '/survivor/index.html') return serveStatic(res, path.join('survivor', 'index.html'));
 
   /* ---------- 背景音乐：单独给长缓存 ----------
    * 全局默认是 no-store（页面要即时更新），但 mp3 一首 2MB，
@@ -1142,6 +1264,65 @@ const server = http.createServer(safe(async (req, res) => {
     });
   }
 
+  /* ---------- 背景图 / 背景视频（2026-11-28）
+   * 之前落到最后的通用静态兜底：一律 octet-stream、不支持 Range。
+   * iOS Safari（AVPlayer）必须有 206 才会播 mp4，所以这里单独给
+   * video/mp4 + Accept-Ranges + 分段读流。 */
+  if (p.startsWith('/bg/')) {
+    const bdir = path.join(PUBLIC, 'bg');
+    const full = path.normalize(path.join(PUBLIC, p.slice(1)));
+    if (full !== bdir && !full.startsWith(bdir + path.sep)) {
+      return send(res, 403, 'forbidden', 'text/plain; charset=utf-8');
+    }
+    const ext = path.extname(full).toLowerCase();
+    const ctype = ext === '.mp4' ? 'video/mp4'
+      : ext === '.webm' ? 'video/webm'
+      : (MIME[ext] || 'application/octet-stream');
+    return fs.stat(full, (err, st) => {
+      if (err) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+      const vid = ext === '.mp4' || ext === '.webm';
+      const base = { 'Accept-Ranges': 'bytes', 'Content-Type': ctype, 'Cache-Control': vid ? 'public, max-age=604800' : 'public, max-age=86400' };
+      const range = req.headers.range;
+      const m = range && /bytes=(\d*)-(\d*)/.exec(range);
+      if (m) {
+        let start = m[1] ? parseInt(m[1], 10) : 0;
+        let end = m[2] ? parseInt(m[2], 10) : st.size - 1;
+        if (isNaN(start)) start = 0;
+        if (isNaN(end) || end >= st.size) end = st.size - 1;
+        if (start > end) {
+          res.writeHead(416, { 'Content-Range': 'bytes */' + st.size });
+          return res.end();
+        }
+        res.writeHead(206, Object.assign({}, base, {
+          'Content-Range': 'bytes ' + start + '-' + end + '/' + st.size,
+          'Content-Length': end - start + 1
+        }));
+        return fs.createReadStream(full, { start, end }).pipe(res);
+      }
+      res.writeHead(200, Object.assign({}, base, { 'Content-Length': st.size }));
+      return fs.createReadStream(full).pipe(res);
+    });
+  }
+
+  /* ---------- 「并肩割草」静态资源（目录逃逸保护） ----------
+   * 游戏目录有 src/、vendor/、assets/、data/ 多层相对路径，serveStatic 只处理单文件。 */
+  if (p.startsWith('/survivor/')) {
+    const sdir = path.join(PUBLIC, 'survivor');
+    /* 文件名里有中文（Boss 贴图），URL 传过来是 %E9%98%B6… 编码形式，必须先 decode */
+    let rel;
+    try { rel = decodeURIComponent(p.slice(1)); } catch { return send(res, 400, 'bad path', 'text/plain; charset=utf-8'); }
+    if (rel.indexOf('\u0000') >= 0) return send(res, 400, 'bad path', 'text/plain; charset=utf-8');
+    const full = path.join(PUBLIC, rel);
+    if (!full.startsWith(sdir)) return send(res, 403, 'forbidden', 'text/plain; charset=utf-8');
+    return fs.readFile(full, (err, data) => {
+      if (err) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+      const ext = path.extname(full).toLowerCase();
+      /* 脚本也走 no-store：这个目录还在频繁改，按路径缓存会拿到旧脚本 */
+      const cache = (ext === '.html' || ext === '.js') ? 'no-store' : 'public, max-age=86400';
+      send(res, 200, data, MIME[ext] || 'application/octet-stream', { 'Cache-Control': cache });
+    });
+  }
+
   /* ---------- 「与鱼」附件：图片 / 语音 inline，文件 attachment ---------- */
   if (p.startsWith('/yu-f/')) return YU.file(req, res, u, p);
 
@@ -1153,6 +1334,15 @@ const server = http.createServer(safe(async (req, res) => {
 
   /* ---------- 「心有灵犀」联机 API（patch2 新增） ---------- */
   if (p.startsWith('/api/lx/')) return LX.api(req, res, u, p);
+
+  /* ---------- 「海龟汤」联机 API：房间 / 问答 / 猜底 / 提示 / SSE ---------- */
+  if (p.startsWith('/api/soup/')) return SOUP.api(req, res, u, p);
+
+  /* ---------- 「并肩割草」联机房间 API：房间 / 画面 / 输入 / 聊天 ---------- */
+  if (p.startsWith('/api/survivor/room/')) return SURVIVOR_ROOM.api(req, res, u, p);
+
+  /* ---------- 「并肩割草」适配器 API：快照 / 调参 / 指令 / 选卡 / 台词 ---------- */
+  if (p.startsWith('/api/survivor/')) return SURVIVOR.api(req, res, u, p);
 
   /* ---------- 她的状态（只读）：页面顶部那一行小字用 ----------
    * 只显示档位词 + 心情 + 今天的账，不返回分数。
@@ -2000,6 +2190,8 @@ server.listen(PORT, HOST, () => {
   console.log(`     首页 /   ·  万象牌 /game   ·  五子棋 /gomoku   ·  聊天室 /chat`);
   console.log(`     与鱼 /yu  ·  心有灵犀 /lingxi`);
   console.log(`     心有灵犀联机：/lingxi 点「🌐 联机」，接口 /api/lx/*`);
+  console.log(`     并肩割草：/survivor（AI 适配器 /api/survivor/*，联机 /api/survivor/room/*）`);
+  console.log(`     海龟汤：/soup（主持人 + 多参与者，接口 /api/soup/*）`);
   console.log(`     上传图片：单文件最大 ${Math.round(MAX_UPLOAD / 1048576)}MB，存在 ${UPLOADS}`);
   if (DEEPSEEK_KEY) {
     console.log(`     AI 助手：${FMT} 格式，模型 ${DEEPSEEK_MODEL}（已读取到密钥）`);

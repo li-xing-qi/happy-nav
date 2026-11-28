@@ -16,7 +16,7 @@
 
   <div class="card">
     <h1>用户管理</h1>
-    <p class="lead">只有管理员能进这一页。停用 / 重置密码会立刻把这人的登录踢下线；删除不可恢复。</p>
+    <p class="lead">每一行两个入口：「切换至此账号」直接以这个身份继续用；「管理此账号」展开停用、重置密码、权限设置。停用或重置密码会立刻把这人的登录踢下线；删除不可恢复。</p>
 
     <div class="row" style="margin-top:18px;align-items:flex-end;gap:10px">
       <div style="flex:1 1 160px">
@@ -27,7 +27,7 @@
         <label class="f" for="npass" style="margin-top:0">密码</label>
         <input class="f" id="npass" placeholder="至少 4 位">
       </div>
-      <button class="btn sm" id="create" style="padding:11px 16px">开个新号</button>
+      <button type="button" class="btn sm" id="create" style="padding:11px 16px">开个新号</button>
     </div>
     <div class="msg" id="cmsg"></div>
 
@@ -44,94 +44,206 @@
 <script>
 (function(){
   var $=function(id){return document.getElementById(id);};
-  function msg(el,t,bad){var e=$(el);e.textContent=t;e.className='msg'+(bad?' bad':'');}
+  /* 权限项：界面的勾选项与服务端白名单一一对应（yu / chat / games） */
+  var PERM_LABELS=[
+    ['yu','进入与鱼聊天室'],
+    ['chat','进入聊天室'],
+    ['games','玩小游戏（五子棋 / 万象牌 / 心有灵犀）']
+  ];
+  var ADMIN_UID='1661973546';
+  var ME=null;
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
   function fmt(ts){
     if(!ts)return '—';
     var d=new Date(ts),p=function(n){return (n<10?'0':'')+n;};
     return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
   }
+  function msg(el,t,bad){var e=$(el);e.textContent=t;e.className='msg'+(bad?' bad':'');}
+  function pmsg(row,t,bad){var e=row.querySelector('[data-pmsg]');if(!e)return;e.textContent=t;e.className='pmsg'+(bad?' bad':'');}
+  function isAdminUser(u){return !!(u.isAdmin||String(u.uid)===ADMIN_UID);}
+
   async function call(path,body){
     var opt={credentials:'same-origin',headers:{'Content-Type':'application/json'}};
     if(body!==undefined){opt.method='POST';opt.body=JSON.stringify(body);}
     var r=await fetch(path,opt);
     var j=null;try{j=await r.json();}catch(e){}
-    if(r.status===403){location.replace('/');return null;}
+    if(r.status===403&&!j)return null;
     return j;
   }
 
-  var ME=null;
+  /* ---------------- 二级面板 ---------------- */
+  function panelHTML(u){
+    var admin=isAdminUser(u);
+    var perms=u.perms||{};
+    var h='<div class="panel">';
+
+    /* 停用 / 启用 —— 管理员这一栏只放一行灰字 */
+    h+='<div class="psec"><div class="ptitle">账号状态</div><div class="pbody">';
+    if(admin){
+      h+='<span class="pnote">管理员账号不可停用</span>';
+    }else{
+      h+='<button type="button" class="btn ghost sm" data-p="toggle">'+(u.disabled?'启用':'停用')+'</button>';
+      h+='<span class="pnote">'+(u.disabled?'当前已停用，启用后马上可以登录':'停用后立刻把这人的登录踢下线')+'</span>';
+    }
+    h+='</div></div>';
+
+    /* 重置密码 —— 重置成 uid，成功后把新密码醒目地显示出来 */
+    h+='<div class="psec"><div class="ptitle">重置密码</div><div class="pbody">';
+    h+='<button type="button" class="btn ghost sm" data-p="reset">重置密码</button>';
+    h+='<span class="pnote">重置成这个账号的 ID：<b class="mono-inline">'+esc(u.uid)+'</b></span>';
+    h+='<div class="passout hidden" data-out></div>';
+    h+='</div></div>';
+
+    /* 权限管理 —— 管理员固定全开、只读 */
+    h+='<div class="psec"><div class="ptitle">权限管理</div><div class="pbody chks">';
+    PERM_LABELS.forEach(function(it){
+      h+='<label class="chk"><input type="checkbox" data-perm="'+it[0]+'"'+
+        (perms[it[0]]!==false?' checked':'')+(admin?' disabled':'')+'> <span>'+it[1]+'</span></label>';
+    });
+    h+='</div>';
+    if(admin){
+      h+='<div class="pnote" style="margin-top:9px">管理员账号不受权限限制，这里固定全部开放。</div>';
+    }else{
+      h+='<div class="pbody" style="margin-top:11px"><button type="button" class="btn sm" data-p="saveperms">保存权限</button><span class="pmsg" data-pmsg></span></div>';
+    }
+    h+='</div>';
+
+    /* 删除放最底下，红色；管理员和自己都不给 */
+    if(!admin&&u.uid!==ME.uid){
+      h+='<div class="pdanger"><button type="button" class="btn danger sm" data-p="del">删除此账号</button></div>';
+    }
+    h+='</div>';
+    return h;
+  }
+
+  function showPass(pr,pass){
+    var box=pr.querySelector('[data-out]');
+    box.classList.remove('hidden');
+    box.innerHTML=
+      '<div class="passout-t">密码已重置为：</div>'+
+      '<div class="passout-line"><input class="passout-in" readonly value="'+esc(pass)+'">'+
+      '<button type="button" class="btn ghost sm" data-copy>复制</button></div>'+
+      '<div class="passout-h">请转告该用户用这个密码登录，登录后立即到「我的账号」修改密码。</div>';
+    var inp=box.querySelector('.passout-in');
+    var cb=box.querySelector('[data-copy]');
+    inp.onclick=function(){try{inp.select();}catch(e){}};
+    try{inp.select();}catch(e){}
+    cb.onclick=function(){
+      var done=function(){cb.textContent='已复制';setTimeout(function(){cb.textContent='复制';},1500);};
+      try{inp.select();if(document.execCommand('copy')){done();return;}}catch(e){}
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(pass).then(done,function(){});
+      }
+    };
+  }
+
+  function wirePanel(pr,u){
+    var tb=pr.querySelector('[data-p="toggle"]');
+    if(tb)tb.onclick=async function(){
+      var word=u.disabled?'启用':'停用';
+      if(!confirm(word+'「'+u.name+'」（'+u.uid+'）？'+(u.disabled?'':'这会立刻把这人的登录踢下线。')))return;
+      tb.disabled=true;
+      var r=await call('/api/admin/users/update',{uid:u.uid,disabled:!u.disabled});
+      tb.disabled=false;
+      if(!r)return;
+      if(r.error){alert(r.error);return;}
+      msg('msg','已'+word+' '+u.name);
+      load();
+    };
+
+    var rb=pr.querySelector('[data-p="reset"]');
+    if(rb)rb.onclick=async function(){
+      if(!confirm('确定把「'+u.name+'」（'+u.uid+'）的密码重置为 '+u.uid+' 吗？'))return;
+      rb.disabled=true;
+      var r=await call('/api/admin/users/resetpass',{uid:u.uid});
+      rb.disabled=false;
+      if(!r)return;
+      if(r.error){alert(r.error);return;}
+      showPass(pr,r.newPass);
+      msg('msg','已重置 '+u.name+' 的密码');
+    };
+
+    var sb=pr.querySelector('[data-p="saveperms"]');
+    if(sb)sb.onclick=async function(){
+      var perms={};
+      pr.querySelectorAll('input[data-perm]').forEach(function(c){perms[c.getAttribute('data-perm')]=!!c.checked;});
+      sb.disabled=true;
+      var r=await call('/api/admin/users/perms',{uid:u.uid,perms:perms});
+      sb.disabled=false;
+      if(!r)return;
+      if(r.error){pmsg(pr,r.error,1);return;}
+      u.perms=r.perms||perms;
+      pmsg(pr,'已保存',0);
+      setTimeout(function(){pmsg(pr,'');},1800);
+    };
+
+    var db=pr.querySelector('[data-p="del"]');
+    if(db)db.onclick=async function(){
+      if(!confirm('删除「'+u.name+'」（'+u.uid+'）？这个操作不可恢复。'))return;
+      db.disabled=true;
+      var r=await call('/api/admin/users/delete',{uid:u.uid});
+      db.disabled=false;
+      if(!r)return;
+      if(r.error){alert(r.error);return;}
+      msg('msg','已删除 '+u.name);
+      load();
+    };
+  }
+
+  /* ---------------- 列表 ---------------- */
+  function render(list){
+    $('cnt').textContent='（'+list.length+'）';
+    var tbEl=$('rows');tbEl.innerHTML='';
+    if(!list.length){tbEl.innerHTML='<tr><td colspan="6" class="muted" style="padding:16px 6px">还没有账号</td></tr>';return;}
+    list.forEach(function(u){
+      var admin=isAdminUser(u);
+      var tr=document.createElement('tr');
+      tr.className='urow';
+      tr.innerHTML=
+        '<td data-l="ID" class="mono-cell">'+esc(u.uid)+'</td>'+
+        '<td data-l="昵称">'+esc(u.name)+(u.uid===ME.uid?' <span class="muted">（我）</span>':'')+'</td>'+
+        '<td data-l="身份">'+(admin?'<span class="tag adm">管理员</span>':'<span class="muted">普通</span>')+'</td>'+
+        '<td data-l="状态">'+(u.disabled?'<span class="tag off">已停用</span>':'<span class="tag on">正常</span>')+'</td>'+
+        '<td data-l="最后登录" class="muted">'+fmt(u.lastLogin)+'</td>'+
+        '<td data-l="操作"><div class="acts">'+
+          '<button type="button" class="btn ghost sm" data-act="switch">切换至此账号</button>'+
+          '<button type="button" class="btn ghost sm" data-act="manage">管理此账号</button>'+
+        '</div></td>';
+
+      var pr=document.createElement('tr');
+      pr.className='panel-row hidden';
+      pr.innerHTML='<td colspan="6">'+panelHTML(u)+'</td>';
+
+      tr.querySelector('[data-act="switch"]').onclick=async function(){
+        if(!confirm('切换到「'+u.name+'」（'+u.uid+'）？切过去后你就以这人的身份使用本站。'))return;
+        var r=await call('/api/admin/switch',{uid:u.uid});
+        if(!r)return;
+        if(r.error){msg('msg',r.error,1);return;}
+        location.href='/';
+      };
+      tr.querySelector('[data-act="manage"]').onclick=function(){
+        pr.classList.toggle('hidden');
+      };
+
+      wirePanel(pr,u);
+      tbEl.appendChild(tr);
+      tbEl.appendChild(pr);
+    });
+  }
+
   async function load(){
     var me=await fetch('/api/auth/me',{credentials:'same-origin'}).then(function(x){return x.json();}).catch(function(){return {ok:false};});
     if(!me||!me.ok){location.replace('/login.html?next=/admin.html');return;}
     if(!me.isAdmin){location.replace('/');return;}
     ME=me;
     var list=await call('/api/admin/users');
-    if(!list)return;
-    $('cnt').textContent='（'+list.length+'）';
-    var tb=$('rows');tb.innerHTML='';
-    if(!list.length){tb.innerHTML='<tr><td colspan="6" class="muted" style="padding:16px 6px">还没有账号</td></tr>';return;}
-    list.forEach(function(u){
-      var tr=document.createElement('tr');
-      tr.innerHTML=
-        '<td data-l="ID" class="mono-cell">'+u.uid+'</td>'+
-        '<td data-l="昵称">'+esc(u.name)+(u.uid===ME.uid?' <span class="muted">（我）</span>':'')+'</td>'+
-        '<td data-l="身份">'+(u.isAdmin?'<span class="tag adm">管理员</span>':'<span class="muted">普通</span>')+'</td>'+
-        '<td data-l="状态">'+(u.disabled?'<span class="tag off">已停用</span>':'<span class="tag on">正常</span>')+'</td>'+
-        '<td data-l="最后登录" class="muted">'+fmt(u.lastLogin)+'</td>'+
-        '<td data-l="操作"><div class="acts">'+
-          '<button class="btn ghost sm" data-act="switch">切换成此账号</button>'+
-          '<button class="btn ghost sm" data-act="toggle">'+(u.disabled?'启用':'停用')+'</button>'+
-          '<button class="btn ghost sm" data-act="reset">重置密码</button>'+
-          (u.uid===ME.uid||u.isAdmin?'':'<button class="btn danger sm" data-act="del">删除</button>')+
-        '</div></td>';
-      tr.querySelectorAll('button[data-act]').forEach(function(b){
-        b.onclick=function(){act(b.dataset.act,u);};
-      });
-      tb.appendChild(tr);
-    });
-  }
-  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
-
-  async function act(kind,u){
-    msg('msg','');
-    if(kind==='switch'){
-      if(!confirm('切换到「'+u.name+'」（'+u.uid+'）？切过去后你就以这人的身份使用本站。'))return;
-      var r=await call('/api/admin/switch',{uid:u.uid});
-      if(!r)return;
-      if(r.error){msg('msg',r.error,1);return;}
-      location.href='/yu';
-      return;
-    }
-    if(kind==='toggle'){
-      if(!confirm((u.disabled?'启用':'停用')+'「'+u.name+'」？'))return;
-      var r2=await call('/api/admin/users/update',{uid:u.uid,disabled:!u.disabled});
-      if(!r2)return;
-      if(r2.error){msg('msg',r2.error,1);return;}
-      msg('msg','已更新 '+u.name);
-      load();return;
-    }
-    if(kind==='reset'){
-      var np=prompt('给「'+u.name+'」设个新密码（至少 4 位）：','');
-      if(np===null)return;
-      if(np.length<4){msg('msg','新密码至少 4 位',1);return;}
-      var r3=await call('/api/admin/users/update',{uid:u.uid,resetPass:np});
-      if(!r3)return;
-      if(r3.error){msg('msg',r3.error,1);return;}
-      msg('msg','已重置 '+u.name+' 的密码');
-      load();return;
-    }
-    if(kind==='del'){
-      if(!confirm('删除「'+u.name+'」（'+u.uid+'）？这个操作不可恢复。'))return;
-      var r4=await call('/api/admin/users/delete',{uid:u.uid});
-      if(!r4)return;
-      if(r4.error){msg('msg',r4.error,1);return;}
-      msg('msg','已删除 '+u.name);
-      load();return;
-    }
+    if(!list||list.error)return;
+    render(list);
   }
 
   $('create').onclick=async function(){
-    var name=$('nname').value.trim(), pass=$('npass').value;
+    var name=$('nname').value.trim(),pass=$('npass').value;
     if(!name||!pass){msg('cmsg','昵称和密码都要填',1);return;}
     $('create').disabled=true;
     var r=await call('/api/admin/users/create',{name:name,pass:pass});

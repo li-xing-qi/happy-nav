@@ -15,10 +15,22 @@ const crypto = require('crypto');
 
 const ADMIN_UID = '1661973546';
 const ADMIN_NAME = '老板';
-/* 管理员初始密码不写死在仓库里：优先取环境变量 ADMIN_PASS；
- * 没设就首次初始化时随机生成一个，只在创建那条日志里显示一次。
- * （已存在 accounts.json 的部署不受影响，密码不会被覆盖。） */
-const ADMIN_PASS = process.env.ADMIN_PASS || '';
+
+/* ============================================================
+   管理员初始密码（2026-11-28 安全修复）
+   ------------------------------------------------------------
+   仓库是公开的，这里绝对不能写明文密码。
+   · 优先读环境变量 ADMIN_PASS（pm2 env / .env 里配）
+   · 没设就 crypto.randomBytes(9).toString('base64url') 现场生成
+   · 这个值只在「accounts.json 里还没有管理员」时用来建号；
+     已有账号的 pass 永远不会被这里覆盖（loadAccounts 只在缺号时写）
+   · 生成后不打印、不落盘：日志里只说「已生成」，避免密码进日志文件
+   ============================================================ */
+function initialAdminPass() {
+  const env = String(process.env.ADMIN_PASS || '').trim();
+  if (env) return { pass: env, from: 'env' };
+  return { pass: crypto.randomBytes(9).toString('base64url'), from: 'random' };
+}
 const COOKIE_NAME = 'hn_sid';
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;   // 30 天
 const MIN_UID = 1;
@@ -27,6 +39,29 @@ const MAX_UID = 9999;
 const NAME_MAX = 16;
 const PASS_MIN = 4;
 const PASS_MAX = 64;
+
+/* ============================================================
+   功能权限（2026-11-28）
+   ------------------------------------------------------------
+   perms: { yu, chat, games } —— 只有这三把开关，服务端强制校验。
+   · 缺字段 / 不是 false 一律视为 true（旧账号读到没有 perms 就是全开）
+   · 管理员（isAdmin）永远不受限，UI 上也不给改
+   · 127.0.0.1 放行由 server.js 的 isLocalReq 负责，不在这里
+   ============================================================ */
+const PERM_KEYS = ['yu', 'chat', 'games'];
+const PERM_LABEL = { yu: '与鱼', chat: '聊天室', games: '小游戏' };
+function normPerms(p) {
+  const out = {};
+  for (let i = 0; i < PERM_KEYS.length; i++) {
+    const k = PERM_KEYS[i];
+    out[k] = !(p && p[k] === false);
+  }
+  return out;
+}
+/* 管理员判定：isAdmin 标记，或者就是预置的那个 uid —— 两重保险 */
+function isAdminAccount(acc) {
+  return !!(acc && (acc.isAdmin || String(acc.uid) === ADMIN_UID));
+}
 
 /* 登录失败限流：同一 IP 10 分钟内失败 10 次 → 拒绝 10 分钟 */
 const RL_WINDOW = 10 * 60 * 1000;
@@ -92,16 +127,28 @@ module.exports = function createAuth(ctx) {
     let dirty = false;
     /* 预置管理员：文件不存在 / 被删 / 没设 isAdmin 都自愈，密码不会被覆盖 */
     if (!accounts[ADMIN_UID]) {
-      const initPass = ADMIN_PASS || crypto.randomBytes(9).toString('base64url');
+      const init = initialAdminPass();
       accounts[ADMIN_UID] = {
-        uid: ADMIN_UID, name: ADMIN_NAME, pass: hashPass(initPass),
-        isAdmin: true, avatar: '', createdAt: Date.now(), lastLogin: 0, disabled: false
+        uid: ADMIN_UID, name: ADMIN_NAME, pass: hashPass(init.pass),
+        isAdmin: true, avatar: '', createdAt: Date.now(), lastLogin: 0, disabled: false,
+        perms: normPerms(null)
       };
       dirty = true;
       console.log('     [auth] 已创建管理员账号 ' + ADMIN_UID + '（' + ADMIN_NAME + '）');
-      if (!ADMIN_PASS) console.log('     [auth] 初始密码（只显示这一次，登录后请立刻修改）：' + initPass);
+      if (init.from === 'random') {
+        console.log('     [auth] 初始密码（只显示这一次，登录后请立刻修改）：' + init.pass);
+      } else {
+        console.log('     [auth] 管理员初始密码取自环境变量 ADMIN_PASS，请立即登录修改');
+      }
     }
     if (dirty) writeJson(ACC_FILE, accounts);
+    /* 旧账号没有 perms：只在内存里补默认全开，不因为这一件事写盘；
+       下次任何一次正常保存（登录时间、改昵称…）会顺带把 perms 补进文件。 */
+    for (const uid of Object.keys(accounts)) {
+      const a = accounts[uid];
+      if (!a || typeof a !== 'object') continue;
+      a.perms = normPerms(a.perms);
+    }
   }
 
   function loadSessions() {
@@ -133,7 +180,8 @@ module.exports = function createAuth(ctx) {
   function pub(acc, withAvatar) {
     const o = {
       uid: acc.uid, name: acc.name, isAdmin: !!acc.isAdmin,
-      createdAt: acc.createdAt || 0, lastLogin: acc.lastLogin || 0, disabled: !!acc.disabled
+      createdAt: acc.createdAt || 0, lastLogin: acc.lastLogin || 0, disabled: !!acc.disabled,
+      perms: normPerms(acc.perms)
     };
     if (withAvatar) o.avatar = acc.avatar || '';
     return o;
@@ -291,7 +339,8 @@ module.exports = function createAuth(ctx) {
       if (!uid) return json(res, { error: '注册名额已满' });
       accounts[uid] = {
         uid, name, pass: hashPass(pass), isAdmin: false, avatar: '',
-        createdAt: Date.now(), lastLogin: Date.now(), disabled: false
+        createdAt: Date.now(), lastLogin: Date.now(), disabled: false,
+        perms: normPerms(null)
       };
       saveAccounts();
       const token = createSession(res, uid);
@@ -397,7 +446,8 @@ module.exports = function createAuth(ctx) {
         if (!uid) return json(res, { error: '注册名额已满' });
         accounts[uid] = {
           uid, name, pass: hashPass(pass), isAdmin: false, avatar: '',
-          createdAt: Date.now(), lastLogin: 0, disabled: false
+          createdAt: Date.now(), lastLogin: 0, disabled: false,
+          perms: normPerms(null)
         };
         saveAccounts();
         return json(res, { ok: true, uid, name });
@@ -417,7 +467,7 @@ module.exports = function createAuth(ctx) {
           target.name = name;
         }
         if (b.disabled != null) {
-          if (target.isAdmin && b.disabled) return json(res, { error: '不能停用管理员账号' });
+          if (isAdminAccount(target) && b.disabled) return json(res, { error: '不能停用管理员账号' });
           target.disabled = !!b.disabled;
           if (target.disabled) {
             /* 停用即踢下线 */
@@ -436,13 +486,61 @@ module.exports = function createAuth(ctx) {
         return json(res, { ok: true, user: pub(target) });
       }
 
+      /* ---------- 重置密码为「该账号的 ID」（2026-11-28） ----------
+       * 用户要求：重置后密码就是 uid，方便口头转达（如 0001 / 0001）。
+       * 仍然走 hashPass（scrypt），文件里不留明文。 */
+      if (p === '/api/admin/users/resetpass') {
+        if (method !== 'POST') return json(res, { error: '只支持 POST' });
+        const b = await readBody(req);
+        const uid = String(b.uid || '');
+        const target = accounts[uid];
+        if (!target) return json(res, { error: '没有这个账号' });
+        const newPass = uid;
+        target.pass = hashPass(newPass);
+        saveAccounts();
+        /* 踢掉目标账号的旧会话，逼它用新密码重登；
+           管理员给自己重置时保留当前这条会话，否则刚点完就把自己踢下线。 */
+        if (uid !== acc.uid) {
+          let kicked = false;
+          for (const t of Object.keys(sessions)) {
+            if (sessions[t] && sessions[t].uid === uid) { delete sessions[t]; kicked = true; }
+          }
+          if (kicked) saveSessions();
+        }
+        return json(res, { ok: true, uid, name: target.name, newPass });
+      }
+
+      /* ---------- 功能权限：只认白名单键 yu / chat / games ---------- */
+      if (p === '/api/admin/users/perms') {
+        if (method !== 'POST') return json(res, { error: '只支持 POST' });
+        const b = await readBody(req);
+        const uid = String(b.uid || '');
+        const target = accounts[uid];
+        if (!target) return json(res, { error: '没有这个账号' });
+        if (isAdminAccount(target)) return json(res, { error: '管理员账号不受权限限制，不用改' });
+        const src = b.perms && typeof b.perms === 'object' && !Array.isArray(b.perms) ? b.perms : null;
+        if (!src) return json(res, { error: 'perms 格式不对' });
+        const next = normPerms(target.perms);
+        let touched = 0;
+        for (const k of PERM_KEYS) {
+          if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+          if (typeof src[k] !== 'boolean') return json(res, { error: '权限值只能是 true / false' });
+          next[k] = src[k];
+          touched++;
+        }
+        if (!touched) return json(res, { error: '没有可改的权限项' });
+        target.perms = next;
+        saveAccounts();
+        return json(res, { ok: true, uid, perms: next });
+      }
+
       if (p === '/api/admin/users/delete') {
         if (method !== 'POST') return json(res, { error: '只支持 POST' });
         const b = await readBody(req);
         const uid = String(b.uid || '');
         if (!accounts[uid]) return json(res, { error: '没有这个账号' });
         if (uid === acc.uid) return json(res, { error: '不能删除自己' });
-        if (accounts[uid].isAdmin) return json(res, { error: '不能删除管理员账号' });
+        if (isAdminAccount(accounts[uid])) return json(res, { error: '不能删除管理员账号' });
         delete accounts[uid];
         saveAccounts();
         for (const t of Object.keys(sessions)) if (sessions[t].uid === uid) delete sessions[t];
@@ -477,6 +575,15 @@ module.exports = function createAuth(ctx) {
     isAdminReq,
     pageAccess,
     redirect,
+    /* 权限：server.js 的权限守卫用这两个 */
+    permAllowed(acc, key) {
+      if (!acc) return false;
+      if (isAdminAccount(acc)) return true;
+      return normPerms(acc.perms)[key] !== false;
+    },
+    isAdminAccount,
+    PERM_KEYS,
+    PERM_LABEL,
     ADMIN_UID
   };
 };

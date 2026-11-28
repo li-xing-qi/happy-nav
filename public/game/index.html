@@ -166,8 +166,11 @@
   .tcard{width:auto;background:linear-gradient(180deg,#252d40,#1c2230);border:1px solid var(--line-2);
     border-left:3px solid var(--tc,#c4b0ff);border-radius:11px;padding:11px 13px;cursor:pointer;
     display:flex;flex-direction:column;gap:5px;transition:transform .1s,border-color .12s,background .12s;}
-  .tcard:hover,.tcard:active{transform:translateX(3px);background:linear-gradient(180deg,#2b3450,#20273a);border-color:var(--tc,#c4b0ff);}
-  .tcard.owned{border-color:#3f7a58;opacity:.6;cursor:default;}
+  .tcard:hover:not(.owned),.tcard:active:not(.owned){transform:translateX(3px);background:linear-gradient(180deg,#2b3450,#20273a);border-color:var(--tc,#c4b0ff);}
+  .tcard.owned{border-color:#3f7a58;opacity:.72;cursor:default;}
+  .tcard.owned .tp{color:#6fe3a0;opacity:1;}
+  .towned{font-size:10px;font-weight:700;color:#6fe3a0;background:rgba(47,122,88,.25);
+    border:1px solid rgba(111,227,160,.45);border-radius:20px;padding:0 6px;margin-left:4px;}
   .tcard-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .tcat{font-size:9.5px;padding:1px 7px;border-radius:20px;background:rgba(255,255,255,.07);
     color:var(--tc,#c4b0ff);border:1px solid rgba(255,255,255,.13);white-space:nowrap;}
@@ -892,7 +895,7 @@ html[data-wxbg="ink"] .topbar{background:linear-gradient(180deg,#15181d,#0e1013)
   <div class="ov" id="joinOv">
     <div class="ov-inner" style="max-width:420px">
       <h2>🃏 万象牌 + 💬 队友频道</h2>
-      <div class="sub">你和朋友打开<b>同一个链接</b>即可一起闯 15 层。右侧（手机点右下角 💬）是<b>你俩之间的对话</b>，消息实时同步，边打牌边商量战术。卡面看不全就<b>长按卡牌</b>，会展开完整说明和词条解释。</div>
+      <div class="sub">和朋友打开<b>同一个链接</b>，一起闯 15 层。右侧（手机点 💬）是队友频道，边打边商量。<b>长按卡牌</b>看完整效果与词条。</div>
       <div class="row2">
         <input class="nm" id="nameInput" maxlength="8" placeholder="你的昵称">
         <button class="btn primary" id="joinBtn">加入战斗</button>
@@ -940,7 +943,7 @@ html[data-wxbg="ink"] .topbar{background:linear-gradient(180deg,#15181d,#0e1013)
       <div class="row2">
         <h2>🛒 商店</h2>
         <span class="chip">🪙 <b id="shopGold">0</b></span>
-        <span class="chip" id="shopMult"></span>
+        <span class="chip" id="shopMult" title="第 1 个天赋 85 折，第 2 个原价，第 3 个起每个 +25%"></span>
         <span class="spacer"></span>
         <button class="btn" id="rerollBtn">🔄 刷新</button>
         <button class="btn primary" id="leaveShopBtn">✅ 备好，进入下一层</button>
@@ -1052,7 +1055,8 @@ function cardData(o){
   return attr(JSON.stringify({
     name:o.name||'', cost:(o.cost==null?'':o.cost), cat:o.cat||'', kind:o.kind||'',
     desc:o.desc||'', word:o.word||'', level:o.level||0, cond:o.cond||'',
-    temp:!!o.temp, base:o.base||'', school:o.school||'', baseDesc:o.baseDesc||''
+    temp:!!o.temp, base:o.base||'', school:o.school||'', baseDesc:o.baseDesc||'',
+    price:(o.price==null?'':o.price), owned:!!o.owned, scaleText:o.scaleText||''
   }));
 }
 
@@ -1466,10 +1470,11 @@ function renderOverlays(){
   if(S.phase==='shop' && me.shop){
     $('shopOv').classList.remove('hidden');
     $('shopGold').textContent = me.gold;
-    $('shopMult').textContent = '天赋阶梯价 ×' + me.shop.mult.toFixed(2);
+    $('shopMult').textContent = '天赋阶梯价 ×' + me.shop.mult.toFixed(2)
+      + ((me.talents && me.talents.length) ? ' · 已拥有 ' + me.talents.length + ' 个' : '');
     $('rerollBtn').textContent = `🔄 刷新（${me.shop.rPrice} 🪙）`;
     $('shopCards').innerHTML = me.shop.cards.map((c,i)=>
-      c.sold ? `<div class="card" style="opacity:.35"><div class="cn">${esc(c.name)}</div><div class="cd">已售出</div></div>`
+      c.sold ? `<div class="card" style="opacity:.35" data-card="${cardData(c)}"><div class="cn">${esc(c.name)}</div><div class="cd">已售出</div></div>`
       : `<div class="card ${KIND_CSS[c.kind]||''}" data-i="${i}" data-card="${cardData(c)}">
           <div class="cn">${esc(c.name)}</div><div class="cc">⚡${c.cost}</div>
           <div class="cd">${esc(c.desc)}</div><div class="price">🪙 ${c.price}</div>
@@ -1477,21 +1482,26 @@ function renderOverlays(){
     $('shopCards').querySelectorAll('.card[data-i]').forEach(el=>{
       el.onclick = ()=>act({t:'buyCard', i:+el.dataset.i});
     });
+    /* 买过的天赋保留在货架上，但打上「已拥有」并禁用点击，避免看起来像购买失败 */
     $('shopTalents').innerHTML = me.shop.talents.map(t=>
-      `<div class="tcard" data-tid="${t.id}" data-card="${cardData({name:t.name,cat:'天赋',kind:'talent',desc:t.desc,word:''})}"><div class="tn">${esc(t.name)}</div>
-        <div class="td">${t.desc}</div><div class="tp">🪙 ${t.price}</div></div>`).join('');
+      `<div class="tcard${t.owned?' owned':''}" data-tid="${t.id}" data-card="${cardData({name:t.name,cat:t.catName||'天赋',kind:'talent',desc:t.desc,word:'',price:t.price,owned:t.owned})}">
+        <div class="tn">${esc(t.name)}${t.owned?' <span class="towned">✓ 已拥有</span>':''}</div>
+        <div class="td">${t.desc}</div><div class="tp">${t.owned?'✓ 已拥有':'🪙 '+t.price}</div></div>`).join('');
     $('shopTalents').querySelectorAll('.tcard').forEach(el=>{
+      if(el.classList.contains('owned')) return;
       el.onclick = ()=>act({t:'buyTalent', tid:el.dataset.tid});
     });
     $('sellList').innerHTML = me.shop.deck.map(d=>
-      `<div class="dcard"><div class="dn">${esc(d.name)} ×${d.cnt}${d.lv?' ⬆':''}</div>
+      `<div class="dcard" data-card="${cardData({name:d.name,cost:d.cost,cat:d.cat,kind:d.kind,level:d.lv,desc:(d.fxm>1?'效果 ×'+d.fxm+'：':'')+d.desc,word:d.word,scaleText:d.scaleText})}">
+        <div class="dn">${esc(d.name)} ×${d.cnt}${d.lv?' ⬆':''}</div>
         <div class="dd">⚡${d.cost}${d.fxm>1?' · 效果×'+d.fxm:''}</div>
         <div class="db"><button data-sell="${d.i}">卖出 +${d.sell}</button></div></div>`).join('');
     $('sellList').querySelectorAll('button[data-sell]').forEach(b=>{
       b.onclick = ()=>act({t:'sell', i:+b.dataset.sell});
     });
     $('upList').innerHTML = me.shop.deck.map(d=>
-      `<div class="dcard"><div class="dn">${esc(d.name)} ×${d.cnt}</div>
+      `<div class="dcard" data-card="${cardData({name:d.name,cost:d.cost,cat:d.cat,kind:d.kind,level:d.lv,desc:(d.fxm>1?'效果 ×'+d.fxm+'：':'')+d.desc,word:d.word,scaleText:d.scaleText})}">
+        <div class="dn">${esc(d.name)} ×${d.cnt}</div>
         <div class="dd">${d.canUp?'升级 '+d.lv+'/1':'✓ 已升级'}</div>
         <div class="db">
           <button data-up="${d.i}" data-mode="cost" ${(!d.canUp||!d.canReduce)?'disabled':''}>降费 ${d.upCost}</button>
@@ -2020,32 +2030,39 @@ $('bgmBtn').addEventListener('click', ()=> Music.toggle());
    · 展开后那一下 click 会被吞掉，避免「想看说明结果把牌打出去了」
    ============================================================ */
 const GLOSS = [
-  {k:['中毒'], t:'中毒', d:'回合开始时失去<b>等于层数</b>的生命，<b>无视格挡与减伤</b>；结算后层数 -1。叠得越厚，掉得越快。'},
-  {k:['易伤'], t:'易伤', d:'敌人受到的攻击伤害 <b>×1.5</b>，每轮结束 -1 层。先上易伤再打爆发最划算。'},
-  {k:['格挡'], t:'格挡', d:'优先抵扣伤害；<b>你自己的回合开始时清空</b>。所以它是「撑过敌人这一轮」的护盾，别指望存下来。'},
-  {k:['力量'], t:'力量', d:'每 1 点力量让你的攻击牌 <b>+1 伤害</b>，在易伤与减伤之前结算。'},
-  {k:['减伤'], t:'减伤', d:'敌人受到的伤害先减掉这个固定值，<b>至少也会造成 1 点</b>。'},
-  {k:['整备'], t:'整备', d:'打出后<b>布置到场</b>，之后每回合开始自动发动一次，<b>仅本场战斗有效</b>。可叠加，铺得越多越值。'},
-  {k:['登场'], t:'登场', d:'立即发动并<b>登记</b>；之后每打出一次登场牌，会<b>重放全部已登记效果</b>。本场第一张登场牌额外发动一次（初登场）。'},
-  {k:['开团'], t:'开团', d:'效果随<b>本回合已出牌数</b>成长；开团之后<b>下一张牌费用 -1</b>，适合放在连锁开头。'},
-  {k:['蓄力'], t:'蓄力', d:'敌人 <b>N 回合后</b>打出一次大伤害（撞击还叠加目标生命上限百分比）。看到蓄力就该囤格挡。'},
-  {k:['转瞬'], t:'转瞬', d:'临时牌，<b>回合结束即消失</b>，不会进入牌组。'},
-  {k:['抽牌'], t:'抽牌', d:'从抽牌堆摸牌；抽牌堆空了会把弃牌堆洗回来再抽。'},
-  {k:['弃牌'], t:'弃牌', d:'回合结束时手牌进弃牌堆，等抽牌堆空了才会洗回去。'},
-  {k:['生命上限'], t:'生命上限', d:'上限被扣掉后，当前生命也不能超过新上限；层末会按规则恢复一部分。'},
-  {k:['失去生命','失血','自损'], t:'失去生命', d:'直接扣血，<b>不经过格挡</b>；会触发自残系的联动（加伤 / 回血 / 加金币）。'},
-  {k:['净化'], t:'净化', d:'清空中毒层数，已经掉掉的血不会回来。'},
-  {k:['恢复','回复'], t:'治疗', d:'回血，但不会超过生命上限。'},
-  {k:['牌数','联动'], t:'牌数联动', d:'本回合每打出一定张数的牌，这张牌的效果就强化一档，通常有上限。'}
+  {k:['中毒'], t:'中毒', d:'回合开始按层数掉血，<b>无视格挡</b>；结算后层数 -1'},
+  {k:['易伤'], t:'易伤', d:'受到的伤害 <b>×1.5</b>，每轮结束 -1 层'},
+  {k:['格挡'], t:'格挡', d:'优先抵扣伤害；<b>你自己的回合开始时清空</b>'},
+  {k:['力量'], t:'力量', d:'每层让你的攻击牌 <b>+1 伤害</b>（本场有效）'},
+  {k:['减伤'], t:'减伤', d:'受到伤害先减去固定值，<b>至少仍受 1 点</b>'},
+  {k:['整备'], t:'整备', d:'打出后<b>布置</b>，每回合开始自动发动一次（仅本场）'},
+  {k:['登场'], t:'登场', d:'立即发动并<b>登记</b>；之后每打出登场牌，重放全部已登记效果'},
+  {k:['下场'], t:'下场', d:'立即结算并<b>结束本回合</b>；下回合首牌额外触发 1 次登场'},
+  {k:['开团'], t:'开团', d:'按 <b>2 张</b>计入连锁；余韵期间下一张牌也算开团，并<b>费用 -1</b>'},
+  {k:['蓄力'], t:'蓄力', d:'敌人 <b>N 回合后</b>打一次高额伤害，看到就囤格挡'},
+  {k:['转瞬'], t:'转瞬', d:'<b>0 费</b>临时牌，回合结束未打出即消失，不进牌组'},
+  {k:['抽牌'], t:'抽牌', d:'从抽牌堆摸牌；抽空后自动把弃牌堆洗回来'},
+  {k:['弃牌'], t:'弃牌', d:'回合结束手牌进弃牌堆，抽牌堆空了才洗回'},
+  {k:['生命上限'], t:'生命上限', d:'当前生命不能超过上限；层间会恢复一部分'},
+  {k:['失去生命','失血','自损'], t:'失去生命', d:'直接扣血、<b>不经格挡</b>，会触发自残联动'},
+  {k:['净化'], t:'净化', d:'清空中毒层数；<b>已掉的血不会回来</b>'},
+  {k:['恢复','回复'], t:'治疗', d:'回血，<b>不超过生命上限</b>'},
+  {k:['牌数','联动'], t:'牌数联动', d:'本回合每打出 N 张牌，效果强化一档（有上限）'}
 ];
-function pickTerms(text){
-  const out = [];
-  GLOSS.forEach(g=>{
-    let at = -1;
-    for(const k of g.k){ const i = text.indexOf(k); if(i>=0 && (at<0 || i<at)) at = i; }
-    if(at>=0) out.push({t:g.t, d:g.d, at});
-  });
-  return out.sort((a,b)=>a.at-b.at);
+/* 只挑和这张牌真正相关的词条：先按牌的类型/流派，再按文字命中，最多 5 条 */
+function termsFor(d){
+  const text = [d.desc||'', d.word||'', d.cat||''].join(' ');
+  const pri = [];
+  if(d.kind==='setup') pri.push('整备');
+  if(d.kind==='entry') pri.push('登场');
+  if(d.kind==='down')  pri.push('下场');
+  if(d.kind==='open')  pri.push('开团');
+  if(d.school==='gu')  pri.push('蛊术');
+  const out = [], seen = {};
+  const add = g => { if(g && !seen[g.t]){ seen[g.t]=1; out.push(g); } };
+  pri.forEach(k => add(GLOSS.find(g => g.k.includes(k) || g.t.includes(k))));
+  GLOSS.forEach(g => { if(g.k.some(k => text.indexOf(k) >= 0)) add(g); });
+  return out.slice(0, 5);
 }
 // 只放行少量标签：卡面注释里有 <b>，其余一律转义
 function safeHTML(s){
@@ -2055,21 +2072,25 @@ function safeHTML(s){
 }
 function hideDetail(){ $('cdOv').classList.add('hidden'); }
 function showDetail(d){
-  const terms = pickTerms([d.desc||'', d.word||'', d.cat||''].join(' '));
+  const terms = termsFor(d);
   const meta = [];
   if(d.cat) meta.push(d.cat);
-  if(d.level) meta.push('已升级 Lv' + d.level);
+  if(d.level) meta.push('已升级' + (d.level > 1 ? ' Lv' + d.level : ''));
   if(d.temp) meta.push('转瞬');
+  if(d.owned) meta.push('✓ 已拥有');
+  if(d.price !== '' && d.price != null) meta.push('🪙 ' + d.price);
+  const desc = d.desc || (d.word ? '' : '（没有额外说明）');
   $('cdBox').innerHTML = `
     <div class="cd-top">
       <div class="cd-name">${esc(d.name)}</div>
       ${(d.cost!=='' && d.cost!=null) ? `<div class="cd-cost">⚡ ${esc(d.cost)}</div>` : ''}
     </div>
     ${meta.length ? `<div class="cd-meta">${meta.map(m=>`<span>${esc(m)}</span>`).join('')}</div>` : ''}
-    <div class="cd-desc">${safeHTML(d.desc || '（这张牌没有额外说明）')}</div>
+    ${desc ? `<div class="cd-sec">${d.kind==='talent' ? '效 果' : '牌 面 效 果'}</div><div class="cd-desc">${safeHTML(desc)}</div>` : ''}
+    ${d.scaleText ? `<div class="cd-desc" style="color:#8be07a;font-size:12px;margin-top:4px">⛓ ${safeHTML(d.scaleText)}</div>` : ''}
     ${d.cond ? `<div class="cd-desc" style="color:#ff9d9d;margin-top:6px">${safeHTML(d.cond)}</div>` : ''}
     ${terms.length ? `<div class="cd-sec">词 条</div>` + terms.map(t=>`<div class="cd-term"><b class="t">${t.t}</b>${t.d}</div>`).join('') : ''}
-    ${d.word ? `<div class="cd-sec">牌 面 注 释</div><div class="cd-word">${safeHTML(d.word)}</div>` : ''}
+    ${d.word ? `<div class="cd-sec">${d.kind==='talent' ? '说 明' : '设 计 注 释'}</div><div class="cd-word">${safeHTML(d.word)}</div>` : ''}
     <button class="cd-close" id="cdClose">知道了</button>`;
   $('cdOv').classList.remove('hidden');
   const btn = $('cdClose');
@@ -2210,28 +2231,28 @@ function showDetail(d){
   /* ---------- 词条：直接扩充原有 GLOSS，长按详情自动带上新机制 ---------- */
   if (typeof GLOSS !== 'undefined' && Array.isArray(GLOSS)) {
     GLOSS.push(
-      {k:['蛊术'], t:'🐛 蛊术（蛊毒流）', d:'蛊毒流的护体资源，<b>不随回合衰减、每场战斗开始清零</b>。①中毒结算时 <b>1 点蛊术吞 3 点毒伤</b>（只挡伤害、不回血）；②被敌人打中后 <b>1 点蛊术回 2 点生命</b>；③回合结束血量不满时继续回血；④血满时只有【蛊·续命】能把蛊术炼成生命上限。<b>每打出 1 张蛊毒牌：+1 蛊术，并给敌人 +10% 当前中毒</b>，这是蛊毒流的伤害引擎。蛊毒牌一律不给格挡。'},
-      {k:['病入膏肓','斩杀线','斩杀'], t:'☠ 病入膏肓 · 斩杀线', d:'点了这个天赋后，<b>敌人身上的毒不再造成伤害</b>，唯一死法是斩杀：每次中毒结算后 <b>敌我毒层与你的蛊术全部翻倍</b>，敌人按你的蛊术永久抬高生命上限，<b>毒层 ≥ 敌人生命上限的 70% 当场斩杀</b>。你施加的中毒额外 +50%，但毒涨得比你快就会先毒死你自己。'},
-      {k:['破盾','碎盾','无视格挡'], t:'🗡 破盾 / 碎盾', d:'破盾者的攻击会让你的<b>格挡只算一半</b>；每 3 回合一次的碎盾重击<b>完全无视格挡</b>。看到意图里的破盾标记，别指望靠叠盾硬吃，先削攻击或铺治疗。'},
-      {k:['撞击'], t:'🩸 撞击', d:'按<b>被击中玩家自己的当前生命上限</b>追加伤害，普攻 / 蓄力各有不同百分比。上限堆得越厚这一下越疼——血池是容错，不是免死金牌。双人版按被命中的那个人实时计算。'},
-      {k:['吞牌','噬牌者'], t:'🍽 吞牌', d:'【噬牌者】每吞 1 张牌，<b>本场永久 +1 攻击</b>，最多吞 5 张；被吞的牌本场不再回到牌堆。牌组越薄，后面越难打。'},
-      {k:['破绽','千刃'], t:'✨ 破绽（千刃舞者）', d:'一回合内被玩家<b>打中 4 次</b>，它的 4 段连击剑路就会中断，退回磨刃。多段小牌比一张大牌更克制它。'},
-      {k:['压制','磐石'], t:'🪨 压制（磐石巨灵）', d:'它<b>本回合每承受 10 点伤害，下一击攻击力 -1</b>。先把它打疼，再让它出手。'},
-      {k:['毒翻倍'], t:'☠ 毒翻倍', d:'中毒结算完之后，敌我双方的毒层一起翻倍；层数不再按常规 -1 衰减，是病入膏肓天赋的核心节奏。'},
-      {k:['禁用流派','爱好流派'], t:'🎯 流派设置', d:'开局 <b>7 个天赋候选</b>按五流派分席位：指定<b>爱好流派</b>占 3 席、其余各 1 席；不指定则各系保底 1 席、剩下随机。<b>禁用一系</b>会把该系的牌与天赋从开局候选 / 商店 / 战利品里整体移除。联机版是房间级设置，开局后锁定，改动下一局生效。'}
+      {k:['蛊术','蛊毒'], t:'🐛 蛊术', d:'<b>不随回合衰减，每场战斗清零</b>。1 点蛊术吞 3 点毒伤；挨打后 1 点回 2 血；每打出 1 张蛊毒牌 +1 蛊术、敌人中毒 +10%（至少 1 层）。蛊毒牌<b>不给格挡</b>。'},
+      {k:['病入膏肓','斩杀线','斩杀'], t:'☠ 病入膏肓', d:'敌人中毒<b>不再掉血</b>；每次中毒结算后敌我毒层与你的蛊术<b>翻倍</b>，敌人按你蛊术×50% 涨生命上限；<b>毒层 ≥ 上限 70% 直接斩杀</b>。'},
+      {k:['破盾','碎盾','无视格挡'], t:'🗡 破盾 / 碎盾', d:'破盾：你的格挡<b>只算一半</b>；碎盾：<b>完全无视格挡</b>。别指望叠盾硬吃。'},
+      {k:['撞击'], t:'🩸 撞击', d:'按被击中者<b>当前生命上限</b>追加伤害；上限越高，这一下越疼。'},
+      {k:['吞牌','噬牌者'], t:'🍽 吞牌', d:'每吞 1 张牌本场<b>永久 +1 攻击</b>（最多 5 张），被吞的牌不回牌堆。'},
+      {k:['破绽','千刃'], t:'✨ 破绽', d:'一回合内被打中 <b>4 次</b>，连击中断。多段小牌更克制它。'},
+      {k:['压制','磐石'], t:'🪨 压制', d:'本回合每受 <b>10 点伤害</b>，下一击攻击 -1。先打疼，再让它出手。'},
+      {k:['毒翻倍'], t:'☠ 毒翻倍', d:'中毒结算后，敌我双方毒层<b>一起翻倍</b>。'},
+      {k:['禁用流派','爱好流派'], t:'🎯 流派设置', d:'房间级设置。<b>禁用一系</b>会把它从开局候选 / 商店 / 战利品整体移除；开局后锁定，下一局生效。'}
     );
   }
 
-  /* ---------- 图鉴静态规则（取自单机版图鉴，按联机版措辞收敛） ---------- */
+  /* ---------- 图鉴静态规则（按单机版图鉴收敛成短句） ---------- */
   var RULES = [
-    {t:'🐛 蛊术：蛊毒流的第二条血线', d:'<b>不随回合衰减，但每场战斗开始清零</b>。中毒结算时 1 点蛊术吞下 3 点毒伤（只挡伤害、不回血）；被敌人打中后 1 点蛊术回 2 点生命；回合结束血量不满时继续回；血满时只有【蛊·续命】能把蛊术炼成生命上限。<b>每打出 1 张蛊毒牌：+1 蛊术 + 敌人当前中毒 ×10%（至少 1 层）</b>。<b>蛊毒牌一律不给格挡</b>，毒是弹药、蛊术是血条，铺太快会死在自己的账单上。'},
-    {t:'☠ 病入膏肓：毒与斩杀的赛跑', d:'敌人的毒<b>不再造成伤害</b>，唯一死法是斩杀线。每次中毒结算后<b>敌我毒层与你的蛊术全翻倍</b>，敌人按你的蛊术 ×50% 永久抬高生命上限，<b>毒层 ≥ 上限的 70% 当场斩杀</b>。你对敌人施加的中毒额外 +50%。毒涨得比你快，你先死；涨得比你慢，它被斩。'},
-    {t:'🎯 五流派与禁用', d:'<b>开团</b>靠本回合出牌数成长、开团后下一张 -1 费；<b>登场</b>登记后每打一张登场牌重放全部效果；<b>整备</b>布置后每回合开始自动发动；<b>自残</b>用失去生命换伤害 / 金币 / 过牌（没有专属词条）；<b>蛊毒</b>用蛊术池吞毒、靠毒层斩杀。开局 7 个天赋候选按未禁用系保底 1 席，爱好流派补到 3 席；禁用一系会把它从候选 / 商店 / 战利品整体移除。'},
-    {t:'🃏 长按卡牌看全部', d:'<b>长按或右键</b>任意卡牌 / 天赋 / 商店条目，会展开完整说明、<b>词条解释</b>与牌面注释；点空白处或按 Esc 关闭。手牌上的紫色「蛊」角标代表蛊毒系卡牌。'},
-    {t:'👥 双人合作与怪物加强', d:'两人各有独立牌组 / 能量 / 天赋，<b>共享一个敌人</b>；双方都结束回合后敌人才行动。为匹配双人输出，怪物<b>生命 ×1.8、攻击 ×1.15</b>（原版 ×1.5）。设计上仍然「小怪爽快清场、BOSS 靠机制」，没有纯堆数值。'},
-    {t:'🗡 BOSS 新机制', d:'<b>破盾者</b>格挡减半 / 每 3 回合碎盾无视格挡；<b>千刃舞者</b>一回合被打中 4 次会中断 4 段连击；<b>磐石巨灵</b>本回合每承伤 10 点，下一击攻击 -1；<b>噬牌者</b>吞你牌堆里的牌并永久加攻；<b>铁壁巨像 / 攻城兽 / 指挥官</b>带按生命上限追加的撞击伤害。敌人面板会实时标出这些状态。'},
-    {t:'⚙ 设置与存档', d:'联机版的进度<b>由服务端统一保管</b>，刷新页面会自动续上，不需要手动存档；音量 / 静音 / 点击音效仍是本地偏好。房间级的爱好 / 禁用流派在设置里改，开局后锁定，改动下一局生效。'},
-    {t:'📖 日志', d:'右上角 <b>⛶</b> 可以放大日志，按「我方 / 队友 / 系统 / 伤害」筛选并搜关键词；日志按因果顺序缩进，出牌联动一眼看得清。'}
+    {t:'🐛 蛊术', d:'蛊毒流的护体资源：<b>不随回合衰减，每场战斗清零</b>。中毒时 1 点蛊术吞 3 点毒伤（只挡伤害、不回血）；挨打后 1 点回 2 血；每打出 1 张蛊毒牌 +1 蛊术、敌人中毒 +10%。<b>蛊毒牌不给格挡。</b>'},
+    {t:'☠ 病入膏肓', d:'敌人的毒<b>不再造成伤害</b>，唯一死法是斩杀线：每次中毒结算后敌我毒层与你的蛊术<b>翻倍</b>，敌人按你蛊术×50% 涨生命上限；<b>毒层 ≥ 上限 70% 当场斩杀</b>。'},
+    {t:'🎯 五流派', d:'<b>开团</b>按 2 张计连锁、余韵减费；<b>登场</b>登记后重放；<b>整备</b>每回合自动触发；<b>自残</b>用血换资源；<b>蛊毒</b>靠蛊术吞毒、毒层斩杀。'},
+    {t:'🃏 长按卡牌', d:'<b>长按或右键</b>卡牌 / 天赋 / 商店条目，查看完整效果与相关词条；点空白处或按 Esc 关闭。'},
+    {t:'👥 双人合作', d:'两人牌组 / 能量 / 天赋各自独立，<b>共享一个敌人</b>；都结束回合后敌人才行动。怪物生命 ×1.8、攻击 ×1.15。'},
+    {t:'🗡 BOSS 机制', d:'破盾减半 / 碎盾无视格挡；千刃被打中 4 次断连击；磐石承伤降攻；噬牌者吞牌加攻；巨像 / 攻城兽 / 指挥官带生命上限撞击。'},
+    {t:'⚙ 设置与存档', d:'进度由服务端保管，刷新自动续上；音量等是本机偏好。流派设置开局后锁定，下一局生效。'},
+    {t:'📖 日志', d:'右上角 <b>⛶</b> 放大日志，可按来源筛选并搜关键词。'}
   ];
 
   /* ---------- 通用 ---------- */
@@ -2282,7 +2303,7 @@ function showDetail(d){
       if(cxTab==='guide'){
         h += '<div class="wx2-sec">五流派 · 开局天赋席位</div><div class="wx2-grid">';
         schools().forEach(s=>{ hit(); h += '<div class="wx2-item" style="border-left-color:'+s.color+';cursor:default">'
-          + '<div class="n">'+esc(s.name)+badge(s.key)+'</div><div class="d">该系天赋与卡牌在开局候选里保底 1 席；设为爱好流派时占 '+((DATA&&DATA.prefSeats)||3)+' 席。被禁用时整系从候选 / 商店 / 战利品移除。</div></div>'; });
+          + '<div class="n">'+esc(s.name)+badge(s.key)+'</div><div class="d">开局候选保底 1 席；设为爱好流派时占 '+((DATA&&DATA.prefSeats)||3)+' 席。禁用后整系从候选 / 商店 / 战利品移除。</div></div>'; });
         h += '</div>';
         var bp = DATA.bossPool||{};
         h += '<div class="wx2-sec">BOSS 分层</div>';
@@ -2297,7 +2318,7 @@ function showDetail(d){
       cards.forEach(c=>{
         hit();
         var b = badge('⚡'+c.cost) + badge(c.cat||c.kind||'') + (c.school?badge(schoolMap()[c.school]||c.school,'gu'):'');
-        h += item({name:c.name, cost:c.cost, cat:c.cat, kind:c.kind, desc:c.desc, word:c.word, school:c.school, baseDesc:c.desc},
+        h += item({name:c.name, cost:c.cost, cat:c.cat, kind:c.kind, desc:c.desc, word:c.word, school:c.school, baseDesc:c.desc, scaleText:c.scaleText},
                   c.name, b, c.desc, c.word, c.school==='gu'?'#c79bff':null);
       });
       h += '</div>';
@@ -2306,7 +2327,7 @@ function showDetail(d){
       h += '<div class="wx2-grid">';
       ts.forEach(t=>{
         hit();
-        h += item({name:t.name, cost:'', cat:t.catName, kind:'talent', desc:t.desc, word:''},
+        h += item({name:t.name, cost:'', cat:t.catName, kind:'talent', desc:t.desc, word:'', price:t.price},
                   t.name, badge(t.catName)+badge('🪙 '+t.price), t.desc, '', t.catColor||'#c4b0ff');
       });
       h += '</div>';
@@ -2400,13 +2421,13 @@ function showDetail(d){
     q('wx2BanRow').querySelectorAll('[data-ban]').forEach(b=> b.onclick=()=>setCfg({ban:b.dataset.ban, pref:LOCAL_CFG.pref}));
     var locked = !!(S && S.banLocked);
     q('wx2SetNote').innerHTML = locked
-      ? '🔒 <b>本局流派已锁定</b>：现在改动会保存下来，<b>下一局（点「再来一局」）才生效</b>，不会打断队友正在打的这一局。'
-      : '整备开始前改动会<b>立即生效</b>；两人到齐、开局之后自动锁定。房间级设置，两个人看到的是同一套。';
+      ? '🔒 本局流派已锁定，改动<b>下一局生效</b>。'
+      : '开局前改动<b>立即生效</b>，两人到齐后自动锁定。';
     var cur = S && S.banSchool ? (m[S.banSchool]||S.banSchool) : '不禁用任何系';
     var nxt = LOCAL_CFG.ban==='random' ? '每局随机禁一系' : (LOCAL_CFG.ban ? (m[LOCAL_CFG.ban]||LOCAL_CFG.ban) : '不禁用');
-    q('wx2RoomNote').innerHTML = '本局实际禁用：<b>'+esc(cur)+'</b> ｜ 下一局配置：<b>'+esc(nxt)+'</b>'
+    q('wx2RoomNote').innerHTML = '本局禁用：<b>'+esc(cur)+'</b> ｜ 下一局：<b>'+esc(nxt)+'</b>'
       + (LOCAL_CFG.pref ? ' ｜ 爱好：<b>'+esc(m[LOCAL_CFG.pref]||LOCAL_CFG.pref)+'</b>' : '')
-      + '<br>双人模式怪物：生命 ×1.8、攻击 ×1.15（原版 ×1.5）。进度由服务端保管，刷新自动续上。';
+      + '<br>双人怪物：生命 ×1.8、攻击 ×1.15。进度由服务端保管，刷新自动续上。';
   }
   function setCfg(next){
     LOCAL_CFG = { ban:next.ban||'', pref:next.pref||'' };
@@ -2506,10 +2527,11 @@ function showDetail(d){
     var extra='';
     if(d.school){
       var nm=schoolMap()[d.school]||d.school;
-      extra += '<div class="wx2-detail-school">🐛 流派归属：<b>'+esc(nm)+'</b>'
-        + (d.school==='gu' ? ' · 该系卡牌不给格挡，靠蛊术池护体' : '') + '</div>';
+      extra += '<div class="wx2-detail-school">流派：<b>'+esc(nm)+'</b>'
+        + (d.school==='gu' ? '（不给格挡，靠蛊术护体）' : '') + '</div>';
     }
-    if(d.baseDesc && d.baseDesc !== d.desc)
+    /* 只有升级后的牌才和原始卡面不同，才值得单独列出来 */
+    if(d.level && d.baseDesc && d.baseDesc !== d.desc)
       extra += '<div class="cd-sec">原 始 卡 面</div><div class="cd-word">'+safeHTML(d.baseDesc)+'</div>';
     if(extra){
       var btn=box.querySelector('#cdClose');

@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>海龟汤 · 和鱼的开心导航 v5.001</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --ink:#1a1a1a; --ink-2:#5b5b5b; --ink-3:#9b9b9b;
+    --line:#e8e5df; --line-2:#d9d5cd;
+    --paper:#ffffff; --paper-2:#f8f6f2; --paper-3:#efede8;
+    --accent:#a4561f; --accent-soft:#fbeee1; --grad:linear-gradient(135deg,#fff7ee 0%,#ffffff 72%);
+    --seal:#8c3f1a; --green:#2f7a4e; --red:#b23a2f; --blue:#3f6f9e;
+  }
+  html,body{height:100%;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .hidden{display:none !important;}
+  button{font-family:inherit;cursor:pointer;}
+  .serif{font-family:"Songti SC","Noto Serif SC","Source Han Serif SC",Georgia,serif;}
+  .seal{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;
+    background:var(--seal);color:#fff;font-size:16px;font-weight:700;font-family:"Songti SC",serif;flex:0 0 auto;}
+
+  /* ================= 进门 ================= */
+  #join{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:var(--grad);overflow-y:auto;}
+  .jcard{width:min(430px,100%);padding-bottom:26px;}
+  .jbrand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:.12em;}
+  .jlead{margin:13px 0 22px;font-size:13px;line-height:1.9;color:var(--ink-2);}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin-bottom:7px;}
+  .jinput{width:100%;padding:13px 14px;border:1px solid var(--line-2);border-radius:11px;background:#fff;
+    font-size:15px;color:var(--ink);outline:none;transition:border-color .15s;}
+  .jinput:focus{border-color:var(--ink);}
+  #roomIn{letter-spacing:.2em;font-weight:700;text-transform:uppercase;}
+  .seg{display:flex;gap:5px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--paper-2);}
+  .seg button{flex:1 1 0;min-width:0;padding:9px 4px;border:none;border-radius:9px;background:transparent;
+    font-size:13px;font-weight:600;color:var(--ink-2);transition:background .14s,color .14s,box-shadow .14s;}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(20,20,20,.09);}
+  .arrange{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .arrange button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 12px;
+    border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font-size:13px;
+    font-weight:600;text-align:left;transition:border-color .14s,background .14s;}
+  .arrange button small{font-size:10.5px;font-weight:400;color:var(--ink-3);line-height:1.45;}
+  .arrange button.on{border-color:var(--accent);background:var(--accent-soft);}
+  .arrange button.on small{color:var(--seal);}
+  .tip{font-size:11.5px;line-height:1.7;color:var(--ink-3);margin-top:7px;}
+  .jbtn{margin-top:8px;width:100%;padding:14px;border:none;border-radius:12px;background:var(--ink);
+    color:#fff;font-size:15px;font-weight:600;letter-spacing:.06em;transition:opacity .15s,transform .1s;}
+  .jbtn:hover{opacity:.9;}
+  .jbtn:active{transform:scale(.99);}
+  .jbtn:disabled{opacity:.45;cursor:default;}
+  .jrow{margin-top:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .jlink{background:none;border:none;padding:0;font-size:12.5px;color:var(--ink-2);text-decoration:none;letter-spacing:.03em;}
+  .jlink:hover{color:var(--ink);}
+  .jmsg{margin-top:12px;font-size:12.5px;line-height:1.7;color:var(--red);min-height:18px;}
+  .jmsg.ok{color:var(--green);}
+  .rbox{margin-top:24px;border-top:1px solid var(--line);padding-top:16px;}
+  .rbox-h{font-size:11px;letter-spacing:.16em;color:var(--ink-3);margin-bottom:8px;}
+  .rrow{width:100%;display:flex;align-items:center;gap:10px;padding:10px 2px;border:none;border-bottom:1px dashed var(--line);
+    background:none;text-align:left;color:var(--ink);}
+  .rrow:last-child{border-bottom:none;}
+  .rrow:hover{background:var(--paper-2);}
+  .rcode{font-weight:700;font-size:13px;letter-spacing:.12em;font-variant-numeric:tabular-nums;}
+  .rwho{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rn{margin-left:auto;flex:0 0 auto;font-size:11px;color:var(--ink-3);}
+  .rempty{font-size:12px;color:var(--ink-3);padding:6px 2px;}
+  .fish{margin-left:6px;font-size:10px;font-weight:600;color:var(--seal);background:var(--accent-soft);
+    border:1px solid #ecd9c4;padding:1px 6px;border-radius:99px;flex:0 0 auto;}
+  .codex-sum{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:8px;justify-content:space-between;}
+  .codex-bar{height:6px;border-radius:99px;background:var(--paper-3);overflow:hidden;margin-top:8px;}
+  .codex-bar i{display:block;height:100%;background:var(--accent);transition:width .3s;}
+  .codex-list{margin-top:9px;display:flex;flex-direction:column;gap:4px;max-height:190px;overflow-y:auto;}
+  .codex-item{font-size:12px;color:var(--ink-2);display:flex;gap:8px;align-items:baseline;}
+  .codex-item b{font-weight:600;color:var(--ink);}
+  .codex-item span{margin-left:auto;font-size:10.5px;color:var(--ink-3);white-space:nowrap;}
+
+  /* ================= 房间 ================= */
+  #room{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--paper);}
+  header{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+    padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:10px;padding-left:14px;padding-right:14px;
+    border-bottom:1px solid var(--line);background:rgba(255,255,255,.94);}
+  .back{width:32px;height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink);text-decoration:none;font-size:15px;}
+  .back:hover{background:var(--paper-2);}
+  .rmeta{flex:1 1 auto;min-width:0;}
+  .rname{font-size:14px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .rname b{font-variant-numeric:tabular-nums;letter-spacing:.16em;}
+  .pill{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:.02em;}
+  .pill.host{background:var(--accent-soft);color:var(--seal);}
+  .pill.player{background:var(--paper-3);color:var(--ink-2);}
+  .rsub{font-size:11px;color:var(--ink-3);margin-top:3px;display:flex;align-items:center;gap:5px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .dot{width:6px;height:6px;border-radius:50%;background:#cfcfcf;flex:0 0 auto;}
+  .dot.on{background:#3ec06a;box-shadow:0 0 0 3px rgba(62,192,106,.16);}
+  .sep{opacity:.55;}
+  .hbtn{flex:0 0 auto;height:32px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:#fff;
+    font-size:12px;color:var(--ink-2);transition:background .14s,color .14s;}
+  .hbtn:hover{background:var(--paper-2);color:var(--ink);}
+
+  .stage{flex:1 1 auto;overflow-y:auto;width:100%;max-width:920px;margin:0 auto;
+    padding:16px 14px 22px;min-height:0;}
+  .stage .col{display:flex;flex-direction:column;gap:14px;min-width:0;}
+  .stage .col.side{margin-top:14px;}
+  @media (min-width:900px){
+    .stage{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:14px;align-items:start;}
+    .stage .col.side{margin-top:0;}
+  }
+
+  /* 汤面 / 选题 */
+  .puzzle,.picker{border:1px solid var(--line);border-radius:16px;background:#fff;padding:20px;
+    box-shadow:0 12px 32px rgba(20,20,20,.05);}
+  .prow{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;}
+  .kicker{font-size:10.5px;letter-spacing:.18em;color:var(--ink-3);}
+  .ptitle{font-family:"Songti SC","Noto Serif SC",Georgia,serif;font-size:21px;line-height:1.45;margin-top:5px;letter-spacing:.02em;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;flex:0 0 auto;}
+  .chip{font-size:11px;color:var(--ink-2);background:var(--paper-2);border:1px solid var(--line);
+    padding:3px 9px;border-radius:99px;white-space:nowrap;}
+  .surface{font-family:"Songti SC","Noto Serif SC",Georgia,serif;font-size:15.5px;line-height:2;
+    color:#2c2c2c;margin-top:14px;letter-spacing:.01em;}
+  .src{font-size:10.5px;line-height:1.6;color:var(--ink-3);margin-top:12px;}
+  .sol{margin-top:16px;border:1px solid var(--line-2);border-radius:12px;padding:14px;background:var(--paper-2);}
+  .sol.host{background:#fffaf3;border-color:#ecd9c4;}
+  .sol p{font-size:14px;line-height:1.9;margin-top:6px;color:#2c2c2c;}
+  .facts{margin-top:12px;display:flex;flex-direction:column;gap:5px;}
+  .fact{font-size:12px;line-height:1.65;color:var(--ink-2);display:flex;gap:7px;align-items:flex-start;}
+  .fact i{width:6px;height:6px;border-radius:50%;background:var(--line-2);margin-top:6px;flex:0 0 auto;}
+  .fact.req i{background:var(--accent);}
+  .hints-all{margin-top:12px;font-size:12px;color:var(--ink-2);}
+  .hints-all summary{cursor:pointer;color:var(--ink-3);font-size:11.5px;letter-spacing:.04em;}
+  .hints-all ol{margin:8px 0 0 18px;line-height:1.85;}
+  .hostbar{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
+  .hostbar button{padding:8px 14px;border:1px solid var(--line-2);border-radius:9px;background:#fff;
+    font-size:12.5px;font-weight:600;color:var(--ink);transition:background .14s;}
+  .hostbar button:hover{background:var(--paper-2);}
+  .hostbar button:disabled{opacity:.4;cursor:default;}
+  .hostbar button.primary{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .hostbar button.primary:hover{opacity:.9;}
+  .hostbar button.win{color:#8a5a12;border-color:#ecd6ae;}
+  .hostbar button.win:hover{background:#fdf1df;}
+
+  .pzlist{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+  .pzbar{display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap;}
+  .pzbar button{padding:5px 11px;border:1px solid var(--line);border-radius:99px;background:#fff;
+    font-size:11.5px;color:var(--ink-2);}
+  .pzbar button.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .pz-done{font-size:10px;font-weight:600;color:var(--ink-3);background:var(--paper-3);
+    padding:2px 7px;border-radius:99px;flex:0 0 auto;}
+  .pz{width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;background:#fff;
+    padding:12px 14px;transition:border-color .14s,background .14s;}
+  .pz:hover{border-color:var(--line-2);background:var(--paper-2);}
+  .pz-t{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;}
+  .pz-d{font-size:10.5px;font-weight:600;color:var(--seal);background:var(--accent-soft);
+    padding:2px 7px;border-radius:99px;flex:0 0 auto;}
+  .pz-s{font-size:12px;line-height:1.7;color:var(--ink-2);margin-top:6px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .loading{font-size:12.5px;color:var(--ink-3);padding:8px 2px;}
+
+  /* 面板 */
+  .panel{border:1px solid var(--line);border-radius:14px;background:#fff;padding:16px;}
+  .ph{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:11px;letter-spacing:.16em;color:var(--ink-3);}
+  .ph span{letter-spacing:0;font-size:11px;color:var(--ink-3);}
+  .empty{font-size:12.5px;line-height:1.8;color:var(--ink-3);padding:10px 0 2px;}
+  .qa,.guess{padding:12px 0;border-bottom:1px dashed var(--line);}
+  .qa:last-child,.guess:last-child{border-bottom:none;padding-bottom:2px;}
+  .qline{display:flex;align-items:center;gap:8px;}
+  .who{font-size:11.5px;font-weight:700;color:var(--ink-2);}
+  .t{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:var(--ink-3);font-variant-numeric:tabular-nums;}
+  .qtext{font-size:14.5px;line-height:1.7;margin:4px 0 8px;color:var(--ink);word-break:break-word;}
+  .gtext{font-size:14px;line-height:1.7;margin:4px 0 8px;color:var(--ink);word-break:break-word;}
+  .answer{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;
+    font-size:12px;font-weight:600;}
+  .answer.yes{background:#eaf6ee;color:var(--green);}
+  .answer.no{background:#fbeceb;color:var(--red);}
+  .answer.irrelevant{background:var(--paper-3);color:var(--ink-2);}
+  .answer.partial{background:#fdf1df;color:#8a5a12;}
+  .answer.unknown{background:#edf2f7;color:var(--blue);}
+  .answer.correct{background:#eaf6ee;color:var(--green);}
+  .note{font-size:11.5px;color:var(--ink-3);margin-left:8px;line-height:1.6;}
+  .waiting{font-size:11.5px;color:var(--ink-3);}
+  .abtns{display:flex;flex-wrap:wrap;gap:6px;}
+  .vb{padding:6px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;
+    font-size:12.5px;font-weight:600;color:var(--ink);transition:background .14s,border-color .14s;}
+  .vb:hover{background:var(--paper-2);}
+  .vb.yes{color:var(--green);}
+  .vb.yes:hover{background:#eaf6ee;border-color:#bfe3cb;}
+  .vb.no{color:var(--red);}
+  .vb.no:hover{background:#fbeceb;border-color:#ecc8c4;}
+  .vb.partial{color:#8a5a12;}
+  .vb.partial:hover{background:#fdf1df;border-color:#ecd6ae;}
+  .vb.correct{color:var(--green);}
+  .vb.correct:hover{background:#eaf6ee;border-color:#bfe3cb;}
+
+  .hints ol{margin:8px 0 0 18px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.75;color:var(--ink-2);}
+  .hints li::marker{color:var(--accent);font-weight:700;}
+
+  /* 聊天 */
+  .chatlog{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;padding:10px 2px 2px;min-height:60px;}
+  .msg{font-size:13px;line-height:1.55;max-width:92%;padding:7px 11px;border-radius:12px;word-break:break-word;}
+  .msg.them{background:var(--paper-3);color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px;}
+  .msg.me{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+  .msg .who{display:block;font-size:10px;font-weight:600;opacity:.65;margin-bottom:2px;}
+  .msg .mt{font-size:9.5px;opacity:.5;margin-left:6px;font-variant-numeric:tabular-nums;}
+
+  .notice{display:flex;align-items:center;gap:12px;border:1px solid #ecd9c4;background:#fffaf3;
+    border-radius:12px;padding:12px 14px;}
+  .notice .n-text{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.65;color:var(--ink-2);}
+  .notice .n-btn{flex:0 0 auto;padding:8px 14px;border:none;border-radius:9px;background:var(--accent);
+    color:#fff;font-size:12.5px;font-weight:600;}
+  .notice .n-btn:hover{opacity:.9;}
+  .logbox{border:1px solid var(--line);border-radius:12px;background:var(--paper-2);padding:10px 14px;}  .logbox summary{font-size:11.5px;color:var(--ink-2);cursor:pointer;letter-spacing:.04em;}
+  .loglist{margin-top:8px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;
+    font-size:11.5px;line-height:1.6;color:var(--ink-3);}
+
+  /* 输入区 */
+  .composer{flex:0 0 auto;border-top:1px solid var(--line);background:rgba(255,255,255,.97);
+    backdrop-filter:blur(8px);padding:10px 14px calc(env(safe-area-inset-bottom) + 10px);}
+  .composer-in{width:100%;max-width:920px;margin:0 auto;}
+  .modes{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+  .modes button{padding:7px 14px;border:1px solid var(--line);border-radius:99px;background:#fff;
+    font-size:12.5px;color:var(--ink-2);transition:background .14s,color .14s,border-color .14s;}
+  .modes button.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .modes button:disabled{opacity:.42;cursor:default;}
+  .cline{display:flex;gap:8px;}
+  .cline input{flex:1 1 auto;min-width:0;padding:12px 14px;border:1px solid var(--line-2);border-radius:12px;
+    font-size:14.5px;outline:none;color:var(--ink);background:#fff;}
+  .cline input:focus{border-color:var(--ink);}
+  .cline input:disabled{background:var(--paper-2);}
+  .cline button{flex:0 0 auto;padding:0 20px;border:none;border-radius:12px;background:var(--ink);color:#fff;
+    font-size:14px;font-weight:600;transition:opacity .14s;}
+  .cline button:hover{opacity:.9;}
+  .cline button:disabled{opacity:.4;cursor:default;}
+  .chint{font-size:11px;line-height:1.6;color:var(--ink-3);margin-top:6px;min-height:14px;}
+
+  .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 64px);transform:translateX(-50%);
+    z-index:220;background:rgba(20,20,20,.92);color:#fff;font-size:12.5px;padding:9px 16px;border-radius:99px;
+    max-width:86vw;text-align:center;line-height:1.5;}
+  .modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(20,20,20,.42);padding:20px;}
+  .mbox{width:min(340px,100%);background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+  .mbox h3{font-size:15px;font-weight:700;margin-bottom:8px;}
+  .mbox p{font-size:13px;color:var(--ink-2);line-height:1.75;margin-bottom:16px;}
+  .mrow{display:flex;gap:10px;}
+  .mrow button{flex:1 1 0;padding:11px;border:1px solid var(--line-2);border-radius:10px;background:#fff;
+    font-size:13px;font-weight:600;color:var(--ink);}
+  .mrow button.yes{background:var(--ink);border-color:var(--ink);color:#fff;}
+
+  @media (max-width:600px){
+    .puzzle,.picker{padding:16px;}
+    .prow{flex-direction:column;gap:8px;}
+    .chips{justify-content:flex-start;}
+    .ptitle{font-size:19px;}
+    .surface{font-size:15px;line-height:1.95;}
+    .stage{padding:12px 12px 18px;}
+    .composer{padding-left:12px;padding-right:12px;}
+  }
+</style>
+</head>
+<body>
+
+<section id="join">
+  <div class="jcard">
+    <div class="jbrand"><span class="seal">汤</span>海龟汤</div>
+    <p class="jlead">主持人知道汤底，只回答「是 / 不是 / 不重要」。参与者提问、猜底，一点一点把故事还原出来。</p>
+
+    <div class="field">
+      <label>房间号</label>
+      <input id="roomIn" class="jinput" maxlength="12" placeholder="例如 SOUP01" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label>你的名字</label>
+      <input id="nameIn" class="jinput" maxlength="12" placeholder="留空就叫「我」" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>开局安排</label>
+      <div class="arrange" id="arrange">
+        <button type="button" data-arr="hostSolo" class="on">我主持 · 不带鱼<small>你知道汤底，回答大家的提问</small></button>
+        <button type="button" data-arr="hostFishPlayer">我主持 · 鱼参与<small>鱼和你一起提问、猜底</small></button>
+        <button type="button" data-arr="fishHost">鱼主持 · 我参与<small>鱼来回答，你来还原故事</small></button>
+        <button type="button" data-arr="join">加入别人的房<small>沿用房主是否带鱼的安排</small></button>
+      </div>
+      <p class="tip">鱼是否加入、扮演什么角色，都在开新房前由你决定；不选就不加入。加入别人的房不会额外叫鱼。</p>
+    </div>
+
+    <button id="enterBtn" class="jbtn">进房间</button>
+    <div class="jrow">
+      <button id="randBtn" class="jlink" type="button">随机开一间</button>
+      <a class="jlink" href="/">返回首页</a>
+    </div>
+    <div id="joinMsg" class="jmsg"></div>
+
+    <div class="rbox">
+      <div class="rbox-h">正在进行的房间</div>
+      <div id="roomList"><div class="rempty">还没有人开房</div></div>
+    </div>
+
+    <div class="rbox">
+      <div class="rbox-h">汤品图鉴</div>
+      <div id="codexBox"><div class="rempty">正在读图鉴…</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="room" class="hidden">
+  <header>
+    <a class="back" id="backBtn" href="/" aria-label="离开房间">←</a>
+    <div class="rmeta">
+      <div class="rname">房间 <b id="codeTxt">----</b><span id="rolePill" class="pill host">主持人</span></div>
+      <div class="rsub"><span id="hostDot" class="dot"></span><span id="hostTxt">等待主持人</span><span class="sep">·</span><span id="countTxt">0 人</span></div>
+    </div>
+    <button class="hbtn" id="copyBtn" type="button">复制房号</button>
+  </header>
+
+  <main id="stage" class="stage"></main>
+
+  <footer class="composer">
+    <div class="composer-in">
+      <div class="modes" id="modes">
+        <button type="button" data-mode="ask" class="on">提问</button>
+        <button type="button" data-mode="guess">猜汤底</button>
+        <button type="button" data-mode="chat">聊天</button>
+      </div>
+      <div class="cline">
+        <input id="input" maxlength="200" placeholder="先问一个能用「是 / 不是」回答的问题" autocomplete="off">
+        <button id="sendBtn" type="button">发送</button>
+      </div>
+      <div class="chint" id="chint"></div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast hidden"></div>
+  <div id="modal" class="modal hidden">
+    <div class="mbox">
+      <h3 id="mTitle">确认</h3>
+      <p id="mText"></p>
+      <div class="mrow">
+        <button id="mNo" type="button">取消</button>
+        <button id="mYes" type="button" class="yes">确定</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var VERDICT_CN = { yes: '是', no: '不是', irrelevant: '不重要', partial: '部分是', unknown: '无法确认' };
+  var JUDGE_CN = { correct: '猜对了', partial: '很接近', no: '还不对' };
+  var PHASE_CN = { lobby: '等人来', playing: '进行中', over: '已揭晓' };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmtTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  var PID = localStorage.getItem('soup_pid');
+  if (!PID) {
+    PID = 's' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    localStorage.setItem('soup_pid', PID);
+  }
+
+  var CODE = '', STATE = null, ES = null, POLL = null, PUZZLES = null;
+  var pickerOpen = false, busy = false, mode = 'ask';
+  var arrangement = 'hostSolo', showDone = false;
+  var lastOpen = -1, lastPhase = '';
+  var toastTimer = null, confirmFn = null, roomsTimer = null;
+
+  /* 开局安排：鱼是否加入、扮演什么角色都在这里决定；不选就不加入。 */
+  var ARRANGEMENTS = {
+    hostSolo: { role: 'host', fish: 'none' },
+    hostFishPlayer: { role: 'host', fish: 'player' },
+    fishHost: { role: 'player', fish: 'host' },
+    join: { role: 'auto', fish: 'none' }
+  };
+
+  /* ---------------- 通用 ---------------- */
+  function toast(text) {
+    var el = $('toast');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2400);
+  }
+  function confirmBox(title, text, fn) {
+    $('mTitle').textContent = title;
+    $('mText').textContent = text;
+    confirmFn = fn || null;
+    $('modal').classList.remove('hidden');
+  }
+  $('mYes').onclick = function () {
+    $('modal').classList.add('hidden');
+    var f = confirmFn; confirmFn = null;
+    if (f) f();
+  };
+  $('mNo').onclick = function () {
+    $('modal').classList.add('hidden');
+    confirmFn = null;
+  };
+
+  function post(path, body) {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ code: CODE, pid: PID }, body || {}))
+    }).then(function (r) { return r.json(); });
+  }
+
+  /* ---------------- 进门 ---------------- */
+  var qs = new URLSearchParams(location.search);
+  $('roomIn').value = (qs.get('room') || '').toUpperCase();
+  $('nameIn').value = localStorage.getItem('soup_name') || '';
+  $('roomIn').addEventListener('input', function (e) {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  });
+  $('roomIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('nameIn').focus(); });
+  $('nameIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') enterRoom(); });
+
+  function setArrangement(name) {
+    if (!ARRANGEMENTS[name]) name = 'hostSolo';
+    arrangement = name;
+    Array.prototype.forEach.call(document.querySelectorAll('#arrange button'), function (x) {
+      x.classList.toggle('on', x.getAttribute('data-arr') === name);
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#arrange button'), function (b) {
+    b.onclick = function () { setArrangement(b.getAttribute('data-arr')); };
+  });
+
+  function jmsg(t, ok) {
+    var el = $('joinMsg');
+    el.textContent = t || '';
+    el.className = 'jmsg' + (ok ? ' ok' : '');
+  }
+
+  $('randBtn').onclick = function () {
+    var s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', c = '';
+    for (var i = 0; i < 5; i++) c += s[Math.floor(Math.random() * s.length)];
+    $('roomIn').value = c;
+    $('nameIn').focus();
+  };
+
+  function enterRoom() {
+    var code = $('roomIn').value.trim().toUpperCase();
+    var name = $('nameIn').value.trim() || '我';
+    if (!code) return jmsg('先填个房间号，或者点「随机开一间」');
+    var arr = ARRANGEMENTS[arrangement] || ARRANGEMENTS.hostSolo;
+    $('enterBtn').disabled = true;
+    jmsg('正在连接…', true);
+    fetch('/api/soup/enter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, name: name, pid: PID, role: arr.role, fish: arr.fish })
+    }).then(function (r) { return r.json(); }).then(function (r) {
+      $('enterBtn').disabled = false;
+      if (!r || r.error) return jmsg((r && r.error) || '进不去，检查一下网络');
+      CODE = r.state.code;
+      localStorage.setItem('soup_name', name);
+      history.replaceState(null, '', '/soup?room=' + encodeURIComponent(CODE));
+      $('join').classList.add('hidden');
+      $('room').classList.remove('hidden');
+      $('codeTxt').textContent = CODE;
+      applyState(r.state);
+      connect();
+      if (r.state.isHost) loadPuzzles();
+    }).catch(function () {
+      $('enterBtn').disabled = false;
+      jmsg('连不上服务器，检查一下网络');
+    });
+  }
+  $('enterBtn').onclick = enterRoom;
+
+  /* ---------------- 加入页房间列表 ---------------- */
+  function loadRooms() {
+    fetch('/api/soup/rooms').then(function (r) { return r.json(); }).then(function (d) {
+      var box = $('roomList');
+      var rooms = (d && d.rooms) || [];
+      if (!rooms.length) { box.innerHTML = '<div class="rempty">还没有人开房</div>'; return; }
+      box.innerHTML = rooms.map(function (r) {
+        var fish = r.fishMode === 'host' ? '<span class="fish">鱼主持</span>'
+          : (r.fishMode === 'player' ? '<span class="fish">鱼参与</span>' : '');
+        var who = r.host ? esc(r.host.name) : (r.fishMode === 'host' ? '等鱼主持' : '无主持人');
+        return '<button class="rrow" type="button" data-room="' + esc(r.code) + '">' +
+          '<span class="rcode">' + esc(r.code) + '</span>' +
+          '<span class="rwho">' + who + fish + '</span>' +
+          '<span class="rn">' + r.n + ' 人 · ' + (PHASE_CN[r.phase] || r.phase) + '</span></button>';
+      }).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('[data-room]'), function (b) {
+        b.onclick = function () {
+          $('roomIn').value = b.getAttribute('data-room');
+          setArrangement('join');
+          $('nameIn').focus();
+        };
+      });
+    }).catch(function () {});
+  }
+  loadRooms();
+  roomsTimer = setInterval(function () {
+    var join = $('join');
+    if (join && !join.classList.contains('hidden') && !document.hidden) loadRooms();
+  }, 8000);
+
+  /* ---------------- 汤品图鉴 ---------------- */
+  var RESULT_CN = { correct: '猜对', win: '直接判赢', revealed: '揭晓' };
+  function loadCodex() {
+    fetch('/api/soup/codex').then(function (r) { return r.json(); }).then(function (d) {
+      var box = $('codexBox');
+      if (!box) return;
+      var items = (d && d.items) || [], total = (d && d.total) || 0, done = items.length;
+      var pct = total ? Math.round(done * 100 / total) : 0;
+      var html = '<div class="codex-sum"><span>已通关 <b>' + done + '</b> / ' + total + '</span>' +
+        (done ? '<span style="font-size:11px;color:var(--ink-3)">默认不再重复出</span>' : '') + '</div>' +
+        '<div class="codex-bar"><i style="width:' + pct + '%"></i></div>';
+      if (items.length) {
+        html += '<div class="codex-list">' + items.map(function (x) {
+          return '<div class="codex-item"><b>' + esc(x.title) +
+            (x.times > 1 ? ' ×' + x.times : '') + '</b><span>' +
+            esc(RESULT_CN[x.lastResult] || '完成') + '</span></div>';
+        }).join('') + '</div>';
+      } else {
+        html += '<div class="rempty">还没有通关记录，打完一碗汤就会记在这里。</div>';
+      }
+      box.innerHTML = html;
+    }).catch(function () {
+      var box = $('codexBox');
+      if (box) box.innerHTML = '<div class="rempty">图鉴暂时读不到</div>';
+    });
+  }
+  loadCodex();
+
+  function loadPuzzles() {
+    if (PUZZLES) return;
+    fetch('/api/soup/puzzles').then(function (r) { return r.json(); }).then(function (d) {
+      PUZZLES = (d && d.puzzles) || [];
+      render();
+    }).catch(function () { PUZZLES = []; render(); });
+  }
+
+  /* ---------------- 实时 ---------------- */
+  function connect() {
+    if (ES) { try { ES.close(); } catch (e) {} }
+    if (POLL) { clearInterval(POLL); POLL = null; }
+    ES = new EventSource('/api/soup/stream?code=' + encodeURIComponent(CODE) + '&pid=' + encodeURIComponent(PID));
+    ES.addEventListener('hello', function (e) {
+      var d = JSON.parse(e.data);
+      applyState(d.state);
+    });
+    ES.addEventListener('state', function (e) {
+      var d = JSON.parse(e.data);
+      applyState(d.state);
+    });
+    ES.onerror = function () {
+      if (!POLL) POLL = setInterval(pollOnce, 3000);
+    };
+    ES.onopen = function () {
+      if (POLL) { clearInterval(POLL); POLL = null; }
+    };
+  }
+  function pollOnce() {
+    fetch('/api/soup/state?code=' + encodeURIComponent(CODE) + '&pid=' + encodeURIComponent(PID))
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r && r.needJoin) {
+          toast('房间状态已失效，请重新进入');
+          setTimeout(function () { location.href = '/soup'; }, 1400);
+          return;
+        }
+        if (r && r.state) applyState(r.state);
+      }).catch(function () {});
+  }
+
+  function applyState(st) {
+    if (!st) return;
+    var prevOpen = STATE ? STATE.openQuestions : 0;
+    var prevPhase = STATE ? STATE.phase : '';
+    STATE = st;
+
+    $('rolePill').textContent = st.isHost ? '主持人' : '参与者';
+    $('rolePill').className = 'pill ' + (st.isHost ? 'host' : 'player');
+    $('hostDot').classList.toggle('on', !!(st.host && st.host.online));
+    $('hostTxt').textContent = st.host
+      ? (st.host.me ? '你正在主持' : '主持人 ' + st.host.name)
+      : '等待主持人';
+    $('countTxt').textContent = (st.users || []).length + ' 人';
+
+    if (st.isHost && prevPhase && prevPhase !== 'over' && st.phase === 'over') PUZZLES = null;
+    if (st.isHost && !PUZZLES) loadPuzzles();
+    render();
+
+    if (st.isHost && prevOpen >= 0 && st.openQuestions > prevOpen) toast('有新的提问');
+    if (prevPhase && prevPhase !== 'over' && st.phase === 'over') toast('汤底揭晓了');
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function render() {
+    var st = STATE;
+    if (!st) return;
+    var stage = $('stage');
+    var top = stage.scrollTop;
+    var oldChat = $('chatLog');
+    var chatTop = oldChat ? oldChat.scrollTop : 0;
+    var stick = !oldChat || (oldChat.scrollHeight - oldChat.scrollTop - oldChat.clientHeight < 40);
+
+    var main = [renderPuzzle(st)];
+    if (st.hints && st.hints.length) main.push(renderHints(st));
+    main.push(renderQA(st));
+    if (st.guesses && st.guesses.length) main.push(renderGuesses(st));
+    if (st.log && st.log.length) main.push(renderLog(st));
+
+    stage.innerHTML =
+      '<div class="col main">' + main.join('') + '</div>' +
+      '<div class="col side">' + renderChat(st) + '</div>';
+
+    stage.scrollTop = top;
+    var chat = $('chatLog');
+    if (chat) chat.scrollTop = stick ? chat.scrollHeight : chatTop;
+
+    updateComposer(st);
+  }
+
+  function puzzleSource(p) {
+    if (!p || !p.source) return '';
+    var s = p.source;
+    return '题目：' + esc(s.name) + (s.license ? ' · ' + esc(s.license) : '');
+  }
+
+  function takeoverNotice(st) {
+    if (st.isHost) return '';
+    /* 已经邀请鱼来主持、她还没进房时，不诱导真人抢主持位 */
+    if (st.fishMode === 'host' && !st.host) return '';
+    if (st.host && st.host.online) return '';
+    return '<section class="notice"><div class="n-text">主持人不在线。你可以接管主持，继续回答大家的问题。</div>' +
+      '<button class="n-btn" type="button" data-host-act="take">接管主持</button></section>';
+  }
+
+  function renderPuzzle(st) {
+    var notice = takeoverNotice(st);
+    var p = st.puzzle;
+    if (!p) {
+      if (st.isHost) return pickerCard('选一道题，把汤面发给大家');
+      var waitTitle = st.fishMode === 'host' ? '等鱼主持人进房' : '等主持人选题';
+      var waitText = st.fishMode === 'host'
+        ? '你已经邀请了小鱼当主持人，她进房后会选好题目。稍等几秒，页面会自动刷新。'
+        : '主持人选好题目后，汤面会出现在这里。你可以先在聊天里打个招呼。';
+      return notice + '<section class="puzzle">' +
+        '<div class="kicker">等待开始</div>' +
+        '<h2 class="ptitle serif">' + waitTitle + '</h2>' +
+        '<p class="surface">' + waitText + '</p>' +
+        '</section>';
+    }
+
+    var chips = [];
+    if (p.done) chips.push('<span class="chip">已通关 ×' + (p.times || 1) + '</span>');
+    if (p.difficultyLabel) chips.push('<span class="chip">' + esc(p.difficultyLabel) + '</span>');
+    (p.tags || []).forEach(function (t) { chips.push('<span class="chip">' + esc(t) + '</span>'); });
+
+    var html = notice + '<section class="puzzle">' +
+      '<div class="prow"><div><div class="kicker">汤面</div>' +
+      '<h2 class="ptitle">' + esc(p.title) + '</h2></div>' +
+      (chips.length ? '<div class="chips">' + chips.join('') + '</div>' : '') +
+      '</div>' +
+      '<p class="surface">' + esc(p.surface) + '</p>' +
+      '<div class="src">' + puzzleSource(p) + '</div>';
+
+    if (st.isHost && st.solution) {
+      html += '<div class="sol host"><div class="kicker">汤底 · 只有主持人能看到</div>' +
+        '<p>' + esc(st.solution) + '</p>';
+      if (st.facts && st.facts.length) {
+        html += '<div class="facts">' + st.facts.map(function (f) {
+          return '<div class="fact' + (f.required ? ' req' : '') + '"><i></i><span>' +
+            esc(f.text) + (f.required ? ' <span style="color:var(--accent)">·必踩</span>' : '') + '</span></div>';
+        }).join('') + '</div>';
+      }
+      if (st.allHints && st.allHints.length) {
+        html += '<details class="hints-all"><summary>本题全部提示（点击展开）</summary><ol>' +
+          st.allHints.map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ol></details>';
+      }
+      html += '</div>';
+    } else if (st.phase === 'over' && st.solution) {
+      html += '<div class="sol"><div class="kicker">汤底</div><p>' + esc(st.solution) + '</p></div>';
+    }
+
+    /* 主持人操作 */
+    if (st.isHost) {
+      if (st.phase === 'playing') {
+        var noMoreHints = !!(st.allHints && st.hintsShown >= st.allHints.length);
+        html += '<div class="hostbar">' +
+          '<button type="button" data-host-act="hint"' + (noMoreHints ? ' disabled' : '') + '>给一条提示</button>' +
+          '<button type="button" class="win" data-host-act="win">直接判赢</button>' +
+          '<button type="button" data-host-act="reveal">揭晓汤底</button>' +
+          '<button type="button" data-host-act="picker">换一题</button>' +
+          '</div>';
+      } else if (st.phase === 'over') {
+        html += '<div class="hostbar"><button type="button" class="primary" data-host-act="picker">再来一题</button></div>';
+      }
+    }
+
+    if (st.isHost && pickerOpen) html += pickerCard(st.phase === 'playing' ? '换一题（会清空当前问答）' : '再来一题');
+
+    html += '</section>';
+    return html;
+  }
+
+  function pickerCard(title) {
+    var body;
+    if (PUZZLES === null) {
+      body = '<div class="loading">正在加载题库…</div>';
+    } else if (!PUZZLES.length) {
+      body = '<div class="loading">题库加载失败，刷新页面再试。</div>';
+    } else {
+      var fresh = PUZZLES.filter(function (p) { return !p.done; });
+      var list = showDone ? PUZZLES : fresh;
+      body = '<div class="pzbar">' +
+        '<button type="button" data-picker-mode="fresh" class="' + (showDone ? '' : 'on') + '">未通关 ' + fresh.length + '</button>' +
+        '<button type="button" data-picker-mode="all" class="' + (showDone ? 'on' : '') + '">全部 ' + PUZZLES.length + '</button>' +
+        '</div>';
+      if (!list.length) {
+        body += '<div class="loading">未通关的汤都打完了。点「全部」可以手动重打已通关的汤。</div>';
+      } else {
+        body += '<div class="pzlist">' + list.map(function (p) {
+          return '<button class="pz" type="button" data-start="' + esc(p.id) + '">' +
+            '<div class="pz-t">' + esc(p.title) +
+            '<span class="pz-d">' + esc(p.difficultyLabel) + '</span>' +
+            (p.done ? '<span class="pz-done">已通关 ×' + (p.times || 1) + '</span>' : '') +
+            '</div>' +
+            '<div class="pz-s">' + esc(p.surface) + '</div></button>';
+        }).join('') + '</div>';
+      }
+    }
+    return '<section class="picker"><div class="kicker">' + esc(title) + '</div>' +
+      body + '</section>';
+  }
+
+  function renderHints(st) {
+    return '<section class="panel hints"><div class="ph">提示 <span>' + st.hintsShown + ' 条</span></div><ol>' +
+      st.hints.map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ol></section>';
+  }
+
+  function renderQA(st) {
+    var qa = st.qa || [];
+    var html = '<section class="panel"><div class="ph">问答 <span>' + qa.length + ' 问</span></div>';
+    if (!qa.length) {
+      html += '<div class="empty">' + (st.isHost
+        ? '还没有人提问。把汤面读一遍，等大家开口。'
+        : '还没有人提问。先问一个能用「是 / 不是」回答的问题。') + '</div>';
+    } else {
+      html += qa.map(function (q) { return qaItem(st, q); }).join('');
+    }
+    html += '</section>';
+    return html;
+  }
+
+  function qaItem(st, q) {
+    var right;
+    if (q.verdict) {
+      right = '<span class="answer ' + esc(q.verdict) + '">' + esc(VERDICT_CN[q.verdict] || q.verdict) + '</span>' +
+        (q.note ? '<span class="note">' + esc(q.note) + '</span>' : '');
+    } else if (st.isHost) {
+      right = '<div class="abtns">' +
+        '<button class="vb yes" type="button" data-answer="' + q.id + '" data-v="yes">是</button>' +
+        '<button class="vb no" type="button" data-answer="' + q.id + '" data-v="no">不是</button>' +
+        '<button class="vb irrelevant" type="button" data-answer="' + q.id + '" data-v="irrelevant">不重要</button>' +
+        '<button class="vb partial" type="button" data-answer="' + q.id + '" data-v="partial">部分是</button>' +
+        '<button class="vb unknown" type="button" data-answer="' + q.id + '" data-v="unknown">无法确认</button>' +
+        '</div>';
+    } else {
+      right = '<span class="waiting">等待主持人回答…</span>';
+    }
+    return '<div class="qa">' +
+      '<div class="qline"><span class="who">' + esc(q.name) + '</span>' +
+      '<span class="t">' + fmtTime(q.at) + '</span></div>' +
+      '<div class="qtext">' + esc(q.text) + '</div>' + right + '</div>';
+  }
+
+  function renderGuesses(st) {
+    return '<section class="panel"><div class="ph">猜汤底 <span>' + st.guesses.length + ' 次</span></div>' +
+      st.guesses.map(function (g) {
+        var right;
+        if (g.verdict) {
+          right = '<span class="answer ' + esc(g.verdict) + '">' + esc(JUDGE_CN[g.verdict] || g.verdict) + '</span>' +
+            (g.note ? '<span class="note">' + esc(g.note) + '</span>' : '');
+        } else if (st.isHost) {
+          right = '<div class="abtns">' +
+            '<button class="vb correct" type="button" data-judge="' + g.id + '" data-v="correct">猜对了</button>' +
+            '<button class="vb partial" type="button" data-judge="' + g.id + '" data-v="partial">很接近</button>' +
+            '<button class="vb no" type="button" data-judge="' + g.id + '" data-v="no">还不对</button>' +
+            '</div>';
+        } else {
+          right = '<span class="waiting">等待主持人判定…</span>';
+        }
+        return '<div class="guess">' +
+          '<div class="qline"><span class="who">' + esc(g.name) + '</span>' +
+          '<span class="t">' + fmtTime(g.at) + '</span></div>' +
+          '<div class="gtext">' + esc(g.text) + '</div>' + right + '</div>';
+      }).join('') + '</section>';
+  }
+
+  function renderChat(st) {
+    var msgs = st.chat || [];
+    var html = '<section class="panel chat"><div class="ph">聊天 <span>' + msgs.length + ' 条</span></div>' +
+      '<div class="chatlog" id="chatLog">';
+    if (!msgs.length) {
+      html += '<div class="empty">还没有消息，先聊聊这道汤。</div>';
+    } else {
+      html += msgs.map(function (m) {
+        return '<div class="msg ' + (m.mine ? 'me' : 'them') + '">' +
+          (m.mine ? '' : '<span class="who">' + esc(m.name) + '</span>') +
+          esc(m.text) + '<span class="mt">' + fmtTime(m.at) + '</span></div>';
+      }).join('');
+    }
+    html += '</div></section>';
+    return html;
+  }
+
+  function renderLog(st) {
+    return '<details class="logbox"><summary>房间动态</summary><div class="loglist">' +
+      st.log.slice().reverse().map(function (l) {
+        return '<div>' + fmtTime(l.at) + ' · ' + esc(l.text) + '</div>';
+      }).join('') + '</div></details>';
+  }
+
+  /* ---------------- 输入区 ---------------- */
+  var MODE_PH = {
+    ask: '先问一个能用「是 / 不是」回答的问题',
+    guess: '把你想还原的汤底写下来',
+    chat: '随便聊两句'
+  };
+
+  function updateComposer(st) {
+    var askBtn = document.querySelector('#modes [data-mode="ask"]');
+    var guessBtn = document.querySelector('#modes [data-mode="guess"]');
+    var playable = st.phase === 'playing' && !!st.puzzle;
+
+    if (st.isHost) {
+      askBtn.classList.add('hidden');
+      guessBtn.classList.add('hidden');
+      mode = 'chat';
+    } else {
+      askBtn.classList.remove('hidden');
+      guessBtn.classList.remove('hidden');
+      askBtn.disabled = !playable;
+      guessBtn.disabled = !playable;
+      if (!playable && (mode === 'ask' || mode === 'guess')) mode = 'chat';
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#modes button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-mode') === mode);
+    });
+
+    $('input').placeholder = MODE_PH[mode] || MODE_PH.chat;
+    $('input').disabled = busy;
+    $('sendBtn').disabled = busy;
+
+    var hint = '';
+    if (st.isHost) {
+      hint = st.phase === 'playing'
+        ? '你是主持人：在每条提问上点「是 / 不是 / 不重要」；需要时给提示、直接判赢或揭晓汤底。'
+        : (st.phase === 'over' ? '本轮已结束，可以点「再来一题」。' : '你是主持人：先选一道题。');
+    } else if (st.phase === 'playing') {
+      hint = mode === 'ask' ? '提问要能用「是 / 不是」回答；一次问一件事更容易得到明确答案。'
+        : (mode === 'guess' ? '猜底可以随时提交，主持人会判定「猜对了 / 很接近 / 还不对」。'
+          : '聊天只有房间里的人能看到。');
+    } else if (st.phase === 'over') {
+      hint = '汤底已经公开，等主持人开下一题。';
+    } else {
+      hint = '等主持人选题后就可以提问了。';
+    }
+    $('chint').textContent = hint;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#modes button'), function (b) {
+    b.onclick = function () {
+      if (b.disabled) return;
+      mode = b.getAttribute('data-mode');
+      updateComposer(STATE || {});
+      $('input').focus();
+    };
+  });
+
+  $('sendBtn').onclick = send;
+  $('input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') send();
+  });
+
+  function send() {
+    if (busy || !STATE) return;
+    var text = $('input').value.trim();
+    if (!text) return;
+    if (mode !== 'chat' && STATE.phase !== 'playing') return toast('现在还不能提问或猜底');
+    if (mode === 'ask' && STATE.isHost) return toast('主持人不提问，直接回答即可');
+    busy = true;
+    updateComposer(STATE);
+    var path = mode === 'ask' ? '/api/soup/ask' : (mode === 'guess' ? '/api/soup/guess' : '/api/soup/chat');
+    post(path, { text: text }).then(function (r) {
+      busy = false;
+      if (r && r.error) { updateComposer(STATE); return toast(r.error); }
+      $('input').value = '';
+      if (r && r.state) applyState(r.state);
+      else if (r && r.ok) pollOnce();
+      updateComposer(STATE);
+      $('input').focus();
+    }).catch(function () {
+      busy = false;
+      updateComposer(STATE);
+      toast('发送失败，检查一下网络');
+    });
+  }
+
+  /* ---------------- 房间内操作 ---------------- */
+  $('stage').addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-answer],[data-judge],[data-start],[data-picker-mode],[data-host-act]') : null;
+    if (!el) return;
+
+    if (el.hasAttribute('data-picker-mode')) {
+      showDone = el.getAttribute('data-picker-mode') === 'all';
+      render();
+      return;
+    }
+    if (el.hasAttribute('data-answer')) {
+      var qid = Number(el.getAttribute('data-answer'));
+      var v = el.getAttribute('data-v');
+      doAct('/api/soup/answer', { qid: qid, verdict: v });
+      return;
+    }
+    if (el.hasAttribute('data-judge')) {
+      var gid = Number(el.getAttribute('data-judge'));
+      var gv = el.getAttribute('data-v');
+      doAct('/api/soup/judge', { gid: gid, verdict: gv });
+      return;
+    }
+    if (el.hasAttribute('data-start')) {
+      startPuzzle(el.getAttribute('data-start'));
+      return;
+    }
+    var act = el.getAttribute('data-host-act');
+    if (act === 'hint') return doAct('/api/soup/hint', {});
+    if (act === 'take') return doAct('/api/soup/host', {});
+    if (act === 'win') {
+      return confirmBox('直接判赢', '不用等猜底正确，直接把本轮判为胜利并公开汤底？', function () {
+        doAct('/api/soup/win', {});
+      });
+    }
+    if (act === 'reveal') {
+      return confirmBox('揭晓汤底', '确定现在公开汤底吗？本轮会立即结束。', function () {
+        doAct('/api/soup/reveal', {});
+      });
+    }
+    if (act === 'picker') {
+      pickerOpen = !pickerOpen;
+      render();
+      return;
+    }
+  });
+
+  function doAct(path, body) {
+    post(path, body).then(function (r) {
+      if (r && r.error) return toast(r.error);
+      if (r && r.state) applyState(r.state);
+      else pollOnce();
+    }).catch(function () { toast('操作失败，检查一下网络'); });
+  }
+
+  function startPuzzle(id) {
+    var doStart = function () {
+      pickerOpen = false;
+      doAct('/api/soup/start', { puzzleId: id });
+    };
+    if (STATE && STATE.phase === 'playing') {
+      confirmBox('换一题', '当前这一轮还没结束，换题会清空问答和猜测。确定吗？', doStart);
+    } else {
+      doStart();
+    }
+  }
+
+  $('copyBtn').onclick = function () {
+    var text = CODE;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('房间号已复制'); })
+        .catch(function () { toast('房间号：' + text); });
+    } else {
+      toast('房间号：' + text);
+    }
+  };
+
+  /* 返回箭头 = 离开房间：先退座，让下一位参与者自动接任主持人 */
+  $('backBtn').onclick = function (e) {
+    e.preventDefault();
+    if (!CODE) { location.href = '/'; return; }
+    post('/api/soup/leave', {}).then(function () { location.href = '/'; })
+      .catch(function () { location.href = '/'; });
+  };
+
+})();
+</script>
+</body>
+</html>

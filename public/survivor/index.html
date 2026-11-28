@@ -1,0 +1,3053 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>无尽之路</title>
+    <style>
+        /* ===== 加载界面（重设计：粒子动效+流光进度条+渐变标题） ===== */
+        #loadingScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: radial-gradient(ellipse at center, #0a0a2a 0%, #050515 70%, #000008 100%);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease-out;
+            overflow: hidden;
+        }
+        #loadingScreen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        /* 加载界面背景旋转光环（CSS伪元素，纯装饰） */
+        #loadingScreen::before {
+            content: '';
+            position: absolute;
+            width: 800px; height: 800px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent, rgba(0,210,255,0.15), transparent 30%, rgba(196,77,255,0.12), transparent 60%, rgba(251,191,36,0.1), transparent);
+            animation: loading-rot 8s linear infinite;
+            filter: blur(40px);
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        @keyframes loading-rot {
+            from { transform: rotate(0deg) scale(1); }
+            50%  { transform: rotate(180deg) scale(1.08); }
+            to   { transform: rotate(360deg) scale(1); }
+        }
+        /* 加载界面中心装饰光环 */
+        #loadingScreen::after {
+            content: '';
+            position: absolute;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,210,255,0.2);
+            box-shadow: 0 0 100px rgba(0,210,255,0.15) inset, 0 0 60px rgba(0,210,255,0.1);
+            animation: loading-pulse 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes loading-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50%      { transform: scale(1.1); opacity: 1; }
+        }
+        .loading-content {
+            text-align: center;
+            width: 480px;
+            max-width: 90vw;
+            position: relative;
+            z-index: 2;
+        }
+        .loading-title {
+            color: #00d2ff;
+            font-size: 56px;
+            margin-bottom: 8px;
+            letter-spacing: 8px;
+            font-weight: 900;
+            text-shadow: 0 0 40px rgba(0,210,255,0.9), 0 0 80px rgba(0,210,255,0.5), 0 4px 0 rgba(0,80,160,0.6);
+            animation: title-glow 2s ease-in-out infinite alternate;
+        }
+        .loading-subtitle {
+            color: rgba(0,210,255,0.55);
+            font-size: 14px;
+            letter-spacing: 12px;
+            margin-bottom: 40px;
+            font-weight: 300;
+            text-transform: uppercase;
+        }
+        .loading-bar-container {
+            width: 100%;
+            height: 10px;
+            background: rgba(0,210,255,0.08);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(0,210,255,0.3);
+            box-shadow: 0 0 20px rgba(0,210,255,0.15) inset;
+            position: relative;
+        }
+        .loading-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00d2ff 0%, #0080ff 50%, #c44dff 100%);
+            border-radius: 5px;
+            transition: width 0.3s ease-out;
+            box-shadow: 0 0 20px rgba(0,210,255,0.8), 0 0 40px rgba(0,210,255,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+        /* 进度条流光动效（白色高光横扫） */
+        .loading-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -50%;
+            width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+            animation: loading-shine 1.5s linear infinite;
+        }
+        @keyframes loading-shine {
+            from { left: -50%; }
+            to   { left: 150%; }
+        }
+        .loading-percent {
+            color: #00d2ff;
+            font-size: 28px;
+            margin-top: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 12px rgba(0,210,255,0.7);
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+        .loading-tip {
+            color: rgba(0,210,255,0.65);
+            font-size: 13px;
+            margin-top: 10px;
+            letter-spacing: 1px;
+            min-height: 18px;
+            transition: opacity 0.3s;
+        }
+        .loading-version {
+            color: rgba(255,255,255,0.25);
+            font-size: 11px;
+            margin-top: 30px;
+            letter-spacing: 2px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Microsoft YaHei', sans-serif; 
+            background: #0a0a1a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            overflow: hidden;
+        }
+        #gameContainer { position: relative; }
+        #gameCanvas {
+            border: 3px solid #00d2ff;
+            border-radius: 12px;
+            box-shadow: 0 0 50px rgba(0,210,255,0.3), inset 0 0 20px rgba(0,0,0,0.3);
+            /* 特效优化：will-change提示浏览器优化Canvas渲染 */
+            will-change: transform;
+            display: block;
+        }
+        #stats {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 160px;
+            background: linear-gradient(135deg, rgba(10,10,30,0.92) 0%, rgba(15,15,40,0.88) 100%);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(0,210,255,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 15;
+            backdrop-filter: blur(6px);
+            max-height: calc(100% - 90px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,210,255,0.3) transparent;
+            transition: opacity 0.3s, transform 0.3s;
+            box-shadow: 0 0 20px rgba(0,210,255,0.15), inset 0 0 12px rgba(0,0,0,0.3);
+        }
+        #stats::-webkit-scrollbar { width: 4px; }
+        #stats::-webkit-scrollbar-thumb { background: rgba(0,210,255,0.4); border-radius: 2px; }
+        #stats::-webkit-scrollbar-track { background: transparent; }
+        #stats.collapsed { opacity: 0.25; transform: translateX(-5px); }
+        #stats.collapsed:hover { opacity: 0.9; }
+        .stat-item {
+            background: linear-gradient(135deg, rgba(0,210,255,0.12) 0%, rgba(0,210,255,0.05) 100%);
+            padding: 7px 8px;
+            border-radius: 7px;
+            border-left: 3px solid #00d2ff;
+            transition: all 0.2s;
+        }
+        .stat-item:hover {
+            background: linear-gradient(135deg, rgba(0,210,255,0.18) 0%, rgba(0,210,255,0.08) 100%);
+            transform: translateX(2px);
+        }
+        .stat-item.damage { border-left-color: #ef4444; }
+        .stat-item.hp { border-left-color: #44ff44; }
+        .stat-item.cd { border-left-color: #ffcc00; }
+        .stat-label { font-size: 10px; color: #aaa; margin-bottom: 2px; letter-spacing: 0.5px; }
+        .stat-value { font-size: 15px; font-weight: bold; color: #fff; text-shadow: 0 0 4px currentColor; }
+        .stat-title {
+            text-align: center;
+            font-size: 13px;
+            padding: 5px;
+            border-bottom: 1px solid rgba(0,210,255,0.5);
+            margin-bottom: 4px;
+            color: #00d2ff;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px rgba(0,210,255,0.6);
+        }
+        #ui {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 75px;
+            background: rgba(10,10,30,0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            gap: 15px;
+            border-top: 2px solid #00d2ff;
+        }
+        .skill-btn {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: 2px solid #00d2ff;
+            background: rgba(0,210,255,0.2);
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .skill-btn:hover { transform: scale(1.08); box-shadow: 0 0 15px rgba(0,210,255,0.5); }
+        .skill-btn.attack { border-color: #44ff44; background: rgba(68,255,68,0.2); }
+        .skill-btn.skill1 { border-color: #ff4444; background: rgba(255,68,68,0.2); }
+        .skill-btn.skill2 { border-color: #ffcc00; background: rgba(255,204,0,0.2); }
+        .skill-btn.skill3 { border-color: #00ffff; background: rgba(0,255,255,0.2); }
+        .cd-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.85);
+            color: #ff4444;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 0 0 32px 32px;
+            line-height: 1.8;
+            padding: 5px 0;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10,10,30,0.9);
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-size: 15px;
+            border: 1px solid #00d2ff;
+            z-index: 10;
+            white-space: nowrap;
+            backdrop-filter: blur(4px);
+        }
+        #wave {
+            position: absolute;
+            top: 10px;
+            right: 220px;
+            background: rgba(10,10,30,0.95);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #00d2ff;
+            border: 2px solid #00d2ff;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        .damage-popup {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: damage-float 0.8s ease-out forwards;
+            text-shadow: 0 0 10px currentColor;
+        }
+        @keyframes damage-float {
+            0% { opacity: 1; transform: translateY(0) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-50px) scale(0.9); }
+        }
+        #startScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background:
+                radial-gradient(ellipse at 30% 20%, rgba(0,80,200,0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(196,77,255,0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(0,210,255,0.05) 0%, transparent 70%),
+                linear-gradient(135deg, #0a0a2a 0%, #1a1a3a 30%, #0a0a2a 70%, #050515 100%);
+            z-index: 1000;
+            display: none;  /* 初始隐藏，由showStartScreen()显示 */
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 14px 0 10px;
+            overflow: hidden;
+            box-sizing: border-box;
+            perspective: 1500px;
+        }
+        /* 开始界面：左右装饰光柱（CSS伪元素） */
+        #startScreen::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 5%;
+            width: 2px; height: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(0,210,255,0.4), transparent);
+            box-shadow: 0 0 30px rgba(0,210,255,0.5);
+            pointer-events: none;
+            animation: side-beam 4s ease-in-out infinite;
+        }
+        #startScreen::after {
+            content: '';
+            position: absolute;
+            top: 0; right: 5%;
+            width: 2px; height: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(196,77,255,0.4), transparent);
+            box-shadow: 0 0 30px rgba(196,77,255,0.5);
+            pointer-events: none;
+            animation: side-beam 4s ease-in-out infinite 2s;
+        }
+        @keyframes side-beam {
+            0%, 100% { opacity: 0.4; transform: scaleY(0.9); }
+            50%      { opacity: 1; transform: scaleY(1.05); }
+        }
+        /* ===== 开始界面：巨型主标题 ===== */
+        .start-title-wrap {
+            position: relative;
+            text-align: center;
+            margin: 0 0 6px;
+            padding: 0 20px;
+        }
+        .start-title-deco {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px; height: 100px;
+            background: radial-gradient(ellipse at center, rgba(0,210,255,0.3) 0%, transparent 70%);
+            filter: blur(20px);
+            pointer-events: none;
+            animation: title-deco-pulse 3s ease-in-out infinite;
+        }
+        @keyframes title-deco-pulse {
+            0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+            50%      { opacity: 1;   transform: translate(-50%, -50%) scale(1.15); }
+        }
+        #startScreen h1 {
+            position: relative;
+            color: #00d2ff;
+            font-size: 56px;
+            margin: 0;
+            letter-spacing: 10px;
+            font-weight: 900;
+            text-shadow:
+                0 0 30px rgba(0,210,255,1),
+                0 0 60px rgba(0,210,255,0.6),
+                0 4px 0 rgba(0,80,160,0.7),
+                0 8px 30px rgba(0,0,0,0.8);
+            animation: title-glow 2.5s ease-in-out infinite alternate;
+        }
+        .start-subtitle {
+            color: rgba(0,210,255,0.55);
+            font-size: 12px;
+            letter-spacing: 18px;
+            margin-top: 4px;
+            font-weight: 300;
+            text-transform: uppercase;
+            text-align: center;
+        }
+        @keyframes title-glow {
+            from { text-shadow: 0 0 30px rgba(0,210,255,1), 0 0 60px rgba(0,210,255,0.6), 0 4px 0 rgba(0,80,160,0.7), 0 8px 30px rgba(0,0,0,0.8); }
+            to   { text-shadow: 0 0 50px rgba(0,210,255,1), 0 0 100px rgba(0,210,255,0.8), 0 4px 0 rgba(0,80,160,0.7), 0 8px 30px rgba(0,0,0,0.8); }
+        }
+        /* ===== 分区标签（替代步骤指示器，更简洁） ===== */
+        .section-label {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00d2ff;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px rgba(0,210,255,0.5);
+            position: relative;
+            padding-left: 14px;
+        }
+        .section-label::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 50%;
+            transform: translateY(-50%);
+            width: 4px; height: 18px;
+            background: linear-gradient(180deg, #00d2ff, #0080ff);
+            border-radius: 2px;
+            box-shadow: 0 0 8px rgba(0,210,255,0.6);
+        }
+        .section-label.center {
+            text-align: center;
+            padding-left: 0;
+        }
+        .section-label.center::before { display: none; }
+        /* ===== 英雄顶栏 ===== */
+        .hero-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+        /* ===== 步骤面板 ===== */
+        .step-stage {
+            width: 94vw;
+            max-width: 1300px;
+            flex: 1 1 auto;
+            min-height: 400px;
+            max-height: calc(100vh - 160px);
+            position: relative;
+            perspective: 1400px;
+            transform-style: preserve-3d;
+        }
+        .step-panel {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(12, 16, 45, 0.92);
+            border: 2px solid rgba(0, 210, 255, 0.25);
+            border-radius: 16px;
+            padding: 16px 20px;
+            box-shadow: 0 0 60px rgba(0, 210, 255, 0.1), inset 0 0 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+            backface-visibility: hidden;
+            transform-style: preserve-3d;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,210,255,0.3) transparent;
+        }
+        .step-panel::-webkit-scrollbar { width: 6px; }
+        .step-panel::-webkit-scrollbar-thumb { background: rgba(0,210,255,0.3); border-radius: 3px; }
+        .step-panel::-webkit-scrollbar-track { background: transparent; }
+        .step-panel.active {
+            display: flex;
+            animation: step-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes step-in {
+            from { opacity: 0; transform: translateX(60px) scale(0.95); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        .step-panel-title {
+            color: #00d2ff;
+            font-size: 22px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            padding: 0 0 10px;
+            margin-bottom: 14px;
+            border-bottom: 2px solid rgba(0, 210, 255, 0.2);
+            text-shadow: 0 0 15px rgba(0, 210, 255, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-panel-title.sub {
+            font-size: 18px;
+            color: #88d4ff;
+            border-bottom: 1px solid rgba(0, 210, 255, 0.15);
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+        }
+
+        /* ===== 英雄面板：左右布局 ===== */
+        #step1Panel {
+            flex-direction: row !important;
+            gap: 18px;
+            padding: 18px 22px;
+        }
+        .hero-left-col {
+            flex: 4;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .hero-right-col {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            background: linear-gradient(160deg, rgba(15,20,50,0.95) 0%, rgba(5,8,25,0.95) 100%);
+            border-radius: 14px;
+            border: 2px solid rgba(0,210,255,0.2);
+            padding: 16px 14px;
+            overflow-y: auto;
+            box-shadow: inset 0 0 30px rgba(0,210,255,0.05), 0 0 20px rgba(0,210,255,0.08);
+        }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding-right: 4px;
+            min-height: 0;
+            align-content: start;
+        }
+        .hero-right-col .detail-hero-name {
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 4px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 12px currentColor;
+        }
+        .hero-right-col .detail-hero-title {
+            font-size: 12px;
+            text-align: center;
+            color: #aaa;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0,210,255,0.15);
+        }
+        .hero-right-col .skill-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid #00d2ff;
+            transition: all 0.3s;
+        }
+        .hero-right-col .skill-card:hover {
+            background: rgba(0,210,255,0.08);
+            border-left-color: #fbbf24;
+        }
+        .hero-right-col .skill-card .sk-name {
+            font-weight: bold;
+            font-size: 14px;
+            color: #fbbf24;
+            margin-bottom: 4px;
+            text-shadow: 0 0 6px rgba(251,191,36,0.3);
+        }
+        .hero-right-col .skill-card .sk-cd {
+            font-size: 11px;
+            color: #00d2ff;
+            float: right;
+            font-weight: normal;
+        }
+        .hero-right-col .skill-card .sk-desc {
+            font-size: 12px;
+            color: #ccc;
+            line-height: 1.6;
+        }
+        .hero-right-col .skill-card.passive-card {
+            border-left-color: #22c55e;
+            background: rgba(34,197,94,0.06);
+        }
+        .hero-right-col .skill-card.passive-card .sk-name {
+            color: #22c55e;
+            text-shadow: 0 0 6px rgba(34,197,94,0.3);
+        }
+        .hero-right-col .empty-tip {
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+            margin-top: 40px;
+        }
+
+        /* ===== 配置面板内部（重设计：难度卡片+等级条） ===== */
+        #step2Panel {
+            flex-direction: column !important;
+        }
+        .diff-row {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 4px 8px 4px 0;
+            flex: 1 1 auto;
+            overflow-y: auto;
+            min-height: 0;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,210,255,0.3) transparent;
+        }
+        .diff-row::-webkit-scrollbar { width: 6px; }
+        .diff-row::-webkit-scrollbar-thumb { background: rgba(0,210,255,0.3); border-radius: 3px; }
+        .diff-row::-webkit-scrollbar-track { background: transparent; }
+        .diff-chip {
+            width: 100%;
+            padding: 18px 22px;
+            text-align: left;
+            border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.15);
+            background: linear-gradient(135deg, rgba(20,20,50,0.7) 0%, rgba(10,10,30,0.85) 100%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            color: #bbb;
+            box-sizing: border-box;
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+        }
+        /* 难度卡片：左侧色条装饰（根据难度等级变色） */
+        .diff-chip::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 6px; height: 100%;
+            background: linear-gradient(to bottom, var(--diff-color, #00d2ff), transparent);
+            box-shadow: 0 0 12px var(--diff-color, #00d2ff);
+        }
+        .diff-chip[data-diff="easy"]     { --diff-color: #44ff44; }
+        .diff-chip[data-diff="normal"]   { --diff-color: #00d2ff; }
+        .diff-chip[data-diff="hard"]     { --diff-color: #ff8800; }
+        .diff-chip[data-diff="nightmare"]{ --diff-color: #c44dff; }
+        .diff-chip[data-diff="end"]      { --diff-color: #ef4444; }
+        .diff-chip:hover {
+            border-color: rgba(0,210,255,0.6);
+            background: linear-gradient(135deg, rgba(0,210,255,0.12) 0%, rgba(10,10,30,0.85) 100%);
+            transform: translateZ(10px) translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,210,255,0.25);
+        }
+        .diff-chip:active { transform: scale(0.98); }
+        .diff-chip.selected {
+            border-color: var(--diff-color, #fbbf24);
+            color: #fff;
+            background: linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(10,10,30,0.85) 100%);
+            box-shadow: 0 0 28px var(--diff-color, rgba(251,191,36,0.4)), inset 0 0 20px rgba(255,255,255,0.05);
+            transform: translateZ(12px);
+        }
+        /* 诅咒之夜作为独立难度选中时，普通难度置灰（仍可点击以切回普通难度） */
+        .diff-chip.disabled {
+            opacity: 0.45;
+            filter: grayscale(0.7);
+            cursor: not-allowed;
+        }
+        .diff-chip .diff-name {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: 2px;
+        }
+        .diff-chip .diff-name .diff-emoji {
+            font-size: 28px;
+            filter: drop-shadow(0 0 8px var(--diff-color, #00d2ff));
+        }
+        .diff-chip .diff-level {
+            display: inline-flex;
+            gap: 3px;
+            margin-left: auto;
+        }
+        .diff-chip .diff-level .star {
+            font-size: 14px;
+            color: rgba(255,255,255,0.15);
+            transition: all 0.3s;
+        }
+        .diff-chip .diff-level .star.on {
+            color: var(--diff-color, #fbbf24);
+            text-shadow: 0 0 6px var(--diff-color, #fbbf24);
+        }
+        .diff-chip .diff-desc {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .diff-chip.selected .diff-desc { color: #ddd; }
+        .diff-chip .diff-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+            font-size: 13px;
+            color: #999;
+            line-height: 1.6;
+        }
+        .diff-chip .diff-stats span {
+            white-space: nowrap;
+        }
+        .diff-chip.selected .diff-stats { color: #c49a14; }
+        .diff-chip .diff-sub {
+            font-size: 11px;
+            color: #888;
+            display: block;
+            font-weight: normal;
+        }
+        .diff-chip.selected .diff-sub { color: #d4a017; }
+
+        /* ===== 步骤2：左右布局（难度 + 诅咒之夜侧边栏） ===== */
+        #step2Panel {
+            flex-direction: column !important;
+        }
+        .step2-layout {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+        }
+        .step2-left {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+        }
+        .step2-right {
+            flex: 0 0 220px;
+            display: flex;
+            align-items: stretch;
+            min-height: 0;
+        }
+        .step2-leftmost {
+            flex: 0 0 220px;
+            display: flex;
+            align-items: stretch;
+            min-height: 0;
+        }
+
+        /* ===== 诅咒之夜侧边栏：血月风格 ===== */
+        .curse-night-sidebar {
+            position: relative;
+            width: 100%;
+            padding: 22px 16px;
+            border-radius: 18px;
+            border: 2px solid rgba(255, 60, 60, 0.25);
+            background: linear-gradient(180deg, rgba(60, 8, 16, 0.85) 0%, rgba(25, 4, 10, 0.95) 100%);
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(160, 20, 40, 0.15);
+        }
+        .curse-night-sidebar:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: rgba(255, 80, 80, 0.6);
+            box-shadow: 0 10px 35px rgba(220, 30, 60, 0.35);
+        }
+        .curse-night-sidebar.active {
+            border-color: rgba(255, 50, 50, 0.9);
+            background: linear-gradient(180deg, rgba(110, 12, 28, 0.9) 0%, rgba(45, 6, 14, 0.97) 100%);
+            box-shadow: 0 0 35px rgba(255, 40, 60, 0.5), inset 0 0 25px rgba(255, 60, 60, 0.12);
+            animation: cursePulse 2.2s ease-in-out infinite;
+        }
+        @keyframes cursePulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 40, 60, 0.45); }
+            50% { box-shadow: 0 0 55px rgba(255, 60, 80, 0.7); }
+        }
+        .curse-night-glow {
+            position: absolute;
+            top: -40%; left: 50%;
+            width: 140px; height: 140px;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(255, 60, 60, 0.25) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .curse-night-icon {
+            font-size: 42px;
+            filter: drop-shadow(0 0 12px rgba(255, 60, 60, 0.7));
+            margin-bottom: 14px;
+            z-index: 1;
+        }
+        .curse-night-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #ff6b6b;
+            text-shadow: 0 0 10px rgba(255, 60, 60, 0.6);
+            margin-bottom: 14px;
+            letter-spacing: 2px;
+            z-index: 1;
+        }
+        .curse-night-sidebar.active .curse-night-title {
+            color: #ff9999;
+            text-shadow: 0 0 16px rgba(255, 80, 80, 0.9);
+        }
+        .curse-night-desc {
+            font-size: 12px;
+            color: #cc8888;
+            line-height: 1.7;
+            margin-bottom: 4px;
+            z-index: 1;
+        }
+        .curse-night-sidebar.active .curse-night-desc {
+            color: #ffbbbb;
+        }
+        .curse-night-badge {
+            margin-top: 16px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #aa6666;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 80, 80, 0.2);
+            z-index: 1;
+            transition: all 0.3s;
+        }
+        .curse-night-sidebar.active .curse-night-badge {
+            color: #fff;
+            background: linear-gradient(135deg, #ff3b3b, #b00020);
+            border-color: rgba(255, 120, 120, 0.6);
+            box-shadow: 0 0 15px rgba(255, 50, 50, 0.5);
+        }
+
+        /* ===== 疯狂之夜侧边栏：橙月风格（独立难度，与诅咒之夜互斥） ===== */
+        .madness-night-sidebar {
+            position: relative;
+            width: 100%;
+            padding: 22px 16px;
+            border-radius: 18px;
+            border: 2px solid rgba(255, 140, 40, 0.25);
+            background: linear-gradient(180deg, rgba(60, 36, 8, 0.85) 0%, rgba(30, 18, 4, 0.95) 100%);
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(180, 100, 20, 0.15);
+        }
+        .madness-night-sidebar:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: rgba(255, 160, 60, 0.6);
+            box-shadow: 0 10px 35px rgba(230, 130, 30, 0.35);
+        }
+        .madness-night-sidebar.active {
+            border-color: rgba(255, 150, 50, 0.9);
+            background: linear-gradient(180deg, rgba(110, 70, 14, 0.9) 0%, rgba(50, 32, 6, 0.97) 100%);
+            box-shadow: 0 0 35px rgba(255, 130, 30, 0.5), inset 0 0 25px rgba(255, 150, 50, 0.12);
+            animation: madnessPulse 2.2s ease-in-out infinite;
+        }
+        @keyframes madnessPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 130, 30, 0.45); }
+            50% { box-shadow: 0 0 55px rgba(255, 160, 60, 0.7); }
+        }
+        .madness-night-glow {
+            position: absolute;
+            top: -40%; left: 50%;
+            width: 140px; height: 140px;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(255, 150, 50, 0.25) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .madness-night-icon {
+            font-size: 42px;
+            filter: drop-shadow(0 0 12px rgba(255, 150, 50, 0.7));
+            margin-bottom: 14px;
+            z-index: 1;
+        }
+        .madness-night-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #ff9a3c;
+            text-shadow: 0 0 10px rgba(255, 150, 50, 0.6);
+            margin-bottom: 14px;
+            letter-spacing: 2px;
+            z-index: 1;
+        }
+        .madness-night-sidebar.active .madness-night-title {
+            color: #ffb866;
+            text-shadow: 0 0 16px rgba(255, 170, 70, 0.9);
+        }
+        .madness-night-desc {
+            font-size: 12px;
+            color: #cc9966;
+            line-height: 1.7;
+            margin-bottom: 4px;
+            z-index: 1;
+        }
+        .madness-night-sidebar.active .madness-night-desc {
+            color: #ffcc99;
+        }
+        .madness-night-badge {
+            margin-top: 16px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #aa7744;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 150, 50, 0.2);
+            z-index: 1;
+            transition: all 0.3s;
+        }
+        .madness-night-sidebar.active .madness-night-badge {
+            color: #fff;
+            background: linear-gradient(135deg, #ff8c1a, #b05500);
+            border-color: rgba(255, 170, 80, 0.6);
+            box-shadow: 0 0 15px rgba(255, 130, 30, 0.5);
+        }
+
+        /* ===== 加入制开关（重设计：紧凑但精美） ===== */
+        .toggle-row-compact {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            margin: 6px 0;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(20,20,50,0.65) 0%, rgba(10,10,30,0.8) 100%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border: 2px solid rgba(255,255,255,0.12);
+            min-height: 60px;
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+        }
+        .toggle-row-compact:hover {
+            background: linear-gradient(135deg, rgba(0,210,255,0.12) 0%, rgba(10,10,30,0.8) 100%);
+            border-color: rgba(0,210,255,0.5);
+            transform: translateZ(6px) translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,210,255,0.2);
+        }
+        .toggle-row-compact:active { transform: scale(0.98); }
+        .toggle-switch-sm {
+            width: 52px; height: 30px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #2a2a3a, #1a1a2a);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .toggle-switch-sm.active {
+            background: linear-gradient(135deg, #00d2ff, #0066ff);
+            box-shadow: 0 0 14px rgba(0,210,255,0.6), inset 0 0 8px rgba(255,255,255,0.2);
+            border-color: rgba(0,210,255,0.6);
+        }
+        .toggle-switch-sm::after {
+            content: '';
+            position: absolute;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffffff, #d0d0d0);
+            top: 3px; left: 3px;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .toggle-switch-sm.active::after {
+            left: 25px;
+            background: linear-gradient(135deg, #ffffff, #e0e0ff);
+            box-shadow: 0 2px 8px rgba(0,210,255,0.5);
+        }
+        .toggle-label-sm {
+            color: #ddd;
+            font-size: 15px;
+            flex: 1;
+            line-height: 1.3;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .toggle-desc-sm {
+            color: #888;
+            font-size: 11px;
+            margin-top: 3px;
+            line-height: 1.5;
+        }
+
+        /* ===== 选择制模式卡（重设计：大卡片+图标+描述） ===== */
+        .mode-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 4px 0;
+        }
+        .mode-card-sm {
+            padding: 18px 22px;
+            margin: 0;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(20,20,50,0.7) 0%, rgba(10,10,30,0.85) 100%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border: 2px solid rgba(255,255,255,0.15);
+            min-height: 90px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+        }
+        /* 模式卡片：右上角装饰图标 */
+        .mode-card-sm::before {
+            content: attr(data-icon);
+            position: absolute;
+            top: 8px; right: 12px;
+            font-size: 40px;
+            opacity: 0.15;
+            transition: all 0.3s;
+        }
+        .mode-card-sm:hover::before {
+            opacity: 0.3;
+            transform: scale(1.1) rotate(-5deg);
+        }
+        .mode-card-sm:hover {
+            background: linear-gradient(135deg, rgba(0,210,255,0.12) 0%, rgba(10,10,30,0.85) 100%);
+            border-color: rgba(0,210,255,0.6);
+            transform: translateZ(10px) translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,210,255,0.25);
+        }
+        .mode-card-sm:active { transform: scale(0.98); }
+        .mode-card-sm.selected {
+            border-color: #fbbf24;
+            background: linear-gradient(135deg, rgba(251,191,36,0.15) 0%, rgba(10,10,30,0.85) 100%);
+            box-shadow: 0 0 28px rgba(251,191,36,0.4);
+            transform: translateZ(12px);
+        }
+        .mode-card-sm.selected .mode-name-sm { color: #fbbf24; text-shadow: 0 0 10px rgba(251,191,36,0.5); }
+        .mode-name-sm {
+            color: #ddd;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .mode-desc-sm {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.6;
+            position: relative;
+            z-index: 1;
+        }
+        .mode-card-sm.selected .mode-desc-sm { color: #d4a017; }
+        /* ===== 商店界面样式 ===== */
+        #shopScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            background: rgba(10,10,30,0.98);
+            padding: 25px 35px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 100;
+            border: 2px solid #fbbf24;
+            display: none;
+            max-height: 85vh;
+            overflow-y: auto;
+            min-width: 700px;
+        }
+        #shopScreen h2 {
+            color: #fbbf24;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        #shopScreen .shop-gold {
+            color: #ffcc00;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        .shop-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .shop-buff-btn {
+            display: block;
+            padding: 14px 18px;
+            font-size: 14px;
+            background: rgba(59,130,246,0.2);
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        .shop-buff-btn:hover {
+            background: rgba(59,130,246,0.45);
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(59,130,246,0.5);
+            border-color: #00d2ff;
+        }
+        .shop-buff-btn .cost {
+            color: #ffcc00;
+            font-size: 12px;
+            float: right;
+        }
+        .shop-close-btn {
+            padding: 12px 50px;
+            font-size: 18px;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        .shop-close-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(16,185,129,0.6);
+        }
+        /* 双人模式商店英雄切换按钮 */
+        .shop-hero-btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            background: rgba(40,40,80,0.8);
+            border: 2px solid #444;
+            border-radius: 15px;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .shop-hero-btn:hover {
+            border-color: #00d2ff;
+            background: rgba(0,210,255,0.1);
+        }
+        .shop-hero-btn.active {
+            border-color: #00d2ff;
+            color: #00d2ff;
+            background: rgba(0,210,255,0.15);
+            box-shadow: 0 0 12px rgba(0,210,255,0.4);
+        }
+        /* ===== 神器选择界面样式 ===== */
+        #artifactScreen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(5,5,20,0.97);
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #artifactScreen h2 {
+            color: #fbbf24;
+            font-size: 34px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(251,191,36,0.7);
+        }
+        #artifactScreen .subtitle {
+            color: #888;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .artifact-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            max-width: 1100px;
+            width: 95vw;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .artifact-card {
+            background: rgba(20,20,50,0.7);
+            border: 2px solid #444;
+            border-radius: 14px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.25s;
+            text-align: center;
+        }
+        .artifact-card:hover {
+            border-color: #fbbf24;
+            box-shadow: 0 0 25px rgba(251,191,36,0.4);
+            transform: translateY(-3px);
+        }
+        .artifact-card:active { transform: translateY(-3px) scale(0.96); }
+        .artifact-icon {
+            font-size: 40px;
+            margin-bottom: 8px;
+        }
+        .artifact-name {
+            color: #fbbf24;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .artifact-desc {
+            color: #aaa;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        /* ===== 天气指示器：角色血量左侧，不遮挡小地图 ===== */
+        #weatherIndicator {
+            position: absolute;
+            top: 8px;
+            left: 168px;
+            background: rgba(10,10,30,0.85);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.25);
+            z-index: 10;
+            display: none;
+            white-space: nowrap;
+            backdrop-filter: blur(4px);
+            line-height: 1.4;
+        }
+        #weatherIndicator .weather-name {
+            font-weight: bold;
+        }
+        #weatherIndicator .weather-effect {
+            color: rgba(255,255,255,0.7);
+            font-size: 10px;
+        }
+        #weatherIndicator .weather-effect .hero-eff { color: #44ff44; }
+        #weatherIndicator .weather-effect .enemy-eff { color: #ff6666; }
+        /* ===== 双角色模式已删除 ===== */
+        /* ===== 右侧难度选择卡片 ===== */
+        .difficulty-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .difficulty-card {
+            background: rgba(20,20,50,0.85);
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .difficulty-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,210,255,0.15), transparent);
+            transition: left 0.5s;
+        }
+        .difficulty-card:hover::before {
+            left: 100%;
+        }
+        .difficulty-card:hover {
+            transform: translateX(4px);
+            border-color: rgba(0,210,255,0.6);
+            box-shadow: 0 4px 20px rgba(0,210,255,0.25);
+        }
+        .difficulty-card.selected {
+            border-color: #fbbf24;
+            box-shadow: 0 0 24px rgba(251,191,36,0.5), inset 0 0 12px rgba(251,191,36,0.1);
+            transform: translateX(6px);
+        }
+        .difficulty-card:active {
+            transform: translateX(6px) scale(0.98);
+        }
+        .diff-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .diff-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .diff-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(0,210,255,0.2);
+            color: #00d2ff;
+            border: 1px solid rgba(0,210,255,0.4);
+        }
+        .diff-badge.baseline { background: rgba(251,191,36,0.2); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
+        .diff-desc {
+            font-size: 12px;
+            color: #aaa;
+            line-height: 1.5;
+        }
+        .diff-stats {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .diff-stats span { color: #6cf; }
+        /* ===== 开始界面底部按钮区（重设计：分组+主按钮突出） ===== */
+        .start-bottom-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+        /* 主操作组（上一步/下一步） */
+        .start-bottom-bar .nav-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        /* 辅助操作组（皮肤/背景/重置） */
+        .start-bottom-bar .util-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding-left: 14px;
+            border-left: 1px solid rgba(255,255,255,0.15);
+        }
+        /* ===== 上一步按钮 ===== */
+        .prev-step-btn {
+            padding: 12px 28px;
+            font-size: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 30px;
+            background: linear-gradient(135deg, rgba(40, 50, 90, 0.7), rgba(20, 30, 60, 0.85));
+            color: #ccc;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            min-width: 140px;
+            text-align: center;
+            box-sizing: border-box;
+            letter-spacing: 1px;
+        }
+        .prev-step-btn:hover {
+            background: linear-gradient(135deg, rgba(60, 70, 110, 0.9), rgba(40, 50, 90, 0.95));
+            border-color: rgba(255, 255, 255, 0.5);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        .prev-step-btn:active { transform: scale(0.98); }
+        /* ===== 统一底部按钮大小（重设计：渐变+发光+悬停升起） ===== */
+        #startGameBtn, .skin-btn, .bg-select-btn, .bg-reset-btn, .music-btn {
+            padding: 14px 36px;
+            font-size: 17px;
+            border: none;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-weight: bold;
+            min-width: 150px;
+            text-align: center;
+            box-sizing: border-box;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        /* 主按钮：开始游戏/下一步（青蓝渐变+脉冲发光） */
+        #startGameBtn {
+            background: linear-gradient(90deg, #00d2ff, #0080ff, #00d2ff);
+            background-size: 200% 100%;
+            box-shadow: 0 0 30px rgba(0,210,255,0.5), 0 4px 0 rgba(0,80,160,0.6);
+            animation: btn-pulse 1.5s ease-in-out infinite, btn-gradient 3s linear infinite;
+        }
+        @keyframes btn-pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(0,210,255,0.5), 0 4px 0 rgba(0,80,160,0.6); }
+            50%      { box-shadow: 0 0 50px rgba(0,210,255,0.8), 0 0 80px rgba(0,210,255,0.4), 0 4px 0 rgba(0,80,160,0.6); }
+        }
+        @keyframes btn-gradient {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        #startGameBtn:hover {
+            transform: translateY(-3px) scale(1.04);
+            box-shadow: 0 0 60px rgba(0,210,255,0.9), 0 8px 0 rgba(0,80,160,0.6);
+        }
+        #startGameBtn:active { transform: scale(1.02); }
+        #startGameBtn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            animation: none;
+            filter: grayscale(0.5);
+        }
+        /* 辅助按钮：背景选择（紫蓝渐变） */
+        .bg-select-btn {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            box-shadow: 0 0 20px rgba(139,92,246,0.4), 0 3px 0 rgba(80,40,160,0.6);
+            min-width: 110px;
+            padding: 12px 22px;
+            font-size: 14px;
+        }
+        .bg-select-btn:hover {
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 0 35px rgba(139,92,246,0.7), 0 5px 0 rgba(80,40,160,0.6);
+        }
+        .bg-select-btn:active { transform: scale(0.98); }
+        /* 辅助按钮：背景重置（暗灰） */
+        .bg-reset-btn {
+            background: linear-gradient(135deg, rgba(100,100,120,0.6), rgba(60,60,80,0.8));
+            border: 1px solid rgba(150,150,170,0.5);
+            color: #ccc;
+            min-width: 110px;
+            padding: 12px 22px;
+            font-size: 14px;
+            box-shadow: 0 3px 0 rgba(40,40,60,0.6);
+        }
+        .bg-reset-btn:hover {
+            background: linear-gradient(135deg, rgba(180,60,60,0.7), rgba(120,40,40,0.9));
+            border-color: rgba(255,80,80,0.6);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 0 rgba(80,20,20,0.6);
+        }
+        .bg-reset-btn:active { transform: scale(0.98); }
+        /* ===== 音乐按钮（琥珀橙渐变，区别于皮肤/背景/重置） ===== */
+        .music-btn {
+            background: linear-gradient(135deg, #ffb400, #ff8c00);
+            box-shadow: 0 0 20px rgba(255,180,0,0.4), 0 3px 0 rgba(180,110,0,0.6);
+            min-width: 110px;
+            padding: 12px 22px;
+            font-size: 14px;
+        }
+        .music-btn:hover {
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 0 35px rgba(255,180,0,0.7), 0 5px 0 rgba(180,110,0,0.6);
+        }
+        .music-btn:active { transform: scale(0.98); }
+        /* ===== 语言按钮（青蓝渐变，区别于皮肤/背景/音乐） ===== */
+        .lang-btn {
+            background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+            box-shadow: 0 0 20px rgba(34,211,238,0.4), 0 3px 0 rgba(14,80,140,0.6);
+            min-width: 110px;
+            padding: 12px 22px;
+            font-size: 14px;
+            border-radius: 30px; /* 与其他底部小UI按钮圆角一致 */
+        }
+        .lang-btn:hover {
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 0 35px rgba(34,211,238,0.7), 0 5px 0 rgba(14,80,140,0.6);
+        }
+        .lang-btn:active { transform: scale(0.98); }
+        /* ===== 语言设置窗口（青蓝主题，区别于音乐琥珀橙） ===== */
+        #langScreen {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw; max-width: 420px;
+            max-height: 85vh;
+            background: rgba(8,20,32,0.98);
+            border: 2px solid rgba(34,211,238,0.5);
+            border-radius: 20px;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            padding: 20px 24px;
+            box-shadow: 0 0 60px rgba(34,211,238,0.3);
+            box-sizing: border-box;
+        }
+        .lang-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+        }
+        .lang-header h2 {
+            color: #22d3ee;
+            font-size: 24px;
+            text-shadow: 0 0 20px rgba(34,211,238,0.5);
+        }
+        .lang-close-btn {
+            padding: 8px 18px;
+            font-size: 14px;
+            background: rgba(255,68,68,0.3);
+            border: 1px solid rgba(255,100,100,0.5);
+            border-radius: 20px;
+            color: #ff8888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .lang-close-btn:hover {
+            background: rgba(255,68,68,0.5);
+            color: #fff;
+        }
+        .lang-options {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .lang-option {
+            padding: 16px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 14px;
+            border: 2px solid rgba(34,211,238,0.3);
+            background: rgba(34,211,238,0.06);
+            color: #7dd3fc;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+        .lang-option:hover {
+            border-color: #22d3ee;
+            background: rgba(34,211,238,0.12);
+        }
+        .lang-option.active {
+            border-color: #22d3ee;
+            color: #22d3ee;
+            background: rgba(34,211,238,0.18);
+            box-shadow: 0 0 14px rgba(34,211,238,0.3);
+        }
+        .lang-option .lang-sub {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: normal;
+            margin-top: 4px;
+            letter-spacing: 0;
+        }
+        /* ===== 皮肤按钮（紫粉渐变） ===== */
+        .skin-btn {
+            background: linear-gradient(135deg, #ff6b9d, #c44dff);
+            box-shadow: 0 0 20px rgba(196,77,255,0.4), 0 3px 0 rgba(120,40,120,0.6);
+            min-width: 110px;
+            padding: 12px 22px;
+            font-size: 14px;
+        }
+        .skin-btn:hover {
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 0 35px rgba(196,77,255,0.7), 0 5px 0 rgba(120,40,120,0.6);
+        }
+        .skin-btn:active { transform: scale(0.98); }
+        /* ===== 皮肤选择窗口 ===== */
+        #skinScreen {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw; max-width: 700px;
+            max-height: 85vh;
+            background: rgba(12,16,45,0.98);
+            border: 2px solid rgba(196,77,255,0.5);
+            border-radius: 20px;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            padding: 20px 24px;
+            box-shadow: 0 0 60px rgba(196,77,255,0.3);
+            box-sizing: border-box;
+        }
+        .skin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+        }
+        .skin-header h2 {
+            color: #ff6b9d;
+            font-size: 24px;
+            text-shadow: 0 0 20px rgba(255,107,157,0.5);
+        }
+        .skin-close-btn {
+            padding: 8px 18px;
+            font-size: 14px;
+            background: rgba(255,68,68,0.3);
+            border: 1px solid rgba(255,100,100,0.5);
+            border-radius: 20px;
+            color: #ff8888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .skin-close-btn:hover {
+            background: rgba(255,68,68,0.5);
+            color: #fff;
+        }
+        .skin-hero-selector {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+            justify-content: center;
+        }
+        .skin-hero-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 2px solid #444;
+            background: rgba(20,20,50,0.7);
+            color: #ccc;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .skin-hero-chip:hover {
+            border-color: rgba(255,107,157,0.5);
+            background: rgba(255,107,157,0.08);
+        }
+        .skin-hero-chip.selected {
+            border-color: #ff6b9d;
+            color: #ff6b9d;
+            background: rgba(255,107,157,0.1);
+            box-shadow: 0 0 12px rgba(255,107,157,0.3);
+        }
+        .skin-preview {
+            text-align: center;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .skin-preview-color {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            box-shadow: 0 0 20px currentColor;
+            margin: 0 auto 4px;
+        }
+        .skin-preview-name {
+            color: #ddd;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        .skin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            overflow-y: auto;
+            flex: 1;
+            padding-right: 4px;
+        }
+        .skin-card {
+            padding: 12px 10px;
+            border-radius: 12px;
+            border: 2px solid #444;
+            background: rgba(20,20,50,0.5);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .skin-card:hover {
+            border-color: rgba(255,107,157,0.5);
+            background: rgba(255,107,157,0.08);
+            transform: translateY(-2px);
+        }
+        .skin-card.selected {
+            border-color: #ff6b9d;
+            background: rgba(255,107,157,0.1);
+            box-shadow: 0 0 14px rgba(255,107,157,0.3);
+        }
+        .skin-card-color {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            margin: 0 auto 6px;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .skin-card-name {
+            color: #ddd;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .skin-card-tag {
+            color: #888;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+        .skin-card.selected .skin-card-name { color: #ff6b9d; }
+        .skin-card.legend {
+            border-color: rgba(255, 215, 0, 0.35);
+            background: linear-gradient(135deg, rgba(255,215,0,0.08) 0%, rgba(255,107,157,0.05) 50%, rgba(138,43,226,0.08) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .skin-card.legend::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(255,215,0,0.2), transparent 30%, rgba(255,107,157,0.15), transparent 60%, rgba(138,43,226,0.15), transparent);
+            animation: skin-card-shine 3s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes skin-card-shine {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .skin-card.legend .skin-card-color {
+            border: 2px solid rgba(255,215,0,0.5);
+            position: relative;
+            z-index: 1;
+        }
+        .skin-card.legend .skin-card-tag {
+            color: #ffd700;
+            font-weight: bold;
+            text-shadow: 0 0 6px rgba(255,215,0,0.4);
+            position: relative;
+            z-index: 1;
+        }
+        .skin-card.legend .skin-card-name {
+            color: #fff;
+            position: relative;
+            z-index: 1;
+        }
+        .skin-card.legend.selected {
+            border-color: #ffd700;
+            box-shadow: 0 0 20px rgba(255,215,0,0.35), inset 0 0 12px rgba(255,215,0,0.1);
+        }
+        .skin-card.legend.selected .skin-card-name { color: #ffd700; }
+        .skin-footer {
+            display: flex;
+            justify-content: center;
+            padding: 12px 0 4px;
+            flex-shrink: 0;
+        }
+        .skin-confirm-btn {
+            padding: 10px 36px;
+            font-size: 16px;
+            background: linear-gradient(90deg, #44ff88, #22cc66);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 0 20px rgba(68,255,136,0.4);
+        }
+        .skin-confirm-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(68,255,136,0.6);
+        }
+        .skin-confirm-btn:active { transform: scale(0.98); }
+        #bgToast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10,10,30,0.95);
+            color: #44ff44;
+            padding: 12px 30px;
+            border-radius: 10px;
+            border: 2px solid #44ff44;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 0 20px rgba(68,255,68,0.5);
+        }
+        #buffScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            background: rgba(10,10,30,0.98);
+            padding: 40px 60px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 100;
+            border: 2px solid #fbbf24;
+            display: none;
+        }
+        #buffScreen h2 {
+            color: #fbbf24;
+            font-size: 32px;
+            margin-bottom: 30px;
+        }
+        .buff-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .buff-btn {
+            display: block;
+            padding: 18px 25px;
+            font-size: 16px;
+            background: rgba(59,130,246,0.3);
+            border: 2px solid #3b82f6;
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .buff-btn:hover { 
+            background: rgba(59,130,246,0.5);
+            transform: scale(1.03);
+            box-shadow: 0 0 20px rgba(59,130,246,0.5);
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            background: rgba(10,10,30,0.98);
+            padding: 50px 70px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 100;
+            border: 2px solid #ef4444;
+            display: none;
+        }
+        #gameOver h2 { color: #ef4444; font-size: 36px; margin-bottom: 20px; }
+        #gameOver p { color: #ccc; font-size: 18px; margin: 10px 0; }
+        #restartBtn {
+            padding: 15px 50px;
+            font-size: 20px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border: none;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            margin-top: 25px;
+            transition: all 0.3s;
+        }
+        #restartBtn:hover { transform: scale(1.05); }
+        .stat-item.cd {
+            border-left-color: #ffcc00;
+        }
+        .btn-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 25px;
+        }
+        .gameover-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            border: none;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .gameover-btn.restart {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        }
+        .gameover-btn.revive {
+            background: linear-gradient(90deg, #10b981, #059669);
+        }
+        .gameover-btn:hover { transform: scale(1.05); }
+
+        /* ===== 新增：3D星空背景层 ===== */
+        #bg3d {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: -1;
+            background: radial-gradient(ellipse at center, #0a0a2a 0%, #000010 70%);
+        }
+        /* ===== 新增：连杀Combo显示 ===== */
+        #comboDisplay {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(255,68,68,0.9), rgba(255,204,0,0.9));
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 10px #ff4444, 2px 2px 0 #000;
+            border: 2px solid #ffcc00;
+            box-shadow: 0 0 25px rgba(255,204,0,0.6);
+            display: none;
+            z-index: 50;
+            animation: combo-pulse 0.4s ease-out;
+        }
+        @keyframes combo-pulse {
+            0% { transform: scale(1.5); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        /* ===== 新增：Boss血条 ===== */
+        #bossBar {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            background: rgba(10,10,30,0.95);
+            padding: 8px 15px;
+            border-radius: 10px;
+            border: 2px solid #ef4444;
+            display: none;
+            z-index: 50;
+            box-shadow: 0 0 30px rgba(239,68,68,0.6);
+        }
+        #bossBar .boss-name {
+            color: #ef4444;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 4px;
+            text-shadow: 0 0 8px #ef4444;
+        }
+        #bossBar .boss-hp-track {
+            width: 100%;
+            height: 14px;
+            background: #1a1a2a;
+            border-radius: 7px;
+            overflow: hidden;
+            border: 1px solid #ef4444;
+        }
+        #bossBar .boss-hp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ef4444, #ff8800, #ef4444);
+            background-size: 200% 100%;
+            animation: boss-hp-flow 2s linear infinite;
+            transition: width 0.3s;
+        }
+        /* Boss血量百分比文字：绝对定位在血条右侧，不影响布局 */
+        #bossBar .boss-hp-pct {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 4px #000, 0 0 2px #000;
+            font-family: 'Courier New', monospace;
+            pointer-events: none;
+            z-index: 1;
+        }
+        /* boss-row 需要相对定位以承载百分比标签 */
+        #bossBar .boss-row {
+            position: relative;
+        }
+        @keyframes boss-hp-flow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        /* ===== 新增：暴击伤害飘字 ===== */
+        .crit-popup {
+            position: absolute;
+            font-size: 36px;
+            font-weight: 900;
+            pointer-events: none;
+            animation: crit-float 1s ease-out forwards;
+            text-shadow: 0 0 15px currentColor, 3px 3px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000;
+        }
+        @keyframes crit-float {
+            0% { opacity: 1; transform: translateY(0) scale(0.3) rotate(-15deg); }
+            30% { transform: translateY(-20px) scale(1.6) rotate(8deg); }
+            60% { transform: translateY(-40px) scale(1.2) rotate(-3deg); }
+            100% { opacity: 0; transform: translateY(-80px) scale(1) rotate(0); }
+        }
+        /* ===== 新增：道具掉落提示 ===== */
+        #pickupToast {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10,10,30,0.95);
+            padding: 15px 30px;
+            border-radius: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #44ff44;
+            border: 2px solid #44ff44;
+            box-shadow: 0 0 30px rgba(68,255,68,0.6);
+            display: none;
+            z-index: 60;
+            text-shadow: 0 0 10px #44ff44;
+        }
+        /* ===== 新增：屏幕震动效果（特效优化：增加微缩放提升冲击感） ===== */
+        @keyframes screen-shake {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            10% { transform: translate(-5px, -3px) scale(1.005); }
+            20% { transform: translate(5px, 3px) scale(1.003); }
+            30% { transform: translate(-4px, 4px) scale(1.004); }
+            40% { transform: translate(4px, -4px) scale(1.002); }
+            50% { transform: translate(-3px, 3px) scale(1.003); }
+            60% { transform: translate(3px, -3px) scale(1.001); }
+            70% { transform: translate(-2px, 2px) scale(1.002); }
+            80% { transform: translate(2px, -2px) scale(1.001); }
+            90% { transform: translate(-1px, 0) scale(1); }
+        }
+        .shake { animation: screen-shake 0.4s ease-in-out; }
+        .shake-strong { animation: screen-shake 0.6s ease-in-out; animation-iteration-count: 2; }
+        /* ===== 新增：慢动作覆盖层（特效优化：增加色彩偏移+边缘暗角） ===== */
+        #slowmoOverlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(ellipse at center, transparent 25%, rgba(0,210,255,0.08) 60%, rgba(0,100,200,0.18) 100%);
+            pointer-events: none;
+            display: none;
+            z-index: 40;
+            backdrop-filter: blur(0.5px);  /* 轻微模糊增强慢动作感 */
+        }
+        /* ===== 劫Boss阶段切换横幅（进入P2/P3时全屏告示） ===== */
+        #jiePhaseBanner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: 900;
+            letter-spacing: 18px;
+            color: #ffffff;
+            text-shadow: 0 0 30px rgba(196,77,255,0.9), 0 0 60px rgba(196,77,255,0.6), 0 0 120px rgba(196,77,255,0.4);
+            pointer-events: none;
+            display: none;
+            z-index: 70;
+            white-space: nowrap;
+            animation: jie-phase-in 1.6s ease-out forwards;
+        }
+        #jiePhaseBanner .phase-sub {
+            display: block;
+            font-size: 22px;
+            letter-spacing: 8px;
+            color: rgba(255,255,255,0.85);
+            text-align: center;
+            margin-top: 6px;
+            text-shadow: 0 0 20px rgba(0,210,255,0.8);
+        }
+        @keyframes jie-phase-in {
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+            20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+            35%  { transform: translate(-50%, -50%) scale(1); }
+            75%  { opacity: 1; }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        /* ===== 新增：战斗暂停覆盖层 ===== */
+        #pauseOverlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            backdrop-filter: blur(3px);
+        }
+        #pauseOverlay.active {
+            display: flex;
+        }
+        #pauseOverlay .pause-icon {
+            width: 36px; height: 48px;
+            display: flex;
+            justify-content: space-between;
+        }
+        #pauseOverlay .pause-icon::before,
+        #pauseOverlay .pause-icon::after {
+            content: '';
+            width: 12px; height: 100%;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 3px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        #pauseOverlay .pause-text {
+            margin-top: 18px;
+            font-size: 28px;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+            letter-spacing: 4px;
+        }
+        #pauseOverlay .pause-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        #pauseOverlay .pause-btn {
+            width: 200px;
+            padding: 10px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.9);
+            letter-spacing: 2px;
+            transition: all 0.2s ease;
+        }
+        #pauseOverlay .pause-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: scale(1.03);
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
+        }
+        #pauseOverlay .pause-btn.continue {
+            border-color: rgba(0, 210, 255, 0.5);
+            color: #00d2ff;
+        }
+        #pauseOverlay .pause-btn.continue:hover {
+            background: rgba(0, 210, 255, 0.15);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+        #pauseOverlay .pause-btn.settings {
+            border-color: rgba(200, 200, 200, 0.35);
+            color: #ccc;
+        }
+        #pauseOverlay .pause-btn.restart {
+            border-color: rgba(255, 180, 0, 0.5);
+            color: #ffb400;
+        }
+        #pauseOverlay .pause-btn.restart:hover {
+            background: rgba(255, 180, 0, 0.15);
+            box-shadow: 0 0 20px rgba(255, 180, 0, 0.3);
+        }
+        #pauseOverlay .pause-btn.back {
+            border-color: rgba(255, 80, 80, 0.5);
+            color: #ff5050;
+        }
+        #pauseOverlay .pause-btn.back:hover {
+            background: rgba(255, 80, 80, 0.15);
+            box-shadow: 0 0 20px rgba(255, 80, 80, 0.3);
+        }
+        #pauseOverlay .pause-hint {
+            margin-top: 16px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.45);
+        }
+        /* ===== 新增：能量条 ===== */
+        #energyBar {
+            position: absolute;
+            bottom: 85px;
+            left: 250px;
+            right: 20px;
+            height: 8px;
+            background: rgba(10,10,30,0.95);
+            border-radius: 4px;
+            border: 1px solid #ff00ff;
+            overflow: hidden;
+            z-index: 30;
+        }
+        #energyFill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff, #ff44ff, #ff00ff);
+            background-size: 200% 100%;
+            animation: energy-flow 1.5s linear infinite;
+            transition: width 0.2s;
+            width: 0%;
+        }
+        @keyframes energy-flow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        #energyLabel {
+            position: absolute;
+            bottom: 96px;
+            left: 260px;
+            font-size: 11px;
+            color: #ff00ff;
+            text-shadow: 0 0 5px #ff00ff;
+            z-index: 30;
+        }
+        /* ===== 新增：英雄选择界面 ===== */
+        #heroSelectScreen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            background: rgba(10,10,30,0.98);
+            padding: 20px 30px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 1000;
+            border: 2px solid #fbbf24;
+            display: none;
+            max-width: 92vw;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+        #heroSelectScreen h2 {
+            color: #fbbf24;
+            font-size: 26px;
+            margin-bottom: 16px;
+            text-shadow: 0 0 20px rgba(251,191,36,0.6);
+        }
+        .hero-grid-nope-removed {
+            display: none;
+        }
+        /* ===== 随机选择按钮 ===== */
+        .random-hero-btn {
+            padding: 8px 18px;
+            background: linear-gradient(90deg, #6a00ff, #00d2ff);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-shadow: 0 0 8px rgba(255,255,255,0.5);
+            box-shadow: 0 0 16px rgba(106,0,255,0.4);
+            position: relative;
+            overflow: hidden;
+            line-height: 1.4;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .random-hero-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        .random-hero-btn:hover::before { left: 100%; }
+        .random-hero-btn:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 30px rgba(106,0,255,0.6);
+        }
+        .random-hero-btn:active { transform: scale(0.98); }
+        .random-hero-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            animation: none;
+        }
+        .random-hero-btn.rolling {
+            animation: random-pulse 0.15s ease-in-out infinite;
+        }
+        @keyframes random-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(106,0,255,0.4); }
+            50% { box-shadow: 0 0 40px rgba(0,210,255,0.8); }
+        }
+        /* 选中框闪烁动画（滚动时高亮快速移动） */
+        .hero-card.rolling-highlight {
+            border-color: #fbbf24 !important;
+            box-shadow: 0 0 30px rgba(251,191,36,0.8) !important;
+            transform: scale(1.08);
+            transition: all 0.08s;
+        }
+        /* ===== 英雄卡片（重设计：大头像+颜色光晕+3D倾斜悬停） ===== */
+        .hero-card {
+            background: linear-gradient(135deg, rgba(20,20,50,0.9) 0%, rgba(10,10,30,0.95) 100%);
+            border: 3px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 14px 10px 12px;
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            text-align: center;
+            min-width: 0;
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+        /* 卡片内部装饰：左上角斜光 */
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: linear-gradient(135deg, transparent 45%, rgba(0,210,255,0.08) 50%, transparent 55%);
+            transition: transform 0.6s;
+            pointer-events: none;
+        }
+        .hero-card:hover::before {
+            transform: rotate(45deg) translate(20%, 20%);
+        }
+        .hero-card:hover {
+            transform: translateY(-6px) scale(1.04);
+            box-shadow: 0 12px 36px rgba(0,210,255,0.35), 0 0 24px rgba(0,210,255,0.2);
+            border-color: rgba(0,210,255,0.6);
+        }
+        .hero-card.selected {
+            border-color: #fbbf24;
+            box-shadow: 0 0 28px rgba(251,191,36,0.7), 0 0 60px rgba(251,191,36,0.3);
+            transform: translateY(-5px) scale(1.04);
+            animation: hero-card-selected-pulse 2s ease-in-out infinite;
+        }
+        @keyframes hero-card-selected-pulse {
+            0%, 100% { box-shadow: 0 0 28px rgba(251,191,36,0.7), 0 0 60px rgba(251,191,36,0.3); }
+            50%      { box-shadow: 0 0 40px rgba(251,191,36,0.9), 0 0 80px rgba(251,191,36,0.5); }
+        }
+        .hero-card .hero-icon {
+            width: 100%;
+            flex: 1;
+            min-height: 140px;
+            border-radius: 12px;
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 8px currentColor;
+            position: relative;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+        .hero-card .hero-icon canvas.hero-portrait {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+        .hero-card:hover .hero-icon {
+            transform: scale(1.08);
+        }
+        .hero-card.selected .hero-icon {
+            animation: hero-icon-glow 1.5s ease-in-out infinite;
+        }
+        @keyframes hero-icon-glow {
+            0%, 100% { filter: brightness(1) drop-shadow(0 0 6px currentColor); }
+            50%      { filter: brightness(1.25) drop-shadow(0 0 14px currentColor); }
+        }
+        .hero-card .hero-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            margin: 10px 0 3px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 8px rgba(0,0,0,0.8);
+            flex-shrink: 0;
+        }
+        .hero-card .hero-title {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        /* ===== 英文模式下微调：缩小字号/字距、允许换行，避免长英文名（拼音）溢出重叠 ===== */
+        html.lang-en .hero-card .hero-name {
+            font-size: 13px;
+            letter-spacing: 0;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            line-height: 1.25;
+        }
+        html.lang-en .hero-card .hero-title {
+            font-size: 10px;
+            letter-spacing: 0;
+            line-height: 1.3;
+        }
+        html.lang-en .hero-right-col .detail-hero-name {
+            font-size: 18px;
+            letter-spacing: 0;
+            line-height: 1.3;
+        }
+        html.lang-en .hero-right-col .detail-hero-title {
+            font-size: 11px;
+            letter-spacing: 0;
+            line-height: 1.4;
+        }
+        html.lang-en .hero-right-col .sk-name {
+            letter-spacing: 0;
+        }
+        html.lang-en .diff-chip .diff-name,
+        html.lang-en .diff-chip .diff-desc,
+        html.lang-en .diff-chip .diff-stats {
+            letter-spacing: 0;
+        }
+        html.lang-en .curse-night-title,
+        html.lang-en .madness-night-title,
+        html.lang-en .curse-night-desc,
+        html.lang-en .madness-night-desc {
+            letter-spacing: 0;
+            line-height: 1.4;
+        }
+        /* 英文下按钮文字更长，放宽辅助按钮内边距换行 */
+        html.lang-en .skin-btn,
+        html.lang-en .bg-select-btn,
+        html.lang-en .music-btn,
+        html.lang-en .lang-btn {
+            padding: 12px 14px;
+            letter-spacing: 0;
+            white-space: nowrap;
+        }
+        .hero-card .hero-stats {
+            font-size: 12px;
+            color: #ccc;
+            line-height: 1.5;
+        }
+        .hero-detail {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            min-height: 70px;
+            text-align: left;
+        }
+        .hero-detail .skill-line {
+            color: #fff;
+            font-size: 13px;
+            margin: 4px 0;
+            line-height: 1.6;
+        }
+        .hero-detail .skill-line .sk-name {
+            font-weight: bold;
+            color: #fbbf24;
+            text-shadow: 0 0 6px rgba(251,191,36,0.4);
+        }
+        #confirmHeroBtn, #backHeroBtn {
+            padding: 10px 32px;
+            font-size: 16px;
+            border: none;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0 8px;
+        }
+        #confirmHeroBtn {
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+        }
+        #confirmHeroBtn:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(251,191,36,0.6); }
+        #backHeroBtn {
+            background: linear-gradient(90deg, #6b7280, #4b5563);
+        }
+        #backHeroBtn:hover { transform: scale(1.05); }
+
+        /* ===== 音乐设置窗口（琥珀橙主题，区别于主蓝） ===== */
+        #musicScreen {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw; max-width: 560px;
+            max-height: 85vh;
+            background: rgba(20,14,8,0.98);
+            border: 2px solid rgba(255,180,0,0.5);
+            border-radius: 20px;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            padding: 20px 24px;
+            box-shadow: 0 0 60px rgba(255,180,0,0.3);
+            box-sizing: border-box;
+        }
+        .music-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+        }
+        .music-header h2 {
+            color: #ffb400;
+            font-size: 24px;
+            text-shadow: 0 0 20px rgba(255,180,0,0.5);
+        }
+        .music-close-btn {
+            padding: 8px 18px;
+            font-size: 14px;
+            background: rgba(255,68,68,0.3);
+            border: 1px solid rgba(255,100,100,0.5);
+            border-radius: 20px;
+            color: #ff8888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .music-close-btn:hover {
+            background: rgba(255,68,68,0.5);
+            color: #fff;
+        }
+        .music-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            flex-shrink: 0;
+        }
+        .music-tab {
+            flex: 1;
+            padding: 10px 0;
+            font-size: 15px;
+            font-weight: bold;
+            border: 2px solid rgba(255,180,0,0.3);
+            border-radius: 12px;
+            background: rgba(255,180,0,0.06);
+            color: #caa45a;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 2px;
+        }
+        .music-tab:hover {
+            border-color: rgba(255,180,0,0.6);
+            background: rgba(255,180,0,0.12);
+        }
+        .music-tab.active {
+            border-color: #ffb400;
+            color: #ffb400;
+            background: rgba(255,180,0,0.15);
+            box-shadow: 0 0 14px rgba(255,180,0,0.3);
+        }
+        .music-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 120px;
+            max-height: 45vh;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 4px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,180,0,0.3) transparent;
+        }
+        .music-list::-webkit-scrollbar { width: 6px; }
+        .music-list::-webkit-scrollbar-thumb { background: rgba(255,180,0,0.3); border-radius: 3px; }
+        .music-list::-webkit-scrollbar-track { background: transparent; }
+        .music-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 12px 14px;
+            text-align: left;
+            border-radius: 12px;
+            border: 2px solid rgba(255,180,0,0.2);
+            background: rgba(255,180,0,0.04);
+            color: #ddd;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .music-item:hover {
+            border-color: rgba(255,180,0,0.5);
+            background: rgba(255,180,0,0.1);
+            transform: translateX(2px);
+        }
+        .music-item.selected {
+            border-color: #ffb400;
+            color: #ffb400;
+            background: rgba(255,180,0,0.14);
+            box-shadow: 0 0 14px rgba(255,180,0,0.25);
+        }
+        .music-item-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .music-item-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: bold;
+        }
+        .music-item-tag {
+            flex-shrink: 0;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,180,0,0.15);
+            color: #ffb400;
+            border: 1px solid rgba(255,180,0,0.3);
+        }
+        .music-footer {
+            display: flex;
+            justify-content: center;
+            padding: 14px 0 4px;
+            flex-shrink: 0;
+        }
+        .music-mode-btn {
+            padding: 10px 28px;
+            font-size: 15px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ffb400, #ff8c00);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 20px rgba(255,180,0,0.4), 0 3px 0 rgba(180,110,0,0.6);
+        }
+        .music-mode-btn:hover {
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 0 30px rgba(255,180,0,0.6), 0 5px 0 rgba(180,110,0,0.6);
+        }
+        .music-mode-btn:active { transform: scale(0.98); }
+        .music-volume {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 6px 2px;
+            flex-shrink: 0;
+        }
+        .music-volume-label {
+            color: #caa45a;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .music-volume-slider {
+            flex: 1;
+            min-width: 0;
+            height: 6px;
+            accent-color: #ffb400;
+            cursor: pointer;
+        }
+        .music-volume-value {
+            color: #ffb400;
+            font-size: 14px;
+            font-weight: bold;
+            width: 44px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .music-credit-btn {
+            margin: 12px auto 0;
+            padding: 9px 22px;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            background: rgba(255,180,0,0.08);
+            border: 1px dashed rgba(255,180,0,0.45);
+            border-radius: 20px;
+            color: #ffb400;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .music-credit-btn:hover {
+            background: rgba(255,180,0,0.18);
+            border-style: solid;
+            box-shadow: 0 0 14px rgba(255,180,0,0.3);
+        }
+        /* 版权与致谢小窗口（覆盖在音乐窗口之上） */
+        .music-credit-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 2100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(2px);
+        }
+        .music-credit-window {
+            width: 90vw;
+            max-width: 520px;
+            max-height: 82vh;
+            display: flex;
+            flex-direction: column;
+            padding: 18px 22px;
+            box-sizing: border-box;
+            background: rgba(20,14,8,0.99);
+            border: 2px solid rgba(255,180,0,0.5);
+            border-radius: 18px;
+            box-shadow: 0 0 50px rgba(255,180,0,0.35);
+        }
+        .music-credit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        .music-credit-header h3 {
+            color: #ffb400;
+            font-size: 20px;
+            text-shadow: 0 0 16px rgba(255,180,0,0.5);
+        }
+        .music-credit-body {
+            overflow-y: auto;
+            padding-right: 4px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,180,0,0.3) transparent;
+        }
+        .music-credit-body::-webkit-scrollbar { width: 6px; }
+        .music-credit-body::-webkit-scrollbar-thumb { background: rgba(255,180,0,0.3); border-radius: 3px; }
+        .music-credit-body::-webkit-scrollbar-track { background: transparent; }
+        .music-note {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255,180,0,0.05);
+            border: 1px dashed rgba(255,180,0,0.35);
+            font-size: 12px;
+            line-height: 1.7;
+            color: #b8a87a;
+        }
+        .music-note p { margin: 2px 0; }
+        .music-note p:first-child {
+            font-weight: bold;
+            color: #ffb400;
+            margin-bottom: 4px;
+        }
+        .music-note b { color: #ffb400; }
+        .music-credit-title {
+            margin: 14px 0 8px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #ffb400;
+            letter-spacing: 1px;
+        }
+        .music-credit-help {
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #b8a87a;
+        }
+        .music-credit-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .music-credit-item {
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(255,180,0,0.04);
+            border: 1px solid rgba(255,180,0,0.18);
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ddd;
+        }
+        .music-credit-item .track {
+            color: #ffb400;
+            font-weight: bold;
+        }
+        .music-credit-item .author {
+            color: #eee;
+        }
+        .music-credit-item a {
+            color: #ffb400;
+            text-decoration: none;
+            font-size: 12px;
+            border-bottom: 1px dotted rgba(255,180,0,0.5);
+        }
+        .music-credit-item a:hover { color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="loadingScreen">
+        <div class="loading-content">
+            <h1 class="loading-title" data-i18n="英雄之战">英雄之战</h1>
+            <div class="loading-subtitle">HEROES OF WAR</div>
+            <div class="loading-bar-container">
+                <div class="loading-bar-fill" id="loadingBarFill"></div>
+            </div>
+            <div class="loading-percent" id="loadingPercent">0%</div>
+            <div class="loading-tip" id="loadingTip">正在加载资源...</div>
+            <div class="loading-version">v2.0 · <span data-i18n="暗夜星辰">暗夜星辰</span></div>
+        </div>
+    </div>
+    <canvas id="bg3d"></canvas>
+    <div id="gameContainer">
+        <div id="stats">
+            <div class="stat-title" id="statHeroTitle" data-i18n="英雄属性">英雄属性</div>
+            <div class="stat-item hp">
+                <div class="stat-label" data-i18n="最大生命">最大生命</div>
+                <div class="stat-value" id="stat-hp">100</div>
+            </div>
+            <div class="stat-item damage">
+                <div class="stat-label" data-i18n="普通攻击">普通攻击</div>
+                <div class="stat-value" id="stat-attack">10</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label" id="stat-s1-label" data-i18n="一技能伤害">一技能伤害</div>
+                <div class="stat-value" id="stat-s1">20</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label" id="stat-s2-label" data-i18n="二技能伤害">二技能伤害</div>
+                <div class="stat-value" id="stat-s2">5</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label" id="stat-s3-label" data-i18n="三技能伤害">三技能伤害</div>
+                <div class="stat-value" id="stat-s3">40</div>
+            </div>
+            <div class="stat-item" style="border-left-color:#ffcc00;">
+                <div class="stat-label" data-i18n="暴击率">暴击率</div>
+                <div class="stat-value" id="stat-crit">20%</div>
+            </div>
+            <div class="stat-item" style="border-left-color:#ff8800;">
+                <div class="stat-label" data-i18n="暴击伤害">暴击伤害</div>
+                <div class="stat-value" id="stat-critdmg">150%</div>
+            </div>
+            <div class="stat-item" style="border-left-color:#ff3366;">
+                <div class="stat-label" data-i18n="伤害增加">伤害增加</div>
+                <div class="stat-value" id="stat-dmgbonus">0%</div>
+            </div>
+            <div class="stat-item" style="border-left-color:#33aaff;">
+                <div class="stat-label" data-i18n="伤害减免">伤害减免</div>
+                <div class="stat-value" id="stat-dmgreduction">0%</div>
+            </div>
+            <div class="stat-title" style="font-size:20px;color:#ffffff;" data-i18n="操作键位">操作键位</div>
+            <div class="stat-item" style="border-left:none;text-align:center;padding:8px;">
+                <div style="font-size:16px;color:#ffffff;line-height:1.5;">
+                    <span data-i18n="WASD移动">WASD移动</span><br/><span data-i18n="0普攻 1/2/3技能">0普攻 1/2/3技能</span>
+                </div>
+            </div>
+        </div>
+        <div>
+            <canvas id="gameCanvas"></canvas>
+            <div id="wave"><span data-i18n="波次: ">波次: </span><span id="waveNum">1</span><span data-i18n=" | 曹操数: "> | 曹操数: </span><span id="enemyCount">1</span><span data-i18n=" | 击杀: "> | 击杀: </span><span id="kills">0</span></div>
+            <div id="info">
+                <span id="heroName" data-i18n="吕布">吕布</span><span data-i18n="血量: ">血量: </span><span id="hp">100</span>/<span id="maxHp">100</span>
+            </div>
+            <div id="comboDisplay"><span data-i18n="连击 ">连击 </span><span id="comboNum">0</span></div>
+            <div id="bossBar">
+                <div class="boss-row" id="bossRow1">
+                    <div class="boss-name" id="bossName1">Boss</div>
+                    <div class="boss-hp-track"><div class="boss-hp-fill" id="bossHpFill1" style="width:100%;"></div></div>
+                    <div class="boss-hp-pct" id="bossHpPct1">100%</div>
+                </div>
+                <div class="boss-row" id="bossRow2" style="display:none;margin-top:6px;">
+                    <div class="boss-name" id="bossName2">Boss</div>
+                    <div class="boss-hp-track"><div class="boss-hp-fill" id="bossHpFill2" style="width:100%;"></div></div>
+                    <div class="boss-hp-pct" id="bossHpPct2">100%</div>
+                </div>
+            </div>
+            <div id="bgToast"></div>
+            <div id="pickupToast"></div>
+            <div id="jiePhaseBanner"></div>
+            <div id="slowmoOverlay"></div>
+            <!-- 战斗暂停覆盖层（空格键切换） -->
+            <div id="pauseOverlay">
+                <div class="pause-icon"></div>
+                <div class="pause-text" data-i18n="已暂停">已暂停</div>
+                <div class="pause-menu">
+                    <button class="pause-btn continue" id="pauseContinueBtn" data-i18n="继续游戏">继续游戏</button>
+                    <button class="pause-btn settings" id="pauseSettingsBtn" data-i18n="设 置">设 置</button>
+                    <button class="pause-btn restart" id="pauseRestartBtn" data-i18n="重新开始">重新开始</button>
+                    <button class="pause-btn back" id="pauseBackBtn" data-i18n="返回主菜单">返回主菜单</button>
+                </div>
+                <div class="pause-hint" data-i18n="或按空格键继续">或按空格键继续</div>
+            </div>
+            <div id="ui">
+                <button class="skill-btn attack" id="btn0" onclick="useSkill(0)">
+                    0<br><small id="btn0Name" data-i18n="普攻">普攻</small>
+                    <div class="cd-overlay" id="cd0" style="display:none;">0</div>
+                </button>
+                <button class="skill-btn skill1" id="btn1" onclick="useSkill(1)">
+                    1<br><small id="btn1Name" data-i18n="一技能">一技能</small>
+                    <div class="cd-overlay" id="cd1" style="display:none;">0</div>
+                </button>
+                <button class="skill-btn skill2" id="btn2" onclick="useSkill(2)">
+                    2<br><small id="btn2Name" data-i18n="二技能">二技能</small>
+                    <div class="cd-overlay" id="cd2" style="display:none;">0</div>
+                </button>
+                <button class="skill-btn skill3" id="btn3" onclick="useSkill(3)">
+                    3<br><small id="btn3Name" data-i18n="三技能">三技能</small>
+                    <div class="cd-overlay" id="cd3" style="display:none;">0</div>
+                </button>
+            </div>
+            <div id="startScreen">
+                <div class="start-title-wrap">
+                    <div class="start-title-deco"></div>
+                    <h1 data-i18n="英雄之战">英雄之战</h1>
+                    <div class="start-subtitle">HEROES OF WAR</div>
+                </div>
+                <!-- ===== 步骤面板容器 ===== -->
+                <div class="step-stage">
+                    <!-- 步骤1：选择英雄（左右布局：左英雄网格 + 右技能详情） -->
+                    <div class="step-panel active" id="step1Panel">
+                        <div class="hero-left-col">
+                            <div class="hero-top-bar">
+                                <span class="section-label" data-i18n="选择英雄">选择英雄</span>
+                                <button class="random-hero-btn" id="randomHeroBtn" data-i18n="🎲 随机选择">🎲 随机选择</button>
+                            </div>
+                            <div class="hero-grid" id="heroGrid"></div>
+                        </div>
+                        <div class="hero-right-col" id="heroDetail"></div>
+                    </div>
+                    <!-- 步骤2：选择难度 + 疯狂之夜侧边栏(左) + 诅咒之夜侧边栏(右) -->
+                    <div class="step-panel" id="step2Panel">
+                        <div class="step2-layout">
+                            <div class="step2-leftmost">
+                                <div class="madness-night-sidebar" id="madnessNightSidebar" onclick="toggleMadnessNightMode()">
+                                    <div class="madness-night-glow"></div>
+                                    <div class="madness-night-icon">👻</div>
+                                    <div class="madness-night-title" data-i18n="疯狂之夜">疯狂之夜</div>
+                                    <div class="madness-night-desc" data-i18n="独立难度 · 全精英怪 · 每波额外Boss">独立难度 · 全精英怪 · 每波额外Boss</div>
+                                    <div class="madness-night-desc" data-i18n="血量×5 · 天罚雷电/疯狂弥漫/猩红疯狂每波切换">血量×5 · 天罚雷电/疯狂弥漫/猩红疯狂每波切换</div>
+                                    <div class="madness-night-badge" id="madnessNightBadge" data-i18n="未开启">未开启</div>
+                                </div>
+                            </div>
+                            <div class="step2-left">
+                                <div class="section-label center" style="margin-bottom:18px;" data-i18n="选择难度">选择难度</div>
+                                <div class="diff-row" id="diffRow"></div>
+                            </div>
+                            <div class="step2-right">
+                                <div class="curse-night-sidebar" id="curseNightSidebar" onclick="toggleCurseNightMode()">
+                                    <div class="curse-night-glow"></div>
+                                    <div class="curse-night-icon">🌙</div>
+                                    <div class="curse-night-title" data-i18n="诅咒之夜">诅咒之夜</div>
+                                    <div class="curse-night-desc" data-i18n="独立难度 · 全精英怪 · 每波额外Boss">独立难度 · 全精英怪 · 每波额外Boss</div>
+                                    <div class="curse-night-desc" data-i18n="血量×3 · 雷电/诅咒/疯狂天气每波切换">血量×3 · 雷电/诅咒/疯狂天气每波切换</div>
+                                    <div class="curse-night-badge" id="curseNightBadge" data-i18n="未开启">未开启</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 步骤3：选择模式 + 附加模块 -->
+                    <div class="step-panel" id="step3Panel">
+                        <div class="section-label center" style="margin-bottom:18px;" data-i18n="选择模式">选择模式</div>
+                        <div class="mode-row" id="selectBody"></div>
+                        <div class="section-label" style="margin-top:22px;margin-bottom:10px;" data-i18n="🔧 附加模块">🔧 附加模块</div>
+                        <div id="joinBody"></div>
+                    </div>
+                </div>
+                <!-- ===== 底部导航栏（分组：主操作 + 辅助操作） ===== -->
+                <div class="start-bottom-bar">
+                    <div class="nav-group">
+                        <button id="prevStepBtn" class="prev-step-btn" style="display:none;" data-i18n="← 上一步">← 上一步</button>
+                        <button id="startGameBtn" disabled data-i18n="下一步">下一步</button>
+                    </div>
+                    <div class="util-group">
+                        <button id="skinBtn" class="skin-btn" data-i18n="🎨 皮肤">🎨 皮肤</button>
+                        <button id="bgSelectBtn" class="bg-select-btn" data-i18n="🖼️ 背景">🖼️ 背景</button>
+                        <button id="musicBtn" class="music-btn" data-i18n="🎵 音乐">🎵 音乐</button>
+                        <button id="langBtn" class="lang-btn" data-i18n="🌐 语言">🌐 语言</button>
+                    </div>
+                </div>
+                <input type="file" id="bgFileInput" accept="image/*" style="display:none;">
+            </div>
+            <div id="buffScreen">
+                <h2 data-i18n="选择奖励">选择奖励</h2>
+                <div class="buff-container" id="buffButtons"></div>
+            </div>
+            <div id="shopScreen">
+                <h2 data-i18n="🏪 商店">🏪 商店</h2>
+                <div class="shop-gold" id="shopGoldDisplay">金币: 0</div>
+                <div class="shop-grid" id="shopGrid"></div>
+                <button class="shop-close-btn" id="shopCloseBtn" data-i18n="关闭商店">关闭商店</button>
+            </div>
+            <div id="artifactScreen">
+                <h2 data-i18n="🏺 选择一件神器">🏺 选择一件神器</h2>
+                <div class="subtitle" data-i18n="选择一件神器带入本局战斗（都是机制级改变，而非数值增强）">选择一件神器带入本局战斗（都是机制级改变，而非数值增强）</div>
+                <div class="artifact-grid" id="artifactGrid"></div>
+            </div>
+            <div id="weatherIndicator">☀️ 晴天</div>
+            <div id="gameOver">
+                <h2 data-i18n="游戏结束">游戏结束</h2>
+                <p><span data-i18n="最高波次: ">最高波次: </span><span id="finalWave">1</span></p>
+                <p><span data-i18n="总击杀: ">总击杀: </span><span id="finalKills">0</span></p>
+                <p id="reviveInfo" style="color:#fbbf24;font-size:14px;"></p>
+                <div class="btn-container">
+                    <button id="restartBtn" class="gameover-btn restart" data-i18n="重新开始">重新开始</button>
+                    <button id="reviveBtn" class="gameover-btn revive" data-i18n="复活">复活</button>
+                </div>
+            </div>
+            <!-- ===== 皮肤选择窗口 ===== -->
+            <div id="skinScreen">
+                <div class="skin-header">
+                    <h2 data-i18n="🎨 皮肤选择">🎨 皮肤选择</h2>
+                    <button id="skinCloseBtn" class="skin-close-btn" data-i18n="✕ 关闭">✕ 关闭</button>
+                </div>
+                <div class="skin-hero-selector" id="skinHeroSelector"></div>
+                <div class="skin-preview" id="skinPreview"></div>
+                <div class="skin-grid" id="skinGrid"></div>
+                <div class="skin-footer">
+                    <button id="skinConfirmBtn" class="skin-confirm-btn" data-i18n="✓ 确认保存">✓ 确认保存</button>
+                </div>
+            </div>
+            <!-- ===== 音乐设置窗口 ===== -->
+            <div id="musicScreen">
+                <div class="music-header">
+                    <h2 data-i18n="🎵 音乐设置">🎵 音乐设置</h2>
+                    <button id="musicCloseBtn" class="music-close-btn" data-i18n="✕ 关闭">✕ 关闭</button>
+                </div>
+                <div class="music-tabs">
+                    <button class="music-tab active" data-music-tab="nonBattle" data-i18n="非战斗">非战斗</button>
+                    <button class="music-tab" data-music-tab="battle" data-i18n="战斗">战斗</button>
+                </div>
+                <div class="music-list" id="musicList"></div>
+                <div class="music-footer">
+                    <button id="musicModeSwitch" class="music-mode-btn"><span data-i18n="播放模式：">播放模式：</span><span id="musicModeValue">循环播放</span></button>
+                </div>
+                <div class="music-volume">
+                    <span class="music-volume-label" data-i18n="🔊 音量">🔊 音量</span>
+                    <input type="range" id="musicVolumeSlider" class="music-volume-slider" min="0" max="1" step="0.01" value="0.6">
+                    <span class="music-volume-value" id="musicVolumeValue">60%</span>
+                </div>
+                <button id="musicCreditBtn" class="music-credit-btn" data-i18n="🎧 版权与致谢">🎧 版权与致谢</button>
+                <!-- 版权与致谢小窗口 -->
+                <div id="musicCreditScreen" class="music-credit-screen">
+                    <div class="music-credit-window">
+                        <div class="music-credit-header">
+                            <h3 data-i18n="🎧 版权与致谢">🎧 版权与致谢</h3>
+                            <button id="musicCreditCloseBtn" class="music-close-btn" data-i18n="✕ 关闭">✕ 关闭</button>
+                        </div>
+                        <div class="music-credit-body">
+                            <div class="music-note">
+                                <p data-i18n="🎧 版权说明">🎧 版权说明</p>
+                                <p data-i18n="本游戏内所有音乐均下载自 OpenGameArt 等免费开源素材平台，并采用 CC0 1.0 通用公有领域奉献协议（Creative Commons Zero 1.0 Universal）授权，可自由用于任何用途，无需署名、无须授权。尽管如此，我们仍致谢每一位作者的贡献。">本游戏内所有音乐均下载自 OpenGameArt 等免费开源素材平台，并采用 CC0 1.0 通用公有领域奉献协议（Creative Commons Zero 1.0 Universal）授权，可自由用于任何用途，无需署名、无须授权。尽管如此，我们仍致谢每一位作者的贡献。</p>
+                                <p data-i18n="素材均按 CC0 协议筛选下载，已核对来源许可证；如对某首曲目仍有疑虑，可随时在设置中替换或移除，以确保零争端。">素材均按 CC0 协议筛选下载，已核对来源许可证；如对某首曲目仍有疑虑，可随时在设置中替换或移除，以确保零争端。</p>
+                            </div>
+                            <div class="music-credit-title" data-i18n="🙏 致谢每一位作者">🙏 致谢每一位作者</div>
+                            <div class="music-credit-help" data-i18n="以下曲目均为 CC0 公有领域作品，署名以致谢作者。点击作者名可跳转到 OpenGameArt 原页。">以下曲目均为 CC0 公有领域作品，署名以致谢作者。点击作者名可跳转到 OpenGameArt 原页。</div>
+                            <div class="music-credit-list" id="musicCreditList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ===== 语言设置窗口 ===== -->
+            <div id="langScreen">
+                <div class="lang-header">
+                    <h2 data-i18n="🌐 语言设置">🌐 语言设置</h2>
+                    <button id="langCloseBtn" class="lang-close-btn" data-i18n="✕ 关闭">✕ 关闭</button>
+                </div>
+                <div class="lang-options">
+                    <button class="lang-option" data-lang="zh">中文<div class="lang-sub">简体中文</div></button>
+                    <button class="lang-option" data-lang="en">English<div class="lang-sub">English</div></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 三方库：已本地化为相对路径(vendor/)，避免依赖外部CDN，兼容 GitHub Pages 子路径部署 -->
+    <script src="vendor/three.min.js?v=20260914"></script>
+    <script src="vendor/gsap.min.js?v=20260914"></script>
+
+    <!-- 主游戏代码（按功能拆分为多个文件，保持原作用域不变，按原顺序加载） -->
+    <!-- v=20260914 用于强制刷新缓存；相对路径(src/...)，兼容 GitHub Pages 子路径部署 -->
+    <script src="src/i18n.js?v=20260914"></script>
+    <script src="src/data_config.js?v=20260914"></script>
+    <script src="src/background.js?v=20260914"></script>
+    <script src="src/config.js?v=4"></script>
+    <script src="src/skins.js?v=20260914"></script>
+    <script src="src/heroes.js?v=20260914"></script>
+    <script src="src/Hero.js?v=20260914"></script>
+    <script src="src/Enemy.js?v=2"></script>
+    <script src="src/bosses.js?v=5"></script>
+    <script src="src/draw.js?v=20260914"></script>
+    <script src="src/wave.js?v=20260914"></script>
+    <script src="src/skills.js?v=20260914"></script>
+    <script src="src/particles.js?v=20260914"></script>
+    <script src="src/gameloop.js?v=3"></script>
+    <script src="src/bootstrap.js?v=20260914"></script>
+    <script src="src/music.js?v=20260914"></script>
+    <!-- 小鱼 AI 驾驶层：追加在上游所有脚本之后；不修改上游任何一行 -->
+    <script src="src/ai.js?v=2"></script>
+    <script src="src/duo.js?v=5"></script>
+    <script src="src/coop.js?v=5"></script>
+</body>
+</html>

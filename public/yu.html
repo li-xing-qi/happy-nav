@@ -12,7 +12,10 @@
      只比原始串的话这条预上色永远不命中，刷新时会先闪一下白再跳成深海。 */
   try{var _t=localStorage.getItem('yu_theme');
     if(_t&&_t.charAt(0)==='"'){try{_t=JSON.parse(_t);}catch(e2){}}
-    if(_t==='white'||_t==='sky'||_t==='sea'||_t==='warm')document.documentElement.dataset.bg=(_t==='warm'?'white':_t),document.documentElement.dataset.yu=_t;}catch(e){}
+    if(_t==='white'||_t==='sky'||_t==='sea'||_t==='warm')document.documentElement.dataset.bg=(_t==='warm'?'white':_t),document.documentElement.dataset.yu=_t;
+    var _cur=document.documentElement.dataset.yu||'white';
+    var _po=matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
+    (new Image()).src='/bg/'+(_po?'p-':'')+_cur+'.jpg?v=3';}catch(e){}
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -32,10 +35,33 @@ html[data-yu="warm"]{--ink:#2c211c;--ink2:#6d5a50;--ink3:#9d887c;--line:#efe6df;
   --paper:#fff;--paper2:#fbf6f1;--paper3:#f5ece4;--accent:#b06f4e;--accent-soft:#f9eee6;--side:#fdf8f3;--bub:#f6ece3;--mine:#b06f4e;}
 html,body{height:100%;}
 /* 2026-11-28 背景底图（只换视觉，不动 data-bg/data-yu 切换逻辑） */
-html[data-bg="white"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(255,255,255,.48),rgba(255,255,255,.66)),url('/bg/white.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
-html[data-bg="sky"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(242,248,252,.34),rgba(242,248,252,.48) 46%,rgba(255,255,255,.58)),url('/bg/sky.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
-html[data-bg="sea"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(16,42,56,.50),rgba(16,42,56,.60) 55%,rgba(10,30,42,.70)),url('/bg/sea.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
-html[data-yu="warm"] body{background-color:var(--paper);background-image:linear-gradient(180deg,rgba(251,246,241,.40),rgba(251,246,241,.58)),url('/bg/warm.jpg');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-bg="white"] body{background-color:var(--paper);background-image:url('/bg/white.jpg?v=3');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-bg="sky"] body{background-color:var(--paper);background-image:url('/bg/sky.jpg?v=3');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-bg="sea"] body{background-color:var(--paper);background-image:url('/bg/sea.jpg?v=3');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+html[data-yu="warm"] body{background-color:var(--paper);background-image:url('/bg/warm.jpg?v=3');background-position:center;background-size:cover;background-repeat:no-repeat;background-attachment:fixed;}
+/* 2026-11-28 动态背景视频层（只跟随 data-bg/data-yu，不改动原有切换逻辑） */
+#bgv{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
+#bgv video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:0;transition:opacity .3s ease;pointer-events:none;}
+/* 只有「当前主题 + 已经真的出帧」才显示，避免未就绪的空白帧一闪 */
+#bgv video.on.ready{opacity:1;}
+#bgv .bgvscrim{position:absolute;inset:0;pointer-events:none;}
+html[data-bg="white"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(255,255,255,.48),rgba(255,255,255,.66));}
+html[data-bg="sky"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(242,248,252,.34),rgba(242,248,252,.48) 46%,rgba(255,255,255,.58));}
+html[data-bg="sea"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(16,42,56,.50),rgba(16,42,56,.60) 55%,rgba(10,30,42,.70));}
+html[data-yu="warm"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(251,246,241,.40),rgba(251,246,241,.58));}
+@media (orientation: portrait) and (max-width: 900px){
+  html[data-bg="white"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(255,255,255,.52),rgba(255,255,255,.68));}
+  html[data-bg="sky"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(242,248,252,.34),rgba(242,248,252,.48) 46%,rgba(255,255,255,.58));}
+  html[data-bg="sea"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(16,42,56,.46),rgba(16,42,56,.56) 55%,rgba(10,30,42,.66));}
+  html[data-yu="warm"] #bgv .bgvscrim{background:linear-gradient(180deg,rgba(251,246,241,.42),rgba(251,246,241,.58));}
+}
+/* 2026-11-28 竖屏专用构图 */
+@media (orientation: portrait) and (max-width: 900px){
+  html[data-bg="white"] body{background-image:url('/bg/p-white.jpg?v=3');}
+  html[data-bg="sky"] body{background-image:url('/bg/p-sky.jpg?v=3');}
+  html[data-bg="sea"] body{background-image:url('/bg/p-sea.jpg?v=3');}
+  html[data-yu="warm"] body{background-image:url('/bg/p-warm.jpg?v=3');}
+}
 body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
   color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;overflow:hidden;transition:background .3s,color .3s;}
 button,input,textarea{font-family:inherit;}button{cursor:pointer;color:inherit;}
@@ -322,6 +348,14 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:11px 16px;
 </style>
 </head>
 <body>
+<div id="bgv" aria-hidden="true">
+  <video class="v-white" data-v="white" muted loop playsinline preload="none" disableRemotePlayback></video>
+  <video class="v-sky" data-v="sky" muted loop playsinline preload="none" disableRemotePlayback></video>
+  <video class="v-sea" data-v="sea" muted loop playsinline preload="none" disableRemotePlayback></video>
+  <video class="v-warm" data-v="warm" muted loop playsinline preload="none" disableRemotePlayback></video>
+  <div class="bgvscrim"></div>
+</div>
+
 
 <!-- ============ 启动占位：自动进房成功后移除 ============ -->
 <div id="boot" style="position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:#fff;color:#666;font-size:14px;text-align:center;line-height:1.9">
@@ -637,14 +671,40 @@ var lastId=0,seen={},es=null,pollT=null,pingT=null,MAX_UP=10*1048576,atBottom=tr
 var TAB='yellow',trayOpen=false,theme=ls('yu_theme','')|| (localStorage.getItem('wnav_bg')||'white');
 if(['white','sky','sea','warm'].indexOf(theme)<0)theme='white';
 
+function bgvPortrait(){try{return !!(window.matchMedia&&window.matchMedia('(orientation: portrait) and (max-width: 900px)').matches);}catch(e){return false;}}
+function bgvReduced(){try{return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);}catch(e){return false;}}
+function syncBgv(){
+  var wrap=document.getElementById('bgv');if(!wrap)return;
+  var vids=wrap.querySelectorAll('video'),cur=theme;
+  for(var i=0;i<vids.length;i++){
+    var v=vids[i],k=v.dataset.v;
+    if(k===cur){
+      if(bgvReduced()){if(!v.paused)v.pause();continue;}
+      var src='/bg/video/'+(bgvPortrait()?'p':'l')+k+'.mp4?v=3';
+      if(v.dataset.cur!==src){v.dataset.cur=src;v.poster='/bg/video/poster/'+(bgvPortrait()?'p':'l')+k+'.jpg?v=3';v.src=src;v.load();}
+      v.classList.add('on');
+      if(!v.dataset.bound){v.dataset.bound='1';v.addEventListener('playing',function(e){var t=e.currentTarget;t.classList.add('ready');});v.addEventListener('error',function(e){e.currentTarget.classList.remove('ready');});}
+      if(v.readyState>=3&&!v.paused)v.classList.add('ready');
+      var pr=v.play();
+      if(pr&&pr.then)pr.then(function(){v.classList.add('ready');}).catch(function(){});
+      else if(pr&&pr.catch)pr.catch(function(){});
+    }else{v.classList.remove('on');v.classList.remove('ready');if(!v.paused)v.pause();}
+  }
+}
 function applyTheme(t){
   theme=t;save('yu_theme',t);
   document.documentElement.dataset.yu=t;
   document.documentElement.dataset.bg=(t==='warm'?'white':t);
   try{localStorage.setItem('wnav_bg',(t==='warm'?'white':t));}catch(e){}
   Array.prototype.forEach.call(document.querySelectorAll('[data-t]'),function(b){b.setAttribute('aria-pressed',b.dataset.t===t?'true':'false');});
+  if(typeof syncBgv==='function')syncBgv();
 }
 applyTheme(theme);
+window.addEventListener('orientationchange',function(){var w=document.getElementById('bgv');if(!w)return;var v=w.querySelectorAll('video');for(var i=0;i<v.length;i++)v[i].dataset.cur='';syncBgv();});
+/* 自动播放被拦时撤掉视频（静图与首帧同像素），首次触摸重试 */
+setTimeout(function(){var w=document.getElementById('bgv');if(!w)return;var v=w.querySelectorAll('video');for(var i=0;i<v.length;i++){var e=v[i];if(!e.classList.contains('ready')&&(e.paused||e.readyState<2)){e.classList.remove('on');e.removeAttribute('src');try{e.load();}catch(x){}}}},2500);
+(function(){function again(){var w=document.getElementById('bgv');if(w){var v=w.querySelectorAll('video');for(var i=0;i<v.length;i++)v[i].dataset.cur='';}syncBgv();document.removeEventListener('touchstart',again,true);document.removeEventListener('pointerdown',again,true);}
+document.addEventListener('touchstart',again,true);document.addEventListener('pointerdown',again,true);})();
 
 function avHTML(v,cls){
   v=String(v||'🐟');

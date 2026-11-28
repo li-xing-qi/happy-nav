@@ -1816,6 +1816,7 @@ class Room {
       school: c.school || '',
       baseDesc: (POOL[c.id] && POOL[c.id].desc) || '',
       cond: c.cond ? this.condText(c.cond) : '',
+      scaleText: this.scaleNote(c, p),
       ok: this.phase === 'combat' && p.canAct && !p.dead && this.condMet(c.cond, p) && this.chainCost(c, p) <= p.energy,
     });
     return {
@@ -1846,17 +1847,24 @@ class Room {
         entries: p.entries.map(x => ({ name: x.name, id: x.id })),
         talents: p.talents.map(t => ({ id: t, name: TALENTS[t] ? TALENTS[t].name : t, desc: TALENTS[t] ? TALENTS[t].desc : '' })),
         talentPicks: (p.talentPicks || []).map(t => talentView(t)), setupStage: p.setupStage,
-        deckCands: (p.deckCands || []).filter(id => POOL[id]).map(id => ({ id, name: POOL[id].name, kind: POOL[id].kind, cost: POOL[id].cost, desc: POOL[id].desc, word: POOL[id].word || '', school: POOL[id].school || '' })),
+        deckCands: (p.deckCands || []).filter(id => POOL[id]).map(id => ({ id, name: POOL[id].name, kind: POOL[id].kind, cat: POOL[id].cat, cost: POOL[id].cost, desc: this.previewDesc(id), word: POOL[id].word || '', school: POOL[id].school || '', scaleText: this.scaleNote(POOL[id], null) })),
         deckPicks: p.deckPicks, pickNeed: PICK_COUNT,
-        rewardPicks: p.rewardPicks.map(id => ({ id, name: POOL[id].name, kind: POOL[id].kind, cost: POOL[id].cost, desc: POOL[id].desc, word: POOL[id].word || '', school: POOL[id].school || '' })),
+        rewardPicks: p.rewardPicks.map(id => ({ id, name: POOL[id].name, kind: POOL[id].kind, cat: POOL[id].cat, cost: POOL[id].cost, desc: this.previewDesc(id), word: POOL[id].word || '', school: POOL[id].school || '', scaleText: this.scaleNote(POOL[id], null) })),
         rewardDone: p.rewardDone,
         shop: p.shop ? {
-          cards: p.shop.cardStock.map(it => ({ id: it.id, name: POOL[it.id].name, kind: POOL[it.id].kind, cost: POOL[it.id].cost, desc: POOL[it.id].desc, word: POOL[it.id].word || '', school: POOL[it.id].school || '', price: it.price, sold: it.sold })),
-          talents: (p.shop.tStock || []).map(t => ({ id: t, name: TALENTS[t].name, desc: TALENTS[t].desc, price: this.talentPrice(p, TALENTS[t].price) })),
+          cards: p.shop.cardStock.map(it => ({ id: it.id, name: POOL[it.id].name, kind: POOL[it.id].kind, cat: POOL[it.id].cat, cost: POOL[it.id].cost, desc: this.previewDesc(it.id), word: POOL[it.id].word || '', school: POOL[it.id].school || '', scaleText: this.scaleNote(POOL[it.id], null), price: it.price, sold: it.sold })),
+          /* owned：买过之后货架仍保留该天赋，但前端要显示「已拥有」并禁止重复购买 */
+          talents: (p.shop.tStock || []).map(t => {
+            const cat = talentCat(t) || TALENT_CAT.other;
+            return { id: t, name: TALENTS[t].name, desc: TALENTS[t].desc, price: this.talentPrice(p, TALENTS[t].price), owned: this.has(p, t), catName: cat.name, catColor: cat.color };
+          }),
           rPrice: p.shop.rPrice, mult: this.talentMult(p),
           deck: this.deckGroups(p).map(g => ({
             i: p.masterDeck.indexOf(g.sample), id: g.sample.id, name: POOL[g.sample.id].name,
-            kind: POOL[g.sample.id].kind, cnt: g.list.length, lv: g.sample.lv || 0,
+            kind: POOL[g.sample.id].kind, cat: POOL[g.sample.id].cat,
+            desc: this.previewDesc(g.sample), word: POOL[g.sample.id].word || '',
+            scaleText: this.scaleNote(POOL[g.sample.id], null),
+            cnt: g.list.length, lv: g.sample.lv || 0,
             cost: Math.max(0, POOL[g.sample.id].cost + g.sample.cd), fxm: g.sample.fxm,
             sell: this.sellPrice(g.sample), upCost: this.upgradePrice(g.sample, 'cost'), upFx: this.upgradePrice(g.sample, 'effect'),
             canUp: this.canUpgrade(g.sample), canReduce: this.canReduce(g.sample),
@@ -1888,49 +1896,87 @@ class Room {
     };
   }
 
-  // 卡面描述（含牌数联动后的实时数值）
-  cardDesc(c, p) {
+  // 卡面描述（含牌数联动后的实时数值；措辞对齐单机版 v4.2 的 fxText）
+  // 牌数联动的规则说明（长按详情用；p 为空时只给规则、不算当前层数）
+  scaleNote(c, p) {
+    if (!c || !c.scale) return '';
+    const NM = { dmg: '伤害', block: '格挡', heal: '回复', gold: '金币', poison: '中毒', draw: '抽牌', vuln: '易伤' };
+    const parts = [];
+    for (const k of Object.keys(c.scale)) {
+      if (k === 'per' || k === 'cap') continue;
+      parts.push(`${NM[k] || k}+${c.scale[k]}`);
+    }
+    const st = p ? this.scaleStacks(c, p) : 0;
+    return `每 ${c.scale.per} 张：${parts.join('、')}${c.scale.cap != null ? `（上限 +${c.scale.cap}）` : ''}` + (p ? ` · 当前 ${st} 层` : '');
+  }
+  cardDesc(c, p, preview) {
     const fx = this.scaledFx(c, p);
     const t = [];
     if (fx.dmg) t.push(`造成 ${fx.dmg} 点伤害`);
+    if (fx.dmgMissing) t.push(`额外造成已损失生命 ${Math.round(fx.dmgMissing * 100)}% 的伤害（至少 ${fx.dmgMin || 1}）`);
+    if (fx.bloodPaid) {
+      const k = fx.bloodPaid, lo = fx.bloodPaidMin || 1, hi = fx.bloodPaidCap || 25;
+      t.push(k === 1 ? `额外造成「等于本回合+上回合你失去的生命」的伤害（至少 ${lo}，最多 ${hi}）`
+                     : `额外造成「本回合+上回合你失去的生命 ×${k}」的伤害（至少 ${lo}，最多 ${hi}）`);
+    }
     if (fx.block) t.push(`获得 ${fx.block} 点格挡`);
-    if (fx.heal) t.push(`恢复 ${fx.heal} 生命`);
-    if (fx.draw) t.push(`抽 ${fx.draw} 张牌`);
-    if (fx.gold) t.push(`获得 ${fx.gold} 金币`);
-    if (fx.poison) t.push(`施加 ${fx.poison} 层中毒`);
     if (fx.guCost) t.push(`消耗 ${fx.guCost} 点蛊术`);
+    if (fx.heal) t.push(`恢复 ${fx.heal} 生命${fx.guCost ? '（蛊术不足按比例减；血满转生命上限）' : ''}`);
+    if (fx.selfDmg) t.push(`自身失去 ${fx.selfDmg} 生命`);
+    if (fx.selfDmgPct) t.push(`失去生命上限 ${Math.round(fx.selfDmgPct * 100)}% 的生命（至少 ${fx.selfDmgPctMin || 1}）`);
+    if (fx.maxHp) t.push(`生命上限 +${fx.maxHp}（不回血）`);
+    if (fx.maxHpCost) t.push(`生命上限 -${fx.maxHpCost}`);
+    if (fx.draw || fx.drawIfPaid) t.push(`抽 ${fx.draw || 0} 张牌${fx.drawIfPaid ? `；本回合已失血则再抽 ${fx.drawIfPaid} 张` : ''}`);
+    if (fx.gold) t.push(`获得 ${fx.gold} 金币`);
+    if (fx.energy) t.push(`获得 ${fx.energy} 点能量`);
+    if (fx.poison) t.push(`施加 ${fx.poison} 层中毒`);
     if (fx.poisonE) t.push(`敌人 +${fx.poisonE} 层中毒`);
     if (fx.poisonSelf) t.push(`你 +${fx.poisonSelf} 层中毒`);
     if (fx.poisonCut) t.push(`敌人中毒 -${fx.poisonCut} 层`);
+    if (fx.poisonCutSelf) t.push(`你身上的毒 -${fx.poisonCutSelf} 层`);
     if (fx.gu) t.push(`获得 ${fx.gu} 点蛊术`);
-    if (fx.guShift) t.push('把身上一半中毒转移给敌人（每 2 层 +1 蛊术）');
-    if (fx.guConvert) t.push(`把「中毒+蛊术」的 ${fx.guConvert}% 转成敌人中毒`);
-    if (fx.guRot) t.push(`造成「敌人中毒层数×${fx.guRot}%」的伤害；毒层≥其当前生命则斩杀`);
-    if (fx.guDoom) t.push(`敌人中毒 +${fx.guDoom}%；之后毒层≥其当前生命则斩杀`);
+    if (fx.guShift) t.push('把你身上一半的中毒转移给敌人（每 2 层 +1 蛊术）');
+    if (fx.guConvert) t.push(`把你「中毒+蛊术」的 ${fx.guConvert}% 转成敌人中毒，并从你身上扣掉同样层数的毒`);
+    if (fx.guRot) t.push(`造成「敌人中毒层数×${fx.guRot}%」的伤害（不消耗层数）；毒层≥其当前生命则直接斩杀`);
+    if (fx.guDoom) t.push(`敌人中毒 +${fx.guDoom}%；之后毒层≥其当前生命则直接斩杀`);
+    if (fx.poisonTick) t.push(`立即结算 ${fx.poisonTick} 次中毒伤害`);
+    if (fx.random) t.push(`获得 ${fx.random} 张随机临时牌`);
+    if (fx.temp) t.push('获得 1 张随机转瞬');
+    if (fx.tempCopy) t.push('复制上一张牌（转瞬版）');
+    if (fx.blockPlayed) t.push(`获得 ${((p && p.playedThisTurn) || 0) + 1} 点格挡（＝本回合牌数）`);
+    if (fx.spring) t.push(`召回本回合打出的前 X+${fx.spring} 张牌，全部变为转瞬`);
+    if (fx.loseBlock) t.push(`失去 ${fx.loseBlock} 点格挡`);
+    if (fx.randomEntry) t.push(`随机触发 ${fx.randomEntry} 个已登记的登场效果`);
+    if (fx.randomSetup) t.push(`随机触发 ${fx.randomSetup} 个已布置的整备效果${fx.safeSetup ? '（不会选到「会触发登场」的整备）' : ''}`);
+    if (fx.fireAll) t.push(`引爆你身上全部整备效果${fx.removePer ? `；每引爆 ${fx.removePer} 个随机失去 1 个整备` : ''}`);
+    if (fx.removeSetup) t.push(`随机失去 ${fx.removeSetup} 个整备`);
+    if (fx.blockSetup) t.push(`消耗全部格挡，每 ${fx.blockSetup.per} 点随机触发 1 个整备效果（最多 ${fx.blockSetup.cap} 次）`);
     if (fx.vuln) t.push(`施加 ${fx.vuln} 层易伤`);
     if (fx.strength) t.push(`永久 +${fx.strength} 力量`);
-    if (fx.energy) t.push(`获得 ${fx.energy} 点能量`);
-    if (fx.selfDmg) t.push(`自身失去 ${fx.selfDmg} 生命`);
-    if (fx.selfDmgPct) t.push(`失去上限 ${Math.round(fx.selfDmgPct * 100)}% 的生命`);
-    if (fx.maxHp) t.push(`生命上限 +${fx.maxHp}`);
-    if (fx.random) t.push(`随机临时牌 ×${fx.random}`);
-    if (fx.temp) t.push('获得 1 张转瞬牌');
-    if (fx.tempCopy) t.push('复制上一张牌');
-    if (fx.randomSetup) t.push(`随机触发 ${fx.randomSetup} 个整备`);
-    if (fx.randomEntry) t.push(`随机触发 ${fx.randomEntry} 个登场`);
-    if (fx.fireAll) t.push('引爆全部整备');
-    if (fx.poisonTick) t.push('立即结算 1 次中毒');
-    if (fx.loseBlock) t.push(`失去 ${fx.loseBlock} 点格挡`);
-    if (fx.blockSetup) t.push(`消耗全部格挡，每 ${fx.blockSetup.per} 点触发 1 个整备`);
-    if (fx.spring) t.push('召回本回合打出的牌');
-    if (fx.bloodPaid) t.push(`追加「近期失血量」的伤害（${fx.bloodPaidMin || 1}~${fx.bloodPaidCap || 25}）`);
-    if (fx.blockPlayed) t.push(`获得格挡 = 本回合打出牌数`);
-    if (c.dynCost) t.push(`X = ${this.springCount(p)}`);
+    if (c.setupEvery) t.push(`每触发 ${c.setupEvery} 次整备 → 1 张随机整备牌（每回合最多 ${ALL_READY_PER_TURN} 张）`);
+    if (c.burn) t.push('本场战斗限用一次（用完即焚）');
+    if (c.bloodCut) t.push('上个回合扣过血时费用 -1');
+    if (c.dynCost && !preview) t.push(`X = ${this.springCount(p)}`);
     let s = t.join('，') || c.desc || '';
-    if (c.kind === 'setup') s = '每回合开始：' + s;
+    // 整备牌的原始 desc 往往已经以「每回合开始」开头，别再加一次前缀
+    if (c.kind === 'setup' && !/^每回合开始/.test(s)) s = '每回合开始：' + s;
     if (c.temp) s += '（转瞬）';
     return s;
   }
+
+  // 非战斗场景（商店 / 选牌 / 图鉴）的卡面说明：和手牌同一套生成逻辑，数值取基础值
+  previewDesc(entry) {
+    const id = typeof entry === 'string' ? entry : (entry && entry.id);
+    if (!POOL[id]) return '';
+    const c = mk(entry || id);
+    return this.cardDesc(c, { playedThisTurn: 0, springThisTurn: 0 }, true);
+  }
 }
 
-module.exports = { Room, MAX_PLAYERS, MAX_FLOOR };
+let _previewRoom = null;
+function previewCardDesc(id) {
+  if (!_previewRoom) _previewRoom = new Room('__preview');
+  return _previewRoom.previewDesc(id);
+}
+
+module.exports = { Room, MAX_PLAYERS, MAX_FLOOR, previewCardDesc };

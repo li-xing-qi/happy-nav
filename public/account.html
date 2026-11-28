@@ -17,6 +17,7 @@
   <div class="card">
     <h1>我的账号</h1>
     <p class="lead">昵称和头像会带到「与鱼」里。ID 是系统分配的，改不了。</p>
+    <div class="msg bad hidden" id="denied"></div>
 
     <label class="f">ID</label>
     <div class="uid-box" id="uid">—</div>
@@ -53,6 +54,16 @@
   var AVATARS=['🐟','🐠','🐳','🐬','🦭','🐙','🦀','🐚','🌊','☀️','🌙','⭐','🍀','🌸','🍑','🐣','🦊','🐼'];
   var $=function(id){return document.getElementById(id);};
   var ME=null, AV='';
+  /* 被权限挡回来时会带 ?denied=yu / chat / games，这里说清楚原因 */
+  var DENY_TEXT={yu:'进入与鱼聊天室',chat:'进入聊天室',games:'玩小游戏'};
+  (function(){
+    var k=new URLSearchParams(location.search).get('denied');
+    if(k&&DENY_TEXT[k]){
+      var e=$('denied');
+      e.textContent='你当前没有「'+DENY_TEXT[k]+'」的权限，需要的话找管理员开通。';
+      e.classList.remove('hidden');
+    }
+  })();
   function msg(el,t,bad){var e=$(el);e.textContent=t;e.className='msg'+(bad?' bad':'');}
 
   function paintAvs(){

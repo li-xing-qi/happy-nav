@@ -446,17 +446,14 @@ html[data-lx="paper"] #fx{opacity:.72;}
 </style>
 <style>
 /* ============================================================
-   v5 patch2 · 心有灵犀「同屏 + 异地联机」增量层（样式）
+   心有灵犀 · 联机房间层（样式）
    ------------------------------------------------------------
-   · 原作 968 行与 v5 贴合层一行未改，本块是纯追加的第三块样式
-   · 默认仍是同屏；点导航条「🌐 联机」后由独立 IIFE 接管界面
-   · 联机 UI 复用原作的 .history-wrap / .arena / .player / .btn / .banner
+   · 本页只做「异地联机」，界面由联机层按房间状态渲染
+   · 联机 UI 复用 .history-wrap / .arena / .player / .btn / .banner
      等 class，所以四套页面氛围与手机断点自动生效
    ============================================================ */
 .lxo{display:flex;flex-direction:column;gap:14px;}
 .lxo[hidden]{display:none!important;}
-.lxo-nav-btn{margin-left:auto;}
-#hxThemeBtn{margin-left:0;}
 
 .lxo-bar{
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;
@@ -489,6 +486,8 @@ html[data-lx="paper"] #fx{opacity:.72;}
   justify-content:center;padding:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:rgba(4,8,16,.72);backdrop-filter:blur(6px);}
 #lxJoin[hidden]{display:none!important;}
+/* 进房面板打开时，「玩法说明」要能盖在它上面 */
+#modal-rules{z-index:130;}
 .lxj-sheet{width:min(400px,100%);margin:auto;border-radius:18px;padding:18px;
   border:1px solid rgba(255,255,255,.14);color:var(--txt);
   background:linear-gradient(180deg,#182238,#0e1526);
@@ -547,7 +546,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
 @media(prefers-reduced-motion:reduce){.lxj-sheet{animation:none}}
 
 /* ------------------------------------------------------------
-   联机模式的「房间动态」只放系统日志，原作给同屏聊天预留的
+   「房间动态」只放系统日志，通用 .chat 预留的
    .chat min-height:190px / .chat-list min-height:112px 在这里会变成
    一大块空白，把底部说明挤到屏幕外。收紧到内容高度，日志多了再滚。
    ------------------------------------------------------------ */
@@ -597,81 +596,8 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
     </div>
   </header>
 
-  <!-- 历史词语 -->
-  <section class="history-wrap">
-    <div class="history-head">
-      <b>历史词语</b>
-      <span id="history-hint">还没有开始的局</span>
-    </div>
-    <div id="history" class="history" aria-live="polite">
-      <div class="history-empty">开局后，每一轮你们写下的词都会留在这一栏。<br>往左滑，看对方一路是怎么想的。</div>
-    </div>
-  </section>
-
-  <!-- 对战区 -->
-  <main class="arena">
-    <section class="player p1" id="panel-1">
-      <div class="p-head">
-        <span class="p-name">玩家 1</span>
-        <span class="p-state" id="state-1">待准备</span>
-      </div>
-      <div class="input-row" id="row-1">
-        <input id="word-1" class="word-input masked" maxlength="12" placeholder="写下你的词或短句" autocomplete="off" enterkeyhint="done" aria-label="玩家1的词语">
-        <button id="peek-1" class="peek" title="按住查看自己写的内容" aria-label="按住查看">👁</button>
-      </div>
-      <button id="submit-1" class="btn primary" disabled>提交</button>
-      <div class="locked" id="locked-1" hidden>已提交 · 等对方<span class="dots"><i></i><i></i><i></i></span></div>
-      <div class="word-show" id="show-1" hidden><span class="w"></span><span class="tag">玩家 1 的答案</span></div>
-      <button id="ready-1" class="btn ghost" hidden>我准备好了</button>
-    </section>
-
-    <div class="vs" aria-hidden="true">VS</div>
-
-    <section class="player p2" id="panel-2">
-      <div class="p-head">
-        <span class="p-name">玩家 2</span>
-        <span class="p-state" id="state-2">待准备</span>
-      </div>
-      <div class="input-row" id="row-2">
-        <input id="word-2" class="word-input masked" maxlength="12" placeholder="写下你的词或短句" autocomplete="off" enterkeyhint="done" aria-label="玩家2的词语">
-        <button id="peek-2" class="peek" title="按住查看自己写的内容" aria-label="按住查看">👁</button>
-      </div>
-      <button id="submit-2" class="btn primary" disabled>提交</button>
-      <div class="locked" id="locked-2" hidden>已提交 · 等对方<span class="dots"><i></i><i></i><i></i></span></div>
-      <div class="word-show" id="show-2" hidden><span class="w"></span><span class="tag">玩家 2 的答案</span></div>
-      <button id="ready-2" class="btn ghost" hidden>我准备好了</button>
-    </section>
-  </main>
-
-  <!-- 中央提示 -->
-  <div id="banner" class="banner info" hidden>
-    <div class="txt"><b id="banner-title"></b><span id="banner-sub"></span></div>
-    <button id="banner-btn" class="btn"></button>
-  </div>
-
-  <!-- 聊天 -->
-  <section class="chat">
-    <div class="chat-head">
-      <span>聊天频道</span>
-      <span id="chat-lock" class="lock hide">游戏进行中 · 已锁定</span>
-    </div>
-    <div id="chat-list" class="chat-list" aria-live="polite">
-      <div class="msg sys"><div class="bubble">这里可以随便聊。两人都点「准备好了」，游戏才会开始。</div></div>
-    </div>
-    <form id="chat-form" class="chat-form" autocomplete="off">
-      <div class="sender">
-        <button type="button" data-sender="1" class="on1">玩家1</button>
-        <button type="button" data-sender="2">玩家2</button>
-      </div>
-      <input id="chat-input" maxlength="80" placeholder="说点什么…" aria-label="聊天输入">
-      <button id="chat-send" type="submit" class="btn ghost">发送</button>
-    </form>
-  </section>
-
-  <footer class="foot">
-    同一台设备双人游玩：输入框默认打码，按住 👁 核对，写完就提交。<br>
-    <kbd>Enter</kbd> 提交词语 · 完全相同的词（忽略空格）即本局成功
-  </footer>
+  <!-- 联机房间界面：结构由脚本按房间状态填充，进房后才显示 -->
+  <div id="lxOnline" class="lxo" hidden></div>
 </div>
 
 <!-- 规则 -->
@@ -679,14 +605,14 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   <div class="mask" data-close></div>
   <div class="sheet" role="dialog" aria-modal="true" aria-label="玩法说明">
     <h2>怎么玩</h2>
-    <p class="sub">先准备好，再同时写下心里的那个词。</p>
+    <p class="sub">两个人各自打开同一个房间号，写同一个词。</p>
     <ol>
-      <li>页面打开时是<b>待准备</b>状态，两人都点「我准备好了」才会开局；此时可以聊天。</li>
-      <li>开局后，两人<b>各自</b>写一个词或短句并提交，<b>都提交后</b>才一起揭晓。</li>
+      <li>输入房间号和昵称进入房间，把邀请链接发给对方，两人会合到同一个房间。</li>
+      <li>两人都点「我准备好了」才会开局。</li>
+      <li>开局后，两人<b>各自</b>写一个词或短句并提交，<b>都提交后</b>才一起揭晓；先交的一方看不到对方的词。</li>
       <li>完全相同（忽略空格、不区分大小写）→ <b>本局成功</b>，音效与彩带庆祝。</li>
-      <li>不一样 → 双方进入下一轮，<b>上方历史栏保留每一轮</b>，可以左右滑动，顺着对方的思路收拢。</li>
-      <li>结束后两人再点「我准备好了」，开始新的一局，历史清零。</li>
-      <li>游戏进行中聊天频道锁定，但历史消息仍可回看。</li>
+      <li>不一样 → 双方点「继续下一轮」，<b>上方历史栏保留每一轮</b>，可以左右滑动，顺着对方的思路收拢。</li>
+      <li>想边玩边聊，点「💬 去与鱼聊」，用同一个房间号就能进同一个聊天频道。</li>
     </ol>
     <div class="tip">小技巧：第一轮先写具体、好猜的词（比如「猫」「火锅」）；两三轮后往对方写过的方向靠，比硬想更容易撞上。</div>
     <button class="btn close" data-close>开始吧</button>
@@ -701,11 +627,6 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
 
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
-  var esc = function (v) {
-    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  };
 
   /* ================= 音效 / 音乐（全部合成，无外部文件） ================= */
   var Audio2 = (function () {
@@ -828,176 +749,13 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
     };
   })();
 
-  /* ================= 状态 ================= */
-  var S = {
-    phase: 'idle',        // idle | playing | reveal | over
-    round: 0,
-    ready: { 1: false, 2: false },
-    word: { 1: '', 2: '' },
-    locked: { 1: false, 2: false },
-    history: [],
-    chat: [{ sys: true, text: '这里可以随便聊。两人都点「准备好了」，游戏才会开始。' }],
-    sender: 1,
-    result: null          // 'hit' | 'miss'
-  };
-
+  /* ================= 设置（页面只保留音乐 / 音效开关） ================= */
   var KEY = 'heart-link:settings:v1';
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
   if (saved.music === false) Audio2.setMusic(false);
   if (saved.sfx === false) Audio2.setSfx(false);
-
-  /* ================= 渲染 ================= */
-  function setPill(text, cls) {
-    var p = $('#status-pill');
-    p.textContent = text;
-    p.className = 'pill' + (cls ? ' ' + cls : '');
-  }
-
-  function setHidden(el, hidden) { if (el) el.hidden = !!hidden; }
-
-  function renderHistory() {
-    var box = $('#history');
-    var hint = $('#history-hint');
-    if (!S.history.length) {
-      box.innerHTML = '<div class="history-empty">开局后，每一轮你们写下的词都会留在这一栏。<br>往左滑，看对方一路是怎么想的。</div>';
-      hint.textContent = S.phase === 'playing' ? '第 1 轮进行中' : '还没有开始的局';
-      return;
-    }
-    box.innerHTML = S.history.map(function (h) {
-      return '<div class="hcard ' + (h.hit ? 'hit' : 'miss') + '">' +
-        '<div class="hr"><span>第 ' + h.round + ' 轮</span><b>' + (h.hit ? '✓ 相同' : '✗ 不同') + '</b></div>' +
-        '<div class="hw a">' + esc(h.a) + '</div>' +
-        '<div class="hw b">' + esc(h.b) + '</div>' +
-        '</div>';
-    }).join('');
-    hint.textContent = '共 ' + S.history.length + ' 轮 · 可左右滑动';
-    box.scrollLeft = box.scrollWidth;
-  }
-
-  function renderPlayers() {
-    [1, 2].forEach(function (n) {
-      var panel = $('#panel-' + n);
-      var row = $('#row-' + n);
-      var sub = $('#submit-' + n);
-      var locked = $('#locked-' + n);
-      var show = $('#show-' + n);
-      var readyBtn = $('#ready-' + n);
-      var stateEl = $('#state-' + n);
-      var input = $('#word-' + n);
-
-      panel.classList.remove('turn', 'hit');
-
-      // 默认全部收起
-      setHidden(row, true); setHidden(sub, true); setHidden(locked, true);
-      setHidden(show, true); setHidden(readyBtn, true);
-      stateEl.className = 'p-state';
-
-      if (S.phase === 'idle' || S.phase === 'over') {
-        // 上一局结束时继续展示双方答案
-        if (S.phase === 'over') {
-          setHidden(show, false);
-          show.querySelector('.w').textContent = S.word[n] || '—';
-          show.querySelector('.tag').textContent = '玩家 ' + n + ' 的答案';
-          panel.classList.add('hit');
-        }
-        setHidden(readyBtn, false);
-        readyBtn.textContent = S.ready[n] ? '已准备 · 等对方' : (S.phase === 'over' ? '我准备好了 · 再来一局' : '我准备好了');
-        readyBtn.className = 'btn ' + (S.ready[n] ? 'ok' : 'ghost');
-        stateEl.textContent = S.ready[n] ? '已准备' : (S.phase === 'over' ? '等待再来一局' : '待准备');
-        if (S.ready[n]) stateEl.className = 'p-state ok';
-      } else if (S.phase === 'playing') {
-        setHidden(row, false); setHidden(sub, false);
-        sub.disabled = S.locked[n];
-        if (S.locked[n]) {
-          setHidden(row, true); setHidden(sub, true); setHidden(locked, false);
-          stateEl.textContent = '已提交';
-          stateEl.className = 'p-state lock';
-        } else {
-          stateEl.textContent = '第 ' + S.round + ' 轮';
-          panel.classList.add('turn');
-          input.value = S.word[n] || '';
-        }
-      } else if (S.phase === 'reveal') {
-        setHidden(show, false);
-        stateEl.textContent = '已揭晓';
-        stateEl.className = 'p-state lock';
-        var w = show.querySelector('.w');
-        w.textContent = S.word[n] || '—';
-        show.querySelector('.tag').textContent = '玩家 ' + n + ' 的答案';
-      }
-    });
-  }
-
-  function renderBanner() {
-    var b = $('#banner'), title = $('#banner-title'), sub = $('#banner-sub'), btn = $('#banner-btn');
-    if (S.phase === 'reveal') {
-      b.hidden = false;
-      b.className = 'banner miss';
-      title.textContent = '没对上 · 第 ' + S.round + ' 轮';
-      sub.textContent = '往上看看历史，顺着对方的思路再写一次。';
-      btn.hidden = false;
-      btn.textContent = '继续第 ' + (S.round + 1) + ' 轮';
-      return;
-    }
-    if (S.phase === 'over') {
-      b.hidden = false;
-      b.className = 'banner win';
-      title.textContent = '心有灵犀！第 ' + S.round + ' 轮对上了';
-      sub.textContent = '你们写的是「' + (S.word[1] || '') + '」。两人都点「我准备好了」就再来一局。';
-      btn.hidden = true;
-      return;
-    }
-    if (S.phase === 'idle') {
-      b.hidden = false;
-      b.className = 'banner info';
-      title.textContent = '待准备 · 还没开始';
-      sub.textContent = '两人都点「我准备好了」后开局。现在可以在下面聊天。';
-      btn.hidden = true;
-      return;
-    }
-    b.hidden = true;
-  }
-
-  function renderChatLock() {
-    var canChat = S.phase === 'idle' || S.phase === 'over';
-    var input = $('#chat-input'), send = $('#chat-send'), lock = $('#chat-lock');
-    input.disabled = !canChat;
-    send.disabled = !canChat;
-    lock.classList.toggle('hide', canChat);
-    input.placeholder = canChat ? '说点什么…' : '游戏进行中，聊天已锁定';
-  }
-
-  function renderAll() {
-    var pillText = '待准备', cls = '';
-    if (S.phase === 'playing') { pillText = '第 ' + S.round + ' 轮 · 进行中'; cls = 'on'; }
-    else if (S.phase === 'reveal') { pillText = '第 ' + S.round + ' 轮 · 揭晓'; cls = 'on'; }
-    else if (S.phase === 'over') { pillText = '本局成功 · ' + S.round + ' 轮'; cls = 'win'; }
-    setPill(pillText, cls);
-    renderPlayers();
-    renderBanner();
-    renderChatLock();
-    renderHistory();
-    renderChat();
-  }
-
-  /* ================= 聊天 ================= */
-  function renderChat() {
-    var list = $('#chat-list');
-    list.innerHTML = S.chat.map(function (m) {
-      if (m.sys) return '<div class="msg sys"><div class="bubble">' + esc(m.text) + '</div></div>';
-      return '<div class="msg me' + m.who + '">' +
-        '<span class="who">玩家 ' + m.who + '</span>' +
-        '<div class="bubble">' + esc(m.text) + '</div></div>';
-    }).join('');
-    list.scrollTop = list.scrollHeight;
-  }
-
-  function pushChat(m) {
-    S.chat.push(m);
-    if (S.chat.length > 200) S.chat.splice(0, S.chat.length - 200);
-    renderChat();
-  }
+  window.LxAudio = Audio2;   /* 联机层按同一个开关判断音效 */
 
   function toast(text) {
     var t = $('#toast');
@@ -1007,193 +765,13 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
     toast._t = setTimeout(function () { t.classList.remove('show'); }, 1800);
   }
 
-  /* ================= 游戏流程 ================= */
-  function startGame() {
-    S.phase = 'playing';
-    S.round = 1;
-    S.history = [];
-    S.word = { 1: '', 2: '' };
-    S.locked = { 1: false, 2: false };
-    S.ready = { 1: false, 2: false };
-    S.result = null;
-    $('#word-1').value = ''; $('#word-2').value = '';
-    $('#word-1').classList.add('masked'); $('#word-2').classList.add('masked');
-    pushChat({ sys: true, text: '—— 第 1 局开始，聊天已锁定 ——' });
-    Audio2.submit();
-    renderAll();
-    setTimeout(function () { try { $('#word-1').focus(); } catch (e) {} }, 120);
-  }
-
-  function toggleReady(n) {
-    if (S.phase !== 'idle' && S.phase !== 'over') return;
-    S.ready[n] = !S.ready[n];
-    Audio2.click();
-    if (S.ready[1] && S.ready[2]) {
-      setTimeout(startGame, 220);
-    }
-    renderAll();
-  }
-
-  function normalized(v) {
-    return String(v == null ? '' : v).trim().replace(/[\s\u3000]+/g, '').toLowerCase();
-  }
-
-  function submitWord(n) {
-    if (S.phase !== 'playing' || S.locked[n]) return;
-    var input = $('#word-' + n);
-    var v = String(input.value || '').trim();
-    if (!v) { toast('先写点什么吧'); try { input.focus(); } catch (e) {} return; }
-    S.word[n] = v;
-    S.locked[n] = true;
-    Audio2.submit();
-    renderAll();
-    if (S.locked[1] && S.locked[2]) setTimeout(reveal, 420);
-  }
-
-  function reveal() {
-    var a = S.word[1], b = S.word[2];
-    var hit = normalized(a) === normalized(b);
-    S.history.push({ round: S.round, a: a, b: b, hit: hit });
-    if (hit) {
-      S.phase = 'over';
-      S.result = 'hit';
-      S.ready = { 1: false, 2: false };
-      Audio2.win();
-      burstConfetti();
-      pushChat({ sys: true, text: '—— 第 ' + S.round + ' 轮对上了，「' + a + '」，本局结束 ——' });
-    } else {
-      S.phase = 'reveal';
-      S.result = 'miss';
-      Audio2.miss();
-    }
-    renderAll();
-  }
-
-  function nextRound() {
-    if (S.phase !== 'reveal') return;
-    S.phase = 'playing';
-    S.round += 1;
-    S.locked = { 1: false, 2: false };
-    S.word = { 1: '', 2: '' };
-    $('#word-1').value = ''; $('#word-2').value = '';
-    $('#word-1').classList.remove('masked'); $('#word-2').classList.remove('masked');
-    Audio2.click();
-    renderAll();
-    setTimeout(function () { try { $('#word-1').focus(); } catch (e) {} }, 100);
-  }
-
-  /* ================= 彩带 ================= */
-  var fx = $('#fx'), fctx = fx.getContext('2d'), parts = [], raf = null;
-
-  function sizeFx() {
-    var dpr = Math.min(2, window.devicePixelRatio || 1);
-    fx.width = Math.floor(window.innerWidth * dpr);
-    fx.height = Math.floor(window.innerHeight * dpr);
-    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  sizeFx();
-  window.addEventListener('resize', sizeFx);
-
-  function burstConfetti() {
-    var w = window.innerWidth, h = window.innerHeight;
-    var colors = ['#7aa2ff', '#ff8fb1', '#3ddc97', '#ffcf6b', '#b9a2ff', '#8fe3ff'];
-    for (var i = 0; i < 140; i++) {
-      parts.push({
-        x: w / 2 + (Math.random() - 0.5) * w * 0.5,
-        y: h * 0.42 + (Math.random() - 0.5) * 60,
-        vx: (Math.random() - 0.5) * 13,
-        vy: -Math.random() * 13 - 3,
-        s: 4 + Math.random() * 7,
-        c: colors[Math.floor(Math.random() * colors.length)],
-        rot: Math.random() * Math.PI,
-        vr: (Math.random() - 0.5) * 0.32,
-        life: 1
-      });
-    }
-    if (!raf) raf = requestAnimationFrame(tickFx);
-  }
-
-  function tickFx() {
-    fctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    for (var i = parts.length - 1; i >= 0; i--) {
-      var p = parts[i];
-      p.vy += 0.42;
-      p.vx *= 0.992;
-      p.x += p.vx;
-      p.y += p.vy;
-      p.rot += p.vr;
-      p.life -= 0.006;
-      if (p.life <= 0 || p.y > window.innerHeight + 40) { parts.splice(i, 1); continue; }
-      fctx.save();
-      fctx.globalAlpha = Math.max(0, Math.min(1, p.life));
-      fctx.translate(p.x, p.y);
-      fctx.rotate(p.rot);
-      fctx.fillStyle = p.c;
-      fctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
-      fctx.restore();
-    }
-    if (parts.length) raf = requestAnimationFrame(tickFx);
-    else { fctx.clearRect(0, 0, window.innerWidth, window.innerHeight); raf = null; }
-  }
-
-  /* ================= 事件绑定 ================= */
-  [1, 2].forEach(function (n) {
-    var input = $('#word-' + n), sub = $('#submit-' + n), peek = $('#peek-' + n), ready = $('#ready-' + n);
-
-    input.addEventListener('input', function () {
-      if (S.phase !== 'playing' || S.locked[n]) return;
-      S.word[n] = input.value;
-      sub.disabled = !String(input.value || '').trim();
-    });
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); submitWord(n); }
-    });
-    sub.addEventListener('click', function () { submitWord(n); });
-    ready.addEventListener('click', function () { toggleReady(n); });
-
-    function showPeek() { input.classList.remove('masked'); }
-    function hidePeek() { input.classList.add('masked'); }
-    peek.addEventListener('mousedown', showPeek);
-    peek.addEventListener('mouseup', hidePeek);
-    peek.addEventListener('mouseleave', hidePeek);
-    peek.addEventListener('touchstart', function (e) { e.preventDefault(); showPeek(); }, { passive: false });
-    peek.addEventListener('touchend', function (e) { e.preventDefault(); hidePeek(); }, { passive: false });
-    peek.addEventListener('touchcancel', hidePeek);
-  });
-
-  $('#banner-btn').addEventListener('click', function () {
-    if (S.phase === 'reveal') nextRound();
-  });
-
-  $('#chat-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    if (S.phase !== 'idle' && S.phase !== 'over') { toast('游戏进行中，聊天已锁定'); return; }
-    var input = $('#chat-input');
-    var v = String(input.value || '').trim();
-    if (!v) return;
-    pushChat({ who: S.sender, text: v });
-    input.value = '';
-    Audio2.click();
-  });
-
-  $$('.sender button').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      S.sender = Number(btn.getAttribute('data-sender')) || 1;
-      $$('.sender button').forEach(function (b) {
-        b.className = b === btn ? (S.sender === 1 ? 'on1' : 'on2') : '';
-      });
-      Audio2.click();
-    });
-  });
-
   $('#btn-music').addEventListener('click', function () {
     var on = !Audio2.isMusic();
     Audio2.setMusic(on);
     this.classList.toggle('off', !on);
     saved.music = on;
     try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
-    if (on) toast('背景音乐已开');
-    else toast('背景音乐已关');
+    toast(on ? '背景音乐已开' : '背景音乐已关');
   });
   $('#btn-sfx').addEventListener('click', function () {
     var on = !Audio2.isSfx();
@@ -1222,9 +800,6 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
 
   if (saved.music === false) $('#btn-music').classList.add('off');
   if (saved.sfx === false) $('#btn-sfx').classList.add('off');
-
-  // 初始化
-  renderAll();
 })();
 </script>
 <script>
@@ -1331,12 +906,9 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
 </script>
 <script>
 /* ============================================================
-   v5 patch2 · 心有灵犀「同屏 + 异地联机」增量层（逻辑）
+   心有灵犀 · 联机房间层
    ------------------------------------------------------------
-   ★ 边界：同屏模式的代码一行未改。
-     原作是封闭 IIFE，状态 S 全在它自己的闭包里；本层不碰它，
-     只在进入联机时把原作界面节点整体 hidden，用独立 UI 接管。
-     返回同屏时把 hidden 撤掉，原作的状态与事件绑定完全没被动过。
+   ★ 本页只做「异地联机」：两个人各自打开同一个房间号远程对局。
    ★ 玩法：两人各写一个词 → 两边都提交后由服务端同时揭晓 →
      完全相同即成功 → 不同则带历史词进下一轮。
      前端绝不本地揭晓、绝不缓存房间状态；房间状态只在服务端。
@@ -1348,14 +920,6 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   var $ = function(s, r){ return (r || document).querySelector(s); };
   var app = $('.app'), nav = $('.hx-nav');
   if (!app || !nav) return;
-
-  /* ---------- 导航条加「🌐 联机」按钮（贴合层源码不改） ---------- */
-  var navBtn = document.createElement('button');
-  navBtn.type = 'button'; navBtn.id = 'lxNavBtn';
-  navBtn.className = 'hx-theme lxo-nav-btn';
-  navBtn.textContent = '🌐 联机';
-  var themeBtn = $('#hxThemeBtn');
-  if (themeBtn) nav.insertBefore(navBtn, themeBtn); else nav.appendChild(navBtn);
 
   /* ---------- 小工具 ---------- */
   function sget(k, d){ try { var v = sessionStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }
@@ -1384,13 +948,13 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   join.id = 'lxJoin'; join.hidden = true;
   join.innerHTML =
     '<div class="lxj-sheet" role="dialog" aria-modal="true" aria-label="心有灵犀联机">' +
-      '<h2>🌐 异地联机</h2>' +
-      '<p class="sub">默认还是同屏双人；联机是额外模式。两个人各自打开同一个房间号，就能远程一起写词。玩法与同屏完全一样：两边都提交后才同时揭晓。</p>' +
+      '<h2>🌐 联机房间</h2>' +
+      '<p class="sub">两个人各自打开同一个房间号，就能远程一起写词。玩法：两边都提交后才同时揭晓，完全相同即成功。</p>' +
       '<div class="lxj-field"><label>房间号</label><input id="lxjRoom" maxlength="12" placeholder="例如 0000" autocomplete="off"></div>' +
       '<div class="lxj-field"><label>昵称</label><input id="lxjName" maxlength="12" placeholder="小鱼" autocomplete="off"></div>' +
-      '<div class="lxj-tip">💡 把 <b>/lingxi?room=房间号</b> 发给对方，点开会自动填好房间号。房间最多 2 人；刷新页面会自动回到当前房间。同屏模式随时可以返回。</div>' +
+      '<div class="lxj-tip">💡 把 <b>/lingxi?room=房间号</b> 发给对方，点开会自动填好房间号。房间最多 2 人；刷新页面会自动回到当前房间。</div>' +
       '<p class="lxj-err" id="lxjErr"></p>' +
-      '<div class="lxj-row"><button class="btn ghost" id="lxjCancel" type="button">取消</button>' +
+      '<div class="lxj-row"><button class="btn ghost" id="lxjRules" type="button">玩法说明</button>' +
         '<button class="btn primary" id="lxjGo" type="button">进入房间</button></div>' +
     '</div>';
   document.body.appendChild(join);
@@ -1409,8 +973,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
       '<button class="btn ghost" id="lxoAct' + i + '" hidden>我准备好了</button>' +
     '</section>';
   }
-  var ui = document.createElement('div');
-  ui.id = 'lxOnline'; ui.className = 'lxo'; ui.hidden = true;
+  var ui = $('#lxOnline');
   ui.innerHTML =
     '<div class="lxo-bar">' +
       '<span class="lxo-mode">🌐 联机房间</span>' +
@@ -1420,7 +983,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
       '<span class="lxo-spacer"></span>' +
       '<button class="lxo-btn" id="lxoCopy" type="button">🔗 复制邀请</button>' +
       '<button class="lxo-btn" id="lxoGoYu" type="button">💬 去与鱼聊</button>' +
-      '<button class="lxo-btn" id="lxoExit" type="button">← 返回同屏</button>' +
+      '<button class="lxo-btn" id="lxoLeave" type="button">↩ 离开房间</button>' +
     '</div>' +
     '<section class="history-wrap">' +
       '<div class="history-head"><b>历史词语</b><span id="lxoHistHint"></span></div>' +
@@ -1439,28 +1002,16 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
     '</section>' +
     '<footer class="foot">两人各写一个词 → 两边都提交后才同时揭晓 → 完全相同即本局成功。<br>' +
       '按 <kbd>Enter</kbd> 提交 · 60 秒没心跳会显示对方离线，本轮的词会保留。</footer>';
-  nav.parentNode.insertBefore(ui, nav.nextSibling);
-
-  /* 原作界面节点：联机时整体隐藏，返回时原样恢复（不重建、不重渲染） */
-  var ORIGINAL = Array.prototype.slice.call(app.children).filter(function(el){
-    return el !== nav && el !== ui;
-  });
 
   /* ---------- 状态 ---------- */
-  var mode = 'local', CODE = '', NAME = '', SEAT = -1, ST = null;
+  var CODE = '', NAME = '', SEAT = -1, ST = null;
   var PID = sget('lx_pid', '');
   if (!PID) { PID = 'lx' + Math.random().toString(36).slice(2, 10); sset('lx_pid', PID); }
   var ES = null, pollT = null, pingT = null;
   var lastRev = -1, lastPhase = '', lastRound = -1, lastSubSig = '';
 
-  function setMode(m){
-    mode = m;
-    var on = (m === 'online');
-    ORIGINAL.forEach(function(el){ el.hidden = on; });
-    ui.hidden = !on;
-    navBtn.disabled = on;
-    navBtn.textContent = on ? '🌐 联机中' : '🌐 联机';
-    document.title = on ? ('心有灵犀 · 联机房间 ' + CODE + ' · 和鱼的开心导航 v5.001')
+  function setTitle(){
+    document.title = CODE ? ('心有灵犀 · 联机房间 ' + CODE + ' · 和鱼的开心导航 v5.001')
       : '心有灵犀 · 和鱼的开心导航 v5.001';
   }
 
@@ -1468,6 +1019,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   var AC = null;
   function beep(kind){
     try {
+      if (window.LxAudio && !window.LxAudio.isSfx()) return;
       var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
       if (!AC) AC = new C();
       if (AC.state === 'suspended') AC.resume();
@@ -1526,6 +1078,15 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
     }
     $('#lxoRound', ui).textContent = st.phase === 'playing' ? '第 ' + st.round + ' 轮'
       : st.phase === 'over' ? '本局成功' : st.phase === 'reveal' ? '已揭晓' : '待准备';
+    var pill = $('#status-pill');
+    if (pill) {
+      var txt = '待准备', cls = '';
+      if (st.phase === 'playing') { txt = '第 ' + st.round + ' 轮 · 进行中'; cls = 'on'; }
+      else if (st.phase === 'reveal') { txt = '第 ' + st.round + ' 轮 · 揭晓'; cls = 'on'; }
+      else if (st.phase === 'over') { txt = '本局成功'; cls = 'win'; }
+      pill.textContent = txt;
+      pill.className = 'pill' + (cls ? ' ' + cls : '');
+    }
   }
 
   function renderHistory(st){
@@ -1641,7 +1202,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   }
 
   function render(st){
-    if (!st || mode !== 'online') return;
+    if (!st) return;
     ST = st;
     updateBar(st);  /* 在线状态不依赖 rev，每次都刷 */
     if (st.rev === lastRev && st.phase === lastPhase && st.round === lastRound) return;
@@ -1742,7 +1303,7 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
       CODE = c; NAME = n; SEAT = d.state.seat;
       sset('lx_room', c); sset('lx_name', n); sset('lx_mode', 'online');
       try { history.replaceState(null, '', '/lingxi?room=' + encodeURIComponent(c)); } catch (e) {}
-      setMode('online');
+      ui.hidden = false; setTitle();
       join.hidden = true; joinErr('');
       lastRev = -1; lastPhase = ''; lastRound = -1; lastSubSig = '';
       render(d.state);
@@ -1750,30 +1311,29 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
       return true;
     });
   }
-  function exit(){
+  /* 离开房间：断开订阅、通知服务端腾出座位，回到进房面板 */
+  function leave(){
     if (CODE) post('/api/lx/leave', { code:CODE, pid:PID });
     stopTimers();
     if (ES) { try { ES.close(); } catch (e) {} ES = null; }
-    setMode('local');
+    var lastRoom = CODE;
     sdel('lx_mode'); sdel('lx_room');
     try { history.replaceState(null, '', '/lingxi'); } catch (e) {}
     CODE = ''; SEAT = -1; ST = null;
     lastRev = -1; lastPhase = ''; lastRound = -1; lastSubSig = '';
-    toast('已回到同屏模式');
+    ui.hidden = true; setTitle();
+    $('#lxjRoom').value = lastRoom || randCode();
+    $('#lxjName').value = NAME || sget('lx_name', '') || '小鱼';
+    joinErr(''); join.hidden = false;
+    toast('已离开房间');
   }
 
   /* ---------- 事件绑定 ---------- */
-  navBtn.addEventListener('click', function(){
-    if (mode === 'online') return;
-    $('#lxjRoom').value = new URLSearchParams(location.search).get('room') || sget('lx_room', '') || randCode();
-    $('#lxjName').value = sget('lx_name', '') || '小鱼';
-    joinErr(''); join.hidden = false;
-    setTimeout(function(){ try { $('#lxjName').focus(); } catch (e) {} }, 60);
-  });
-  $('#lxjCancel').addEventListener('click', function(){ join.hidden = true; });
-  join.addEventListener('click', function(e){ if (e.target === join) join.hidden = true; });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !join.hidden) join.hidden = true; });
   function goJoin(){ enter($('#lxjRoom').value, $('#lxjName').value, false); }
+  $('#lxjRules').addEventListener('click', function(){
+    if (window.LxAudio) window.LxAudio.click();
+    $('#modal-rules').hidden = false;
+  });
   $('#lxjGo').addEventListener('click', goJoin);
   ['lxjRoom', 'lxjName'].forEach(function(id){
     $('#' + id).addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); goJoin(); } });
@@ -1791,21 +1351,22 @@ html[data-lx="paper"] .lxo-msg{color:#eef2ff;}
   });
   $('#lxoBBtn', ui).addEventListener('click', function(){ if (ST && ST.phase === 'reveal') doNext(); });
   $('#lxoCopy', ui).addEventListener('click', copyInvite);
-  $('#lxoExit', ui).addEventListener('click', exit);
+  $('#lxoLeave', ui).addEventListener('click', leave);
   $('#lxoGoYu', ui).addEventListener('click', goYu);
   $('#lxoGoYu2', ui).addEventListener('click', goYu);
 
-  /* ---------- 自动恢复 / 邀请链接 ----------
-     刷新页面：sessionStorage 里记着在联机 → 静默回到原房间。
-     带 ?room= 打开：只自动填房号并展开面板，让用户确认昵称，不偷偷进房。 */
+  /* ---------- 启动：本页只做联机 ----------
+     刷新页面：sessionStorage 里记着在联机 → 静默回到原房间；
+     否则（或带 ?room= 打开）：展开进房面板，让用户确认房号与昵称。 */
   var urlRoom = new URLSearchParams(location.search).get('room');
-  if (sget('lx_mode', '') === 'online' && sget('lx_room', '')) {
-    enter(sget('lx_room', ''), sget('lx_name', '') || '小鱼', true).then(function(ok){
-      if (!ok) { setMode('local'); sdel('lx_mode'); }
+  var savedRoom = sget('lx_mode', '') === 'online' ? sget('lx_room', '') : '';
+  $('#lxjRoom').value = urlRoom || savedRoom || sget('lx_room', '') || randCode();
+  $('#lxjName').value = sget('lx_name', '') || '小鱼';
+  if (savedRoom) {
+    enter(savedRoom, sget('lx_name', '') || '小鱼', true).then(function(ok){
+      if (!ok) { sdel('lx_mode'); join.hidden = false; }
     });
-  } else if (urlRoom) {
-    $('#lxjRoom').value = urlRoom;
-    $('#lxjName').value = sget('lx_name', '') || '小鱼';
+  } else {
     join.hidden = false;
   }
 })();

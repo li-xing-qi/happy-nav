@@ -84,3 +84,34 @@ input.f.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;le
   .tbl td{display:flex;justify-content:space-between;gap:10px;border:0;padding:3px 0;}
   .tbl td::before{content:attr(data-l);font-size:11px;color:var(--ink-3);letter-spacing:.08em;}
 }
+
+/* ===== 管理页二级面板（2026-11-28）===== */
+/* 面板挂在表格里单独一行，桌面端跨 6 列、整块铺开 */
+.panel-row td{display:table-cell !important;padding:0 !important;background:var(--paper-2);border-bottom:1px solid var(--line);}
+.panel{border:1px solid var(--line);border-radius:12px;background:#fff;margin:4px 0 14px;padding:4px 16px 2px;}
+.psec{padding:14px 0;border-bottom:1px solid var(--line);}
+.psec:last-of-type{border-bottom:0;}
+.ptitle{font-size:11px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:10px;}
+.pbody{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.pnote{font-size:11.5px;line-height:1.75;color:var(--ink-3);}
+.chks{display:flex;flex-direction:column;align-items:flex-start;gap:9px;}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);cursor:pointer;}
+.chk input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
+.chk input:disabled{cursor:default;}
+.pdanger{padding:12px 0 8px;}
+.pmsg{font-size:11.5px;color:var(--accent);}
+.pmsg.bad{color:var(--danger);}
+.mono-inline{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;}
+/* 重置密码后的醒目结果 */
+.passout{margin-top:12px;border:1px solid #cfe4e0;background:var(--accent-soft);border-radius:10px;padding:12px 14px;flex:1 1 100%;}
+.passout-t{font-size:12px;letter-spacing:.06em;color:var(--accent);}
+.passout-line{display:flex;gap:8px;align-items:center;margin-top:7px;}
+.passout-in{flex:1 1 auto;min-width:0;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:#fff;
+  color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:19px;font-weight:700;letter-spacing:.16em;}
+.passout-h{margin-top:8px;font-size:11.5px;line-height:1.75;color:var(--ink-2);}
+@media (max-width:640px){
+  .panel-row td{display:block !important;padding:0 !important;}
+  .panel{margin:0 0 10px;padding:2px 12px 0;}
+  .panel-row td::before{content:none;}
+}
