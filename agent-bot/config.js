@@ -142,6 +142,7 @@ const ROOMS = {
   card: pick('CARD_ROOM') || 'main',
   gomoku: pick('GOMOKU_ROOM') || '0000',
   lingxi: pick('LINGXI_ROOM') || '',
+  survivor: pick('SURVIVOR_ROOM') || 'main',
 };
 
 /* ---------- 各场景的 bot 身份（在与鱼/房间里显示）---------- */
@@ -150,6 +151,12 @@ const BOTS = {
   card: { pid: pick('CARD_PID') || 'ai-teammate', name: pick('CARD_NAME') || IDENTITY.aiName },
   gomoku: { pid: pick('GOMOKU_PID') || 'go-fish', name: pick('GOMOKU_NAME') || IDENTITY.aiName },
   lingxi: { pid: pick('LINGXI_PID') || 'lx-fish', name: pick('LINGXI_NAME') || IDENTITY.aiName },
+  survivor: { pid: pick('SURVIVOR_PID') || 'survivor-fish', name: pick('SURVIVOR_NAME') || IDENTITY.aiName },
+  /* 海龟汤两份适配器：soup=参与者，soupHost=主持人（同一只鱼，不同 PID） */
+  soup: { pid: pick('SOUP_PID') || 'soup-fish', name: pick('SOUP_NAME') || IDENTITY.aiName },
+  soupHost: { pid: pick('SOUP_HOST_PID') || 'soup-host-fish', name: pick('SOUP_HOST_NAME') || IDENTITY.aiName },
+  /* 英雄之战联机：鱼作为队友（guest），只在房主邀请时加入 */
+  survivorCoop: { pid: pick('SURVIVOR_COOP_PID') || 'survivor-coop-fish', name: pick('SURVIVOR_COOP_NAME') || IDENTITY.aiName },
 };
 
 /* ---------- 截图渲染（画图功能，可选）---------- */

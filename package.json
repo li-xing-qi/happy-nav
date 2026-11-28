@@ -20,7 +20,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check yu.js && node --check lx.js && node --check engine.js && node --check content.js",
+    "check": "node --check server.js && node --check yu.js && node --check lx.js && node --check survivor.js && node --check survivor_coop.js && node --check soup.js && node --check soup-content.js && node --check engine.js && node --check content.js",
     "smoke": "bash scripts/smoke-test.sh",
     "migrate:uploads": "node scripts/migrate-uploads.js"
   },

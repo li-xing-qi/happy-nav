@@ -15,6 +15,10 @@ const ENABLE = {
   card: process.env.NO_CARD !== '1',
   gomoku: process.env.NO_GOMOKU !== '1',
   lingxi: process.env.NO_LINGXI !== '1',
+  survivor: process.env.NO_SURVIVOR !== '1',
+  'survivor-coop': process.env.NO_SURVIVOR_COOP !== '1',
+  soup: process.env.NO_SOUP !== '1',
+  'soup-host': process.env.NO_SOUP_HOST !== '1',
 };
 
 const scenes = [];
@@ -43,7 +47,7 @@ async function main() {
     log(`提示：${guessed.join(' / ')} 仍是默认值。房号即凭证，建议改成不容易猜的（改 .env 即可）`);
   }
 
-  for (const name of ['chat', 'card', 'gomoku', 'lingxi']) {
+  for (const name of ['chat', 'card', 'gomoku', 'lingxi', 'survivor', 'survivor-coop', 'soup', 'soup-host']) {
     if (!ENABLE[name]) {
       log(`跳过场景 ${name}（已禁用）`);
       continue;
