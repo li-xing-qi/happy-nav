@@ -120,6 +120,18 @@ node server.js
 
 ---
 
+## 首次部署必须设置管理员密码
+
+账号系统在**首次创建** `data/auth/accounts.json` 时会读取环境变量 `ADMIN_PASS` 作为管理员（uid `1661973546`）的初始密码：
+
+- **必须**在第一次启动前设置 `ADMIN_PASS`，例如 `ADMIN_PASS='你的密码' pm2 start server.js --name wanxiang`
+- 不设置的话，系统会随机生成一个密码：它只在这次启动的日志里打印一次（`[auth] 初始密码…`），不会明文落盘。**错过了那行日志就只能删 `data/auth/accounts.json` 重新初始化**（会丢失所有账号）
+- `accounts.json` 已存在时这段逻辑不会触发，密码不会被覆盖
+
+登录后请到 `/account.html` 立即修改密码。管理员密码只以 scrypt 哈希形式存储。
+
+---
+
 ## 启动 AI 陪玩：agent-bot
 
 站点只负责「页面 + 玩法 + 房间」。真正让四个场景有 AI 的是另一个进程：`agent-bot/`。
