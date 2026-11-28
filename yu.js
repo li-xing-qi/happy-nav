@@ -308,7 +308,10 @@ module.exports = function createYu(ctx) {
           bubble: cleanStr(b.bubble, 24), fontSize: Number(b.fontSize) || 0,
           seat: r.users.length, lastSeen: Date.now(), hits: [] };
         r.users.push(me); fresh = true;
-        push(r, { type: 'sys', text: `${me.name} 游进了房间` });
+        /* 机器人（yufish.js 的 YU_BOT_PID=dsh-fish）自己重连不播报：
+           每次 pm2 restart wanxiang 都会让它重连进房，播报一次就攒一条
+           「小鱼 游进了房间」，把老板的房间刷成系统提示墙。人类照旧播报。 */
+        if (pid !== 'dsh-fish') push(r, { type: 'sys', text: `${me.name} 游进了房间` });
       }
       r.lastAt = Date.now(); r.rev++;
       broadcast(r, 'members', { members: r.users.map(publicUser) });

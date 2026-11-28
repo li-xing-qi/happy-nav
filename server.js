@@ -1145,7 +1145,10 @@ const GUARD_API_PREFIX = [
   /* 同一类「用起来」的接口，一并拦住，避免未登录还能从控制台踢馆 */
   '/api/join', '/api/act', '/api/restart', '/api/stream',
   /* 新增小游戏的接口 */
-  '/api/survivor/', '/api/soup/'
+  '/api/survivor/', '/api/soup/',
+  /* 图鉴是只读快照，但仍是「有内容」的接口：未登录不该拿到整份卡表。
+     权限表里它归 games（登录但 games=false 时仍 403），这里补登录守卫。 */
+  '/api/codex'
 ];
 
 /* ============================================================
